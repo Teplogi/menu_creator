@@ -1,14 +1,65 @@
 import "dotenv/config";
 import express from "express";
+import helmet from "helmet";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import Anthropic from "@anthropic-ai/sdk";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const app = express();
+// 本番はリバースプロキシ(Render/Fly等)の背後で動くため、X-Forwarded-* を1ホップ分だけ信頼。
+// これにより req.ip が実クライアントIPになり、レート制限が正しく効く。
+app.set("trust proxy", 1);
+
+// セキュリティヘッダ。単一HTMLにインラインの<script>/<style>/onclick/データURIを多用しているため、
+// CSPは 'unsafe-inline' と data: を許可する実用重視の設定にする（将来的にnonce化を検討）。
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrcAttr: ["'unsafe-inline'"], // onclick 等のインラインハンドラを許可（既定の'none'だとUIが壊れる）
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", "data:"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        frameAncestors: ["'self'"],
+        formAction: ["'self'"],
+        manifestSrc: ["'self'"],
+        upgradeInsecureRequests: null, // localhost(http)開発を壊さないため無効
+      },
+    },
+    // 別オリジンのアイコン等は無いが、将来のCDN埋め込みに備えて緩めに
+    crossOriginEmbedderPolicy: false,
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
 const client = new Anthropic(); // ANTHROPIC_API_KEY を環境変数から読み込む
+
+// ---------- レート制限 ----------
+const jsonTooMany = (msg) => (req, res) => res.status(429).json({ error: msg });
+// ログイン/登録: 総当たり・大量アカウント作成の抑止（IP単位）
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonTooMany("試行回数が多すぎます。しばらく時間をおいてから再度お試しください。"),
+});
+// AI生成系: コスト暴走・乱用の抑止（ログインユーザー単位、未認証時はIP）
+const aiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.AI_RATE_LIMIT_PER_HOUR) || 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.id || ipKeyGenerator(req.ip),
+  handler: jsonTooMany("AI生成のご利用が短時間に集中しています。1時間ほど時間をおいてからお試しください。"),
+});
 
 const MAX_DAYS = 14;
 const MAX_SLOTS = 42; // 生成量の上限（14日 × 3食）
@@ -46,6 +97,8 @@ const SCHEMA_STATEMENTS = [
     pw_hash TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expires_at TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at)`,
   `CREATE TABLE IF NOT EXISTS memberships (
     household_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member',
     created_at TEXT NOT NULL, PRIMARY KEY (household_id, user_id))`,
@@ -85,12 +138,15 @@ function verifyPassword(pw, stored) {
   const test = scryptSync(pw, Buffer.from(saltHex, "hex"), 64);
   return hash.length === test.length && timingSafeEqual(hash, test);
 }
+const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS) || 30;
 async function createSession(userId) {
   const token = randomBytes(24).toString("base64url");
-  await q("INSERT INTO sessions (token, user_id, created_at) VALUES ($1, $2, $3)", [
+  const now = Date.now();
+  await q("INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)", [
     token,
     userId,
-    new Date().toISOString(),
+    new Date(now).toISOString(),
+    new Date(now + SESSION_TTL_DAYS * 86400000).toISOString(),
   ]);
   return token;
 }
@@ -100,6 +156,11 @@ async function auth(req, res, next) {
     const h = req.headers.authorization || "";
     const token = h.startsWith("Bearer ") ? h.slice(7) : null;
     const sess = token ? await one("SELECT * FROM sessions WHERE token = $1", [token]) : null;
+    // 有効期限切れセッションは無効化（掃除して401）。expires_at が無い旧行は期限なし扱い。
+    if (sess && sess.expires_at && sess.expires_at < new Date().toISOString()) {
+      await q("DELETE FROM sessions WHERE token = $1", [token]).catch(() => {});
+      return res.status(401).json({ error: "セッションの有効期限が切れました。再度ログインしてください。" });
+    }
     const user = sess ? await one("SELECT id, username FROM users WHERE id = $1", [sess.user_id]) : null;
     if (!user) return res.status(401).json({ error: "ログインが必要です。" });
     req.user = user;
@@ -381,7 +442,7 @@ async function householdsOf(userId) {
   );
 }
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", authLimiter, async (req, res) => {
   try {
     const username = (req.body?.username || "").toString().trim();
     const password = (req.body?.password || "").toString();
@@ -403,7 +464,7 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", authLimiter, async (req, res) => {
   try {
     const username = (req.body?.username || "").toString().trim();
     const password = (req.body?.password || "").toString();
@@ -584,7 +645,7 @@ const INSERT_PLAN = `INSERT INTO meal_plans
    preferences, avoid, input_json, data_json, created_at)
   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`;
 
-app.post("/api/plans", auth, async (req, res) => {
+app.post("/api/plans", auth, aiLimiter, async (req, res) => {
   try {
     const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid } =
       req.body || {};
@@ -717,7 +778,7 @@ app.delete("/api/plans/:id", auth, async (req, res) => {
 });
 
 // 1食だけ作り直し
-app.post("/api/plans/:id/regenerate", auth, async (req, res) => {
+app.post("/api/plans/:id/regenerate", auth, aiLimiter, async (req, res) => {
   try {
     const { date, slot } = req.body || {};
     const row = await loadPlanForUser(req, res);
@@ -754,7 +815,7 @@ app.post("/api/plans/:id/regenerate", auth, async (req, res) => {
 });
 
 // 料理名・指示を指定して、その1品だけをAIで差し替え（機能5）
-app.post("/api/plans/:id/replace-dish", auth, async (req, res) => {
+app.post("/api/plans/:id/replace-dish", auth, aiLimiter, async (req, res) => {
   try {
     const { date, slot, dishIndex, instruction } = req.body || {};
     const instr = (instruction || "").toString().trim();
