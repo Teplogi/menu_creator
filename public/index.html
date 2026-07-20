@@ -350,6 +350,32 @@
     .legal-note a { color: var(--orange-dark); font-weight: 600; }
     .legal-links { text-align: center; font-size: .82rem; margin-top: 4px; }
     .legal-links a { color: var(--muted); text-decoration: underline; }
+    /* ---- ランディング(LP) ---- */
+    .lp { max-width: 560px; margin: 0 auto; padding: 8px 4px 48px; }
+    .lp-hero { text-align: center; padding: 16px 0 8px; }
+    .lp-logo { width: 88px; height: 88px; border-radius: 20px; box-shadow: var(--shadow); }
+    .lp-h1 { font-size: 1.55rem; font-weight: 800; line-height: 1.45; margin: 18px 0 10px; }
+    .lp-sub { color: var(--muted); font-size: .98rem; line-height: 1.75; margin: 0 auto 22px; max-width: 460px; }
+    .lp-cta { width: 100%; max-width: 320px; margin: 4px auto 0; display: block; font-size: 1.05rem; }
+    .lp-login { font-size: .9rem; color: var(--muted); margin-top: 14px; }
+    .lp-login a { color: var(--orange-dark); font-weight: 700; }
+    .lp-benefits { display: grid; gap: 12px; margin: 34px 0; }
+    .lp-card { background: var(--card); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+    .lp-card .lp-ic { font-size: 1.8rem; line-height: 1; }
+    .lp-card h3 { margin: 10px 0 4px; font-size: 1.05rem; }
+    .lp-card p { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.65; }
+    .lp-h2 { text-align: center; font-size: 1.2rem; margin: 8px 0 18px; }
+    .lp-steps { margin: 34px 0; }
+    .lp-step { display: flex; gap: 14px; align-items: flex-start; padding: 9px 0; }
+    .lp-num { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; background: var(--orange); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .lp-step b { display: block; }
+    .lp-step p { margin: 3px 0 0; color: var(--muted); font-size: .9rem; line-height: 1.6; }
+    .lp-price { background: var(--card); border-radius: 16px; padding: 22px 20px; box-shadow: var(--shadow); text-align: center; margin: 34px 0; }
+    .lp-price-lead { font-size: 1.15rem; margin: 0 0 8px; }
+    .lp-price-lead b { color: var(--orange-dark); }
+    .lp-price-note { color: var(--muted); font-size: .92rem; line-height: 1.75; margin: 0; }
+    .lp-foot { text-align: center; font-size: .82rem; margin-top: 28px; }
+    .lp-foot a { color: var(--muted); text-decoration: underline; }
     .move-panel .ef { display: block; margin-bottom: 12px; }
     .move-panel .ef > span { display: block; font-size: .78rem; font-weight: 700; color: #6f665c; margin-bottom: 6px; }
     .move-panel input { background: #fff; }
@@ -541,6 +567,41 @@
   </div>
 
   <main>
+    <!-- ランディング（未ログインの初回） -->
+    <section class="view" id="view-landing">
+      <div class="lp">
+        <div class="lp-hero">
+          <img src="/icon.png" class="lp-logo" alt="めにゅらく！" width="88" height="88" />
+          <h1 class="lp-h1">「今日、何作ろう？」<br />から解放される。</h1>
+          <p class="lp-sub">共働き家庭のためのAI献立アプリ。期間を選ぶだけで、毎日の献立も買い物リストも自動でつくれます。</p>
+          <button class="btn-primary lp-cta" onclick="startFromLanding('register')">無料ではじめる</button>
+          <p class="lp-login">アカウントをお持ちの方は <a href="#" onclick="startFromLanding('login');return false;">ログイン</a></p>
+        </div>
+
+        <div class="lp-benefits">
+          <div class="lp-card"><div class="lp-ic">🗓️</div><h3>期間を選ぶだけ</h3><p>AIが数日〜2週間分の献立をまとめて提案。調理時間や苦手な食材も考慮します。</p></div>
+          <div class="lp-card"><div class="lp-ic">🛒</div><h3>買い物リストが自動</h3><p>献立の材料を週ごとに自動でまとめます。買い忘れを防いで、買い物がぐっとラクに。</p></div>
+          <div class="lp-card"><div class="lp-ic">👨‍👩‍👧</div><h3>家族と共有</h3><p>世帯を家族と共有して、みんなで献立を確認・編集できます。</p></div>
+        </div>
+
+        <div class="lp-steps">
+          <h2 class="lp-h2">使い方はかんたん3ステップ</h2>
+          <div class="lp-step"><span class="lp-num">1</span><div><b>期間と食事を選ぶ</b><p>いつ・どの食事を作るか選ぶだけ。</p></div></div>
+          <div class="lp-step"><span class="lp-num">2</span><div><b>AIが献立を作成</b><p>ボタンひとつで、まとめて献立が完成。</p></div></div>
+          <div class="lp-step"><span class="lp-num">3</span><div><b>買い物リストで買う</b><p>自動でまとまったリストを見ながらお買い物。</p></div></div>
+        </div>
+
+        <div class="lp-price">
+          <h2 class="lp-h2" style="margin-top:0">料金</h2>
+          <p class="lp-price-lead"><b>無料</b>ではじめられます</p>
+          <p class="lp-price-note">手動での献立入力・買い物リストはずっと無料。AIによる献立作成は<b>月10食分まで無料</b>、それ以上使いたい方は<b>プレミアム（月480円・税込）</b>で使い放題です。</p>
+        </div>
+
+        <button class="btn-primary lp-cta" onclick="startFromLanding('register')">無料ではじめる</button>
+        <p class="lp-foot"><a href="/terms.html">利用規約</a> ・ <a href="/privacy.html">プライバシーポリシー</a> ・ <a href="/tokushoho.html">特定商取引法に基づく表記</a></p>
+      </div>
+    </section>
+
     <!-- ログイン / 新規登録 -->
     <section class="view" id="view-auth">
       <div class="card stack">
@@ -780,7 +841,7 @@
       $("view-" + id).classList.add("active");
       $("title").textContent = title;
       $("backBtn").classList.toggle("hidden", !back);
-      const noChrome = id === "auth" || id === "setup";
+      const noChrome = id === "auth" || id === "setup" || id === "landing";
       $("appbar").classList.toggle("hidden", noChrome); // ログイン/世帯作成ではアプリバー非表示（カードにロゴあり）
       $("tabbar").classList.toggle("hidden", noChrome);
       $("shareBtn").style.visibility = noChrome ? "hidden" : "visible";
@@ -817,6 +878,8 @@
       return data;
     }
 
+    function showLanding() { showView("landing", "めにゅらく！"); }
+    function startFromLanding(mode) { setAuthMode(mode || "register"); showView("auth", "めにゅらく！"); }
     function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); }
     function showSetup() {
       $("claimOld").style.display = localStorage.getItem("householdToken") ? "block" : "none";
@@ -931,7 +994,7 @@
         if (res.ok) { currentUser = data.user; households = data.households; return afterLogin(); }
         authToken = null; localStorage.removeItem("authToken");
       }
-      showAuth();
+      showLanding(); // 未ログインの初回訪問はまず紹介ページ（そこから登録/ログインへ）
     }
     async function afterLogin() {
       const saved = localStorage.getItem("householdId");
