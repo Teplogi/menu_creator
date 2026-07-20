@@ -628,6 +628,7 @@
         </label>
 
         <p id="error"></p>
+        <p id="aiQuotaHint" class="hint" style="display:none;margin:0 0 8px"></p>
         <button type="submit" class="btn-primary" id="submitBtn">AIで作成する</button>
         <button type="button" class="btn-ghost" id="manualBtn" onclick="createManual()">自分で入力する（AIなし）</button>
       </form>
@@ -822,6 +823,8 @@
     async function showCreate() {
       backHandler = goHome;
       showView("create", "献立を作成", { back: true });
+      $("aiQuotaHint").style.display = "none";
+      loadBillingStatus().then(updateAiQuotaHint); // 無料枠の残数を先出し
       // 既定の期間（今日〜3日後）でカレンダーを初期化
       const today = new Date();
       rangeStart = fmt(today);
@@ -984,7 +987,7 @@
       } else {
         $("billingBody").innerHTML =
           `<div class="plan-row"><span class="plan-badge free">無料プラン</span>` +
-          `<span class="plan-note">今月のAI生成 残り <b>${b.freeRemaining}</b> / ${b.freeLimit} 回</span></div>` +
+          `<span class="plan-note">今月のAI生成 残り <b>${b.freeRemaining}</b> / ${b.freeLimit} 食</span></div>` +
           `<button class="btn-primary" style="width:100%" onclick="startCheckout()">プレミアムにアップグレード</button>` +
           `<p class="hint" style="margin:8px 0 0">手動での献立入力・買い物リストはずっと無料です。</p>`;
       }
@@ -1026,11 +1029,21 @@
     function showPaywall(info) {
       const ov = ensurePaywallModal();
       const lim = (info && info.freeLimit != null) ? info.freeLimit : (billingStatus ? billingStatus.freeLimit : "");
-      $("paywallMsg").textContent = (info && info.error) || `今月の無料AI生成（${lim}回）を使い切りました。`;
+      $("paywallMsg").textContent = (info && info.error) || `今月の無料AI生成（${lim}食）を使い切りました。`;
       ov.style.display = "flex";
       loadBillingStatus(); // 残数などを更新
     }
     function closePaywall() { const ov = $("paywallModal"); if (ov) ov.style.display = "none"; }
+    // 作成画面に無料枠の残数を先出し（無料ユーザーのみ。加入者・課金未設定では非表示）
+    function updateAiQuotaHint() {
+      const el = $("aiQuotaHint");
+      if (!el) return;
+      const b = billingStatus;
+      if (!b || !b.billingEnabled || b.active) { el.style.display = "none"; return; }
+      el.style.display = "";
+      el.innerHTML = `無料枠：今月あと <b>${b.freeRemaining}</b> / ${b.freeLimit} 食。` +
+        `これを超える期間は<a href="#" onclick="startCheckout();return false;">プレミアム</a>で使い放題です。`;
+    }
 
     // ---------- 世帯（作成・引き継ぎ・切替・メンバー） ----------
     async function createHousehold() {

@@ -48,7 +48,8 @@ const client = new Anthropic(); // ANTHROPIC_API_KEY を環境変数から読み
 // ---------- Stripe（課金 / フリーミアム） ----------
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || null;
-const FREE_AI_PER_MONTH = Number(process.env.FREE_AI_PER_MONTH) || 3;
+// 無料ユーザーが月に生成できる「食数」（回数ではなく、生成した食事の数で数える）
+const FREE_AI_MEALS_PER_MONTH = Number(process.env.FREE_AI_MEALS_PER_MONTH) || 10;
 // 課金が有効なのは「秘密鍵」と「価格ID」が両方そろっているときだけ。
 // 未設定の間は AI 生成を全ユーザーに開放する（開発・公開前でも普通に使える）。
 const billingEnabled = () => !!(stripe && STRIPE_PRICE_ID);
@@ -67,29 +68,50 @@ async function getAiUsage(userId) {
   const r = await one("SELECT count FROM ai_usage WHERE user_id = $1 AND ym = $2", [userId, currentYM()]);
   return r ? r.count : 0;
 }
-async function incAiUsage(userId) {
+async function incAiUsage(userId, n = 1) {
   await q(
-    `INSERT INTO ai_usage (user_id, ym, count) VALUES ($1, $2, 1)
-     ON CONFLICT (user_id, ym) DO UPDATE SET count = ai_usage.count + 1`,
-    [userId, currentYM()]
+    `INSERT INTO ai_usage (user_id, ym, count) VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, ym) DO UPDATE SET count = ai_usage.count + $3`,
+    [userId, currentYM(), n]
   );
 }
-// AI利用ゲート（auth の後段に置く）。課金未設定=全開放、加入済み=無制限、無料=月FREE_AI_PER_MONTH回まで。
-// 成否に関わらずここでは消費しない。各ハンドラが「成功時のみ」 incAiUsage する。
-async function requireAi(req, res, next) {
-  try {
-    if (!billingEnabled()) { req.aiPaid = true; return next(); }
-    if (await hasActiveEntitlement(req.user.id)) { req.aiPaid = true; return next(); }
-    const used = await getAiUsage(req.user.id);
-    if (used < FREE_AI_PER_MONTH) { req.aiPaid = false; return next(); }
-    return res.status(402).json({
-      error: `今月の無料AI生成（${FREE_AI_PER_MONTH}回）を使い切りました。プレミアムにアップグレードすると無制限で使えます。`,
-      code: "UPGRADE_REQUIRED",
-      freeLimit: FREE_AI_PER_MONTH,
-    });
-  } catch (err) {
-    handleError(res, err);
-  }
+// リクエストから「生成する食数」を数える（targets の slots 合計）
+function aiCostFromTargets(targets) {
+  if (!Array.isArray(targets)) return 1;
+  const n = targets.reduce((sum, t) => sum + (Array.isArray(t?.slots) ? t.slots.length : 0), 0);
+  return Math.max(1, n);
+}
+// AI利用ゲート（auth の後段に置く）。課金未設定=全開放、加入済み=無制限、
+// 無料=月 FREE_AI_MEALS_PER_MONTH「食」まで。costFn(req) が今回生成する食数を返す。
+// 「残り枠 < 今回の食数」なら生成前に 402 で止める（大量生成を無料で取られる穴を塞ぐ）。
+// 消費はここではせず、各ハンドラが「成功時のみ」 incAiUsage(userId, req.aiCost) する。
+function requireAi(costFn) {
+  return async (req, res, next) => {
+    try {
+      if (!billingEnabled()) { req.aiPaid = true; return next(); }
+      if (await hasActiveEntitlement(req.user.id)) { req.aiPaid = true; return next(); }
+      const cost = Math.max(1, costFn ? costFn(req) : 1);
+      const used = await getAiUsage(req.user.id);
+      const remaining = Math.max(0, FREE_AI_MEALS_PER_MONTH - used);
+      if (cost > remaining) {
+        return res.status(402).json({
+          code: "UPGRADE_REQUIRED",
+          error:
+            remaining <= 0
+              ? `今月の無料AI生成（${FREE_AI_MEALS_PER_MONTH}食）を使い切りました。プレミアムにアップグレードすると使い放題です。`
+              : `今回の生成（${cost}食分）は無料枠の残り（${remaining}食）を超えます。期間を短くするか、プレミアムで使い放題に。`,
+          freeLimit: FREE_AI_MEALS_PER_MONTH,
+          freeRemaining: remaining,
+          requested: cost,
+        });
+      }
+      req.aiPaid = false;
+      req.aiCost = cost;
+      return next();
+    } catch (err) {
+      handleError(res, err);
+    }
+  };
 }
 async function getOrCreateStripeCustomer(user) {
   const e = await one("SELECT stripe_customer_id FROM entitlements WHERE user_id = $1", [user.id]);
@@ -719,7 +741,7 @@ const INSERT_PLAN = `INSERT INTO meal_plans
    preferences, avoid, input_json, data_json, created_at)
   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`;
 
-app.post("/api/plans", auth, aiLimiter, requireAi, async (req, res) => {
+app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
   try {
     const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid } =
       req.body || {};
@@ -755,7 +777,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi, async (req, res) => {
       JSON.stringify(plan),
       new Date().toISOString(),
     ]);
-    if (!req.aiPaid) await incAiUsage(req.user.id); // 無料ユーザーは成功時のみ1回消費
+    if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1); // 無料は成功時のみ食数分を消費
     res.json(planToClient(row));
   } catch (err) {
     handleError(res, err);
@@ -853,7 +875,7 @@ app.delete("/api/plans/:id", auth, async (req, res) => {
 });
 
 // 1食だけ作り直し
-app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi, async (req, res) => {
+app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1), async (req, res) => {
   try {
     const { date, slot } = req.body || {};
     const row = await loadPlanForUser(req, res);
@@ -883,7 +905,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi, async (req, re
       "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
       [JSON.stringify(data), row.id]
     );
-    if (!req.aiPaid) await incAiUsage(req.user.id);
+    if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1);
     res.json(planToClient(updated));
   } catch (err) {
     handleError(res, err);
@@ -891,7 +913,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi, async (req, re
 });
 
 // 料理名・指示を指定して、その1品だけをAIで差し替え（機能5）
-app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi, async (req, res) => {
+app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1), async (req, res) => {
   try {
     const { date, slot, dishIndex, instruction } = req.body || {};
     const instr = (instruction || "").toString().trim();
@@ -925,7 +947,7 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi, async (req, 
       "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
       [JSON.stringify(data), row.id]
     );
-    if (!req.aiPaid) await incAiUsage(req.user.id);
+    if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1);
     res.json(planToClient(updated));
   } catch (err) {
     handleError(res, err);
@@ -946,9 +968,9 @@ app.get("/api/billing/status", auth, async (req, res) => {
       active,
       plan: active ? e?.plan || "monthly" : null,
       currentPeriodEnd: active ? e?.current_period_end || null : null,
-      freeLimit: FREE_AI_PER_MONTH,
+      freeLimit: FREE_AI_MEALS_PER_MONTH,
       freeUsed: used,
-      freeRemaining: Math.max(0, FREE_AI_PER_MONTH - used),
+      freeRemaining: Math.max(0, FREE_AI_MEALS_PER_MONTH - used),
     });
   } catch (err) {
     handleError(res, err);
