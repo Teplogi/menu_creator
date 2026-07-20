@@ -1,0 +1,15 @@
+{
+  "name": "めにゅらく！",
+  "short_name": "めにゅらく！",
+  "description": "共働き家庭向けの時短献立づくり。AIが献立を作成、買い物リストも自動集約。",
+  "lang": "ja",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fff7f1",
+  "theme_color": "#f5831f",
+  "icons": [
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

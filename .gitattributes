@@ -1,0 +1,10 @@
+# リポジトリ内はLFに正規化（Windows作業コピーはCRLFのままでOK）
+* text=auto eol=lf
+
+# バイナリ
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.webp binary
+*.db binary

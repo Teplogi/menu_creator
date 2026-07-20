@@ -1,0 +1,29 @@
+# --- 秘密情報（絶対にコミットしない） ---
+.env
+.env.*
+!.env.example
+
+# --- データベース（ユーザーの実データ・ローカルDB） ---
+data.db
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+test-*.db*
+
+# --- 依存関係 ---
+node_modules/
+
+# --- ローカル開発ツール設定 ---
+.claude/
+
+# --- ログ・一時ファイル ---
+*.log
+npm-debug.log*
+tmp/
+scratchpad/
+
+# --- OS / エディタ ---
+.DS_Store
+Thumbs.db
+.vscode/

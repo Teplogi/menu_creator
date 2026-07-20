@@ -1,0 +1,14 @@
+{
+  "name": "recipe-creator",
+  "version": "1.0.0",
+  "description": "期間を指定するとAIが毎日の献立を作成してくれるWebアプリ",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "express": "^5.1.0"
+  }
+}
