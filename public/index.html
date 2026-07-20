@@ -384,6 +384,8 @@
     /* ---- 生成プログレスバー ---- */
     .genbar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.35); overflow: hidden; margin: 6px 0; }
     .genbar-fill { height: 100%; width: 0%; background: #fff; border-radius: 999px; transition: width .4s ease; }
+    .gen-pending { color: var(--orange-dark); font-weight: 600; animation: genPulse 1.1s ease-in-out infinite; }
+    @keyframes genPulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
     .move-panel .ef { display: block; margin-bottom: 12px; }
     .move-panel .ef > span { display: block; font-size: .78rem; font-weight: 700; color: #6f665c; margin-bottom: 6px; }
     .move-panel input { background: #fff; }
@@ -1742,24 +1744,95 @@
         includeSteps: !$("noSteps").checked,
       };
 
-      const mealCount = targets.reduce((n, t) => n + t.slots.length, 0);
-      $("overlay").classList.add("on");
       $("submitBtn").disabled = true;
-      startGenProgress(mealCount);
       try {
-        const plan = await apiOK("/api/plans", { method: "POST", body: payload });
-        stopGenProgress(true);
-        showOverview(plan);
+        await generatePlanStreaming(payload); // 順次表示（できた献立から画面に出す）
       } catch (e2) {
-        if (!e2.upgrade) $("error").textContent = e2.message;
+        if (!e2.upgrade) $("error").textContent = e2.message || "生成に失敗しました。";
       } finally {
-        stopGenProgress(false);
-        $("overlay").classList.remove("on");
         $("submitBtn").disabled = false;
       }
     });
 
-    // ---------- 生成中のプログレス表示（待ち時間の不安を軽減） ----------
+    // ---------- 順次表示（progressive）で献立を生成 ----------
+    let streaming = false;
+    async function generatePlanStreaming(payload) {
+      const dates = payload.targets.map((t) => t.date).sort();
+      // スケルトン（各食「作成中」）を作り、詳細画面をすぐ表示
+      const skeleton = {
+        people: Number(payload.people) > 0 ? Number(payload.people) : 2,
+        startDate: dates[0],
+        endDate: dates[dates.length - 1],
+        _streaming: true,
+        days: payload.targets
+          .slice()
+          .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+          .map((t) => ({ date: t.date, meals: t.slots.map((slot) => ({ slot, dishes: [], _pending: true })) })),
+      };
+      const total = skeleton.days.reduce((n, d) => n + d.meals.length, 0);
+      streaming = true;
+      showOverview(skeleton);
+      setStreamTitle(0, total);
+
+      let res;
+      try {
+        res = await fetch("/api/plans/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...(authToken ? { Authorization: "Bearer " + authToken } : {}) },
+          body: JSON.stringify(payload),
+        });
+      } catch (e) { streaming = false; goHome(); throw new Error("通信に失敗しました。"); }
+
+      const ct = res.headers.get("content-type") || "";
+      if (!res.ok || !ct.includes("ndjson") || !res.body) {
+        // 402 など（ストリームでないJSONエラー）
+        const data = await res.json().catch(() => null);
+        streaming = false; goHome();
+        if (res.status === 402 && data && data.code === "UPGRADE_REQUIRED") { showPaywall(data); const err = new Error(data.error); err.upgrade = true; throw err; }
+        throw new Error((data && data.error) || `エラー（${res.status}）`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "", done = 0, finalPlan = null;
+      while (true) {
+        const { value, done: rdone } = await reader.read();
+        if (rdone) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) >= 0) {
+          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+          if (!line) continue;
+          let ev; try { ev = JSON.parse(line); } catch { continue; }
+          if (ev.type === "meal" || ev.type === "meal_error") {
+            const m = findStreamMeal(ev.date, ev.slot);
+            if (m) { m.dishes = ev.dishes || []; m._pending = false; if (ev.type === "meal_error") m._error = true; }
+            done++;
+            setStreamTitle(done, total);
+            if (activeViewId() === "detail") renderOverview();
+          } else if (ev.type === "done") {
+            finalPlan = ev.plan;
+          } else if (ev.type === "fatal") {
+            streaming = false; throw new Error(ev.error || "生成に失敗しました。");
+          }
+        }
+      }
+      streaming = false;
+      if (finalPlan) showOverview(finalPlan); // 保存済み（id付き）で最終描画
+    }
+    function findStreamMeal(date, slot) {
+      const d = (currentPlan.days || []).find((x) => x.date === date);
+      return d && d.meals.find((m) => m.slot === slot);
+    }
+    function activeViewId() {
+      const v = [...document.querySelectorAll(".view")].find((x) => x.classList.contains("active"));
+      return v ? v.id.replace(/^view-/, "") : "";
+    }
+    function setStreamTitle(done, total) {
+      if (activeViewId() === "detail" && streaming) $("title").textContent = `作成中… ${done}/${total}食`;
+    }
+
+    // ---------- 生成中のプログレス表示（旧・単発生成用。順次表示では未使用） ----------
     let genTimer = null;
     function startGenProgress(mealCount) {
       const est = Math.max(12, 8 + mealCount * 9); // 目安（秒）: 実測に合わせて長めに
@@ -1826,27 +1899,32 @@
         for (const meal of day.meals || []) {
           const card = document.createElement("div");
           card.className = "mealcard";
-          const rows = (meal.dishes && meal.dishes.length)
-            ? meal.dishes.map((d) =>
-                `<li><span class="rl">${esc(d.role || "料理")}</span><span class="nm">${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
-              ).join("")
-            : `<li class="empty-dish">タップして料理を追加</li>`;
+          let rows;
+          if (meal._pending) rows = `<li class="empty-dish gen-pending">作成中…</li>`;
+          else if (meal._error) rows = `<li class="empty-dish">生成に失敗しました（後で作り直せます）</li>`;
+          else if (meal.dishes && meal.dishes.length)
+            rows = meal.dishes.map((d) =>
+              `<li><span class="rl">${esc(d.role || "料理")}</span><span class="nm">${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
+            ).join("");
+          else rows = `<li class="empty-dish">タップして料理を追加</li>`;
           card.innerHTML = `
             <div class="mealcard-head"><span class="slot-chip">${esc(meal.slot)}</span>
-              <span class="seehint">作り方<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></div>
+              ${meal._pending ? "" : `<span class="seehint">作り方<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>`}</div>
             <ul class="dishlist">${rows}</ul>`;
-          card.addEventListener("click", () => openRecipe(day.date, meal.slot));
+          if (!meal._pending) card.addEventListener("click", () => openRecipe(day.date, meal.slot));
           frag.appendChild(card);
         }
       }
       body.appendChild(frag);
 
-      const range = plan.startDate === plan.endDate ? mdLabel(plan.startDate) : `${mdLabel(plan.startDate)}〜${mdLabel(plan.endDate)}`;
-      const del = document.createElement("button");
-      del.className = "btn-danger";
-      del.innerHTML = `${TRASH_SVG}<span>この献立（${esc(range)}）を削除</span>`;
-      del.addEventListener("click", () => deletePlan(currentPlan.id));
-      body.appendChild(del);
+      if (currentPlan.id) { // 生成中（保存前スケルトン）は削除ボタンを出さない
+        const range = plan.startDate === plan.endDate ? mdLabel(plan.startDate) : `${mdLabel(plan.startDate)}〜${mdLabel(plan.endDate)}`;
+        const del = document.createElement("button");
+        del.className = "btn-danger";
+        del.innerHTML = `${TRASH_SVG}<span>この献立（${esc(range)}）を削除</span>`;
+        del.addEventListener("click", () => deletePlan(currentPlan.id));
+        body.appendChild(del);
+      }
     }
 
     // ---------- 作り方ページ ----------
@@ -2258,6 +2336,7 @@
       });
     }
     async function scalePlan(newPeople) {
+      if (streaming || !currentPlan.id) return; // 生成中は人数変更を受け付けない
       newPeople = Math.max(1, Math.min(12, newPeople));
       const ratio = newPeople / (currentPlan.people || 1);
       if (ratio === 1) return;

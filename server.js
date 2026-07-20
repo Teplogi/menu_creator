@@ -342,7 +342,7 @@ const DISH_COUNT_DIRECTIVE = {
 };
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "" } = {}) {
   const { people, maxCookMinutes, dishCount, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -367,6 +367,9 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [] } = {}
       : "",
     recentDishes && recentDishes.length
       ? `この世帯が最近作った料理です。マンネリを避けるため、これらとは違う料理・味付け・ジャンルを優先すること: ${recentDishes.join("、")}`
+      : "",
+    styleHint
+      ? `参考の方向性: 今回は「${styleHint}」寄りで、他と被らない一皿を歓迎します（絶対条件ではありません）。`
       : "",
     "",
     "【バリエーションのルール（重要）】",
@@ -393,9 +396,26 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [] } = {}
     .join("\n");
 }
 
-async function generate(targets, opts, diversity = {}) {
+// まとめ生成の既定モデル（品質重視）。単発操作・順次表示は速い Haiku を使う。
+const BULK_MODEL = process.env.GEN_MODEL || "claude-opus-4-8";
+const SINGLE_MODEL = process.env.GEN_MODEL_SINGLE || "claude-haiku-4-5";
+// 並列数を制限しながら map（順次表示で1食ずつ生成する際、同時実行制限に当たりにくくする）
+async function mapLimit(items, limit, fn) {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const i = cursor++;
+      await fn(items[i], i);
+    }
+  });
+  await Promise.all(runners);
+}
+const SLOT_ORDER = { 朝食: 0, 昼食: 1, 夕食: 2 };
+const STYLE_ROTATION = ["和食", "洋食", "中華・エスニック", "麺類・丼もの", "魚介中心", "卵・豆腐など"];
+
+async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
   const stream = client.messages.stream({
-    model: "claude-opus-4-8",
+    model,
     max_tokens: 32000,
     tools: [
       {
@@ -474,7 +494,7 @@ function buildDishPrompt(instruction, ctx) {
 
 async function generateDish(instruction, ctx) {
   const stream = client.messages.stream({
-    model: "claude-opus-4-8",
+    model: SINGLE_MODEL, // 1品差し替えは単発操作＝速い Haiku
     max_tokens: 8000,
     tools: [
       {
@@ -798,6 +818,88 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
   }
 });
 
+// 順次表示（progressive）: 食事ごとに生成し、完成したものから ndjson で流す。
+// 単発生成＝速い Haiku を使い、最初の1食を早く画面に出す。最後に組み立てて保存し done を返す。
+app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
+  const send = (obj) => { try { res.write(JSON.stringify(obj) + "\n"); } catch {} };
+  try {
+    const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid, includeSteps } =
+      req.body || {};
+    const household = await requireMember(req, res, householdId);
+    if (!household) return;
+    const vErr = validateTargets(targets);
+    if (vErr) return res.status(400).json({ error: vErr });
+
+    const opts = {
+      people: Number(people) > 0 ? Number(people) : 2,
+      maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
+      dishCount: dishCount || "main_side",
+      preferences: (preferences || "").toString().trim(),
+      avoid: (avoid || "").toString().trim(),
+      includeSteps: includeSteps !== false,
+    };
+    const recentDishes = await getRecentDishNames(household.id);
+
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no"); // プロキシのバッファリング無効化
+
+    const units = [];
+    for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
+    send({ type: "start", total: units.length, units: units.map((u) => ({ date: u.date, slot: u.slot })) });
+
+    const collected = new Map();
+    await mapLimit(units, 4, async (u, i) => {
+      let dishes = [];
+      // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
+      try {
+        for (let attempt = 0; attempt < 3 && dishes.length === 0; attempt++) {
+          const r = await generate(
+            [{ date: u.date, slots: [u.slot] }],
+            opts,
+            { recentDishes, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length] },
+            SINGLE_MODEL
+          );
+          dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
+        }
+      } catch (e) {
+        dishes = [];
+      }
+      if (!opts.includeSteps) dishes.forEach((d) => delete d.steps);
+      collected.set(`${u.date}|${u.slot}`, dishes);
+      send(
+        dishes.length
+          ? { type: "meal", date: u.date, slot: u.slot, dishes }
+          : { type: "meal_error", date: u.date, slot: u.slot }
+      );
+    });
+
+    // 全食まとまったらプランを組み立てて保存
+    const byDate = new Map(targets.map((t) => [t.date, []]));
+    for (const t of targets)
+      for (const slot of t.slots)
+        byDate.get(t.date).push({ slot, dishes: collected.get(`${t.date}|${slot}`) || [] });
+    const days = [...byDate.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([date, meals]) => ({
+        date,
+        meals: meals.sort((a, b) => (SLOT_ORDER[a.slot] ?? 9) - (SLOT_ORDER[b.slot] ?? 9)),
+      }));
+    const dates = targets.map((t) => t.date).sort();
+    const row = await one(INSERT_PLAN, [
+      randomUUID(), household.id, dates[0], dates[dates.length - 1], opts.people, opts.maxCookMinutes,
+      opts.dishCount, opts.preferences, opts.avoid,
+      JSON.stringify({ targets, opts }), JSON.stringify({ days }), new Date().toISOString(),
+    ]);
+    if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1);
+    send({ type: "done", plan: planToClient(row) });
+    res.end();
+  } catch (err) {
+    if (res.headersSent) { send({ type: "fatal", error: (err && err.message) || "生成に失敗しました" }); res.end(); }
+    else handleError(res, err);
+  }
+});
+
 // AIを使わず空の献立を作る（手打ち入力用・APIキー不要）
 app.post("/api/plans/manual", auth, async (req, res) => {
   try {
@@ -910,7 +1012,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1), async
     const regenerated = await generate([{ date, slots: [slot] }], opts, {
       avoidDishes,
       recentDishes,
-    });
+    }, SINGLE_MODEL); // 1食作り直しは単発操作＝速い Haiku
     const newDishes = regenerated.days?.[0]?.meals?.[0]?.dishes;
     if (!newDishes) throw new Error("EMPTY_RESPONSE");
     if (opts?.includeSteps === false) newDishes.forEach((d) => delete d.steps); // 献立だけモードは作り方を除去
