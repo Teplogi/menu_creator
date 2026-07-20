@@ -345,6 +345,11 @@
     .plan-note { font-size: .88rem; color: var(--muted); }
     .pw-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
     .pw-list li { font-size: .92rem; color: var(--ink); line-height: 1.4; }
+    /* ---- 規約リンク ---- */
+    .legal-note { font-size: .78rem; color: var(--muted); text-align: center; margin: 14px 0 2px; line-height: 1.6; }
+    .legal-note a { color: var(--orange-dark); font-weight: 600; }
+    .legal-links { text-align: center; font-size: .82rem; margin-top: 4px; }
+    .legal-links a { color: var(--muted); text-decoration: underline; }
     .move-panel .ef { display: block; margin-bottom: 12px; }
     .move-panel .ef > span { display: block; font-size: .78rem; font-weight: 700; color: #6f665c; margin-bottom: 6px; }
     .move-panel input { background: #fff; }
@@ -553,6 +558,7 @@
           <p id="authErr" style="color:var(--orange-dark);font-weight:600;font-size:.85rem;margin:12px 0 0;min-height:1em"></p>
           <button type="submit" class="btn-primary" id="authBtn">ログイン</button>
         </form>
+        <p class="legal-note">登録・ログインすることで、<a href="/terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意したものとみなされます。</p>
       </div>
     </section>
 
@@ -690,6 +696,7 @@
         <div class="sec-head"><span class="label">アカウント</span><span class="lead"></span></div>
         <p style="font-size:.9rem;margin:0 0 10px">ログイン中: <b id="meName"></b></p>
         <button class="btn-ghost" onclick="logout()">ログアウト</button>
+        <p class="legal-links"><a href="/terms.html" target="_blank" rel="noopener">利用規約</a> ・ <a href="/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a></p>
       </div>
     </section>
 
