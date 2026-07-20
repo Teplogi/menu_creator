@@ -344,6 +344,7 @@ const DISH_COUNT_DIRECTIVE = {
 // ---------- 生成ロジック ----------
 function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [] } = {}) {
   const { people, maxCookMinutes, dishCount, preferences, avoid } = opts;
+  const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
     .map((t) => `- ${t.date} : ${t.slots.join(" / ")}`)
     .join("\n");
@@ -383,7 +384,9 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [] } = {}
     "その他のルール:",
     "- 各 dish の role は「主菜」「副菜」「汁物」のいずれかにする。",
     "- 材料は name（食材名）・amount（分量）・category（分類）に分ける。category は指定の6分類から正しく選び、常備調味料は必ず「調味料」にする。",
-    "- 手順は簡潔な箇条書きにする。",
+    includeSteps
+      ? "- 手順は簡潔な箇条書きにする。"
+      : "- このプランは献立（料理名・材料）だけでよく、作り方の手順は不要です。",
     "- すべて日本語で出力する。",
   ]
     .filter(Boolean)
@@ -410,6 +413,15 @@ async function generate(targets, opts, diversity = {}) {
   );
   if (!toolBlock) throw new Error("EMPTY_RESPONSE");
   return toolBlock.input; // { days: [...] }
+}
+
+// 「作り方は生成しない」モード用。生成後にサーバー側で作り方(steps)を確実に削除する。
+// （モデルはプロンプト無視で steps を返すことがあるため、ここで削るのが唯一確実な方法）
+function stripSteps(plan) {
+  for (const d of plan?.days || [])
+    for (const m of d.meals || [])
+      for (const dish of m.dishes || []) delete dish.steps;
+  return plan;
 }
 
 // ---------- 1品だけ差し替え生成（機能5） ----------
@@ -743,7 +755,7 @@ const INSERT_PLAN = `INSERT INTO meal_plans
 
 app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
   try {
-    const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid } =
+    const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid, includeSteps } =
       req.body || {};
     const household = await requireMember(req, res, householdId);
     if (!household) return;
@@ -757,10 +769,12 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
       dishCount: dishCount || "main_side",
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
+      includeSteps: includeSteps !== false, // false で「作り方は生成しない（献立だけ）」
     };
 
     const recentDishes = await getRecentDishNames(household.id);
     const plan = await generate(targets, opts, { recentDishes });
+    if (!opts.includeSteps) stripSteps(plan); // モデルが返しても作り方を確実に除去
 
     const dates = targets.map((t) => t.date).sort();
     const row = await one(INSERT_PLAN, [
@@ -899,6 +913,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1), async
     });
     const newDishes = regenerated.days?.[0]?.meals?.[0]?.dishes;
     if (!newDishes) throw new Error("EMPTY_RESPONSE");
+    if (opts?.includeSteps === false) newDishes.forEach((d) => delete d.steps); // 献立だけモードは作り方を除去
 
     meal.dishes = newDishes;
     const updated = await one(

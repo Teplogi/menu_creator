@@ -376,6 +376,14 @@
     .lp-price-note { color: var(--muted); font-size: .92rem; line-height: 1.75; margin: 0; }
     .lp-foot { text-align: center; font-size: .82rem; margin-top: 28px; }
     .lp-foot a { color: var(--muted); text-decoration: underline; }
+    /* ---- 作り方トグル ---- */
+    .toggle-field { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 4px; cursor: pointer; }
+    .toggle-field input { margin-top: 3px; flex: none; width: 18px; height: 18px; accent-color: var(--orange); }
+    .toggle-field span { display: flex; flex-direction: column; gap: 2px; }
+    .toggle-field small { color: var(--muted); font-size: .8rem; line-height: 1.5; }
+    /* ---- 生成プログレスバー ---- */
+    .genbar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.35); overflow: hidden; margin: 6px 0; }
+    .genbar-fill { height: 100%; width: 0%; background: #fff; border-radius: 999px; transition: width .4s ease; }
     .move-panel .ef { display: block; margin-bottom: 12px; }
     .move-panel .ef > span { display: block; font-size: .78rem; font-weight: 700; color: #6f665c; margin-bottom: 6px; }
     .move-panel input { background: #fff; }
@@ -694,6 +702,11 @@
           <textarea id="preferences" placeholder="例: 和食多めで、野菜をたっぷり。子どもも食べやすいもの。"></textarea>
         </label>
 
+        <label class="toggle-field">
+          <input type="checkbox" id="noSteps" />
+          <span><b>作り方は作らない（献立と材料だけ）</b><small>料理名と材料だけの一覧に。作り方は表示されません（後から鉛筆や「AIで変更」で追加できます）</small></span>
+        </label>
+
         <p id="error"></p>
         <p id="aiQuotaHint" class="hint" style="display:none;margin:0 0 8px"></p>
         <button type="submit" class="btn-primary" id="submitBtn">AIで作成する</button>
@@ -798,7 +811,11 @@
 
   <div class="overlay" id="overlay">
     <div class="spinner"></div>
-    <div><p>AIが献立を考えています…</p><small>数十秒かかることがあります</small></div>
+    <div style="text-align:center;width:min(320px,80vw)">
+      <p id="genMsg" style="margin:0 0 6px">AIが献立を考えています…</p>
+      <div class="genbar"><div class="genbar-fill" id="genFill"></div></div>
+      <small id="genSub">まもなく完成します</small>
+    </div>
   </div>
 
   <script>
@@ -1722,19 +1739,46 @@
         dishCount: $("dishCount").value,
         preferences: $("preferences").value.trim(),
         avoid: $("avoid").value.trim(),
+        includeSteps: !$("noSteps").checked,
       };
 
+      const mealCount = targets.reduce((n, t) => n + t.slots.length, 0);
       $("overlay").classList.add("on");
       $("submitBtn").disabled = true;
+      startGenProgress(mealCount);
       try {
-        showOverview(await apiOK("/api/plans", { method: "POST", body: payload }));
+        const plan = await apiOK("/api/plans", { method: "POST", body: payload });
+        stopGenProgress(true);
+        showOverview(plan);
       } catch (e2) {
         if (!e2.upgrade) $("error").textContent = e2.message;
       } finally {
+        stopGenProgress(false);
         $("overlay").classList.remove("on");
         $("submitBtn").disabled = false;
       }
     });
+
+    // ---------- 生成中のプログレス表示（待ち時間の不安を軽減） ----------
+    let genTimer = null;
+    function startGenProgress(mealCount) {
+      const est = Math.max(12, 8 + mealCount * 9); // 目安（秒）: 実測に合わせて長めに
+      const start = Date.now();
+      $("genMsg").textContent = `AIが${mealCount}食ぶんの献立を考えています…`;
+      $("genFill").style.width = "0%";
+      $("genSub").textContent = "まもなく完成します";
+      clearInterval(genTimer);
+      genTimer = setInterval(() => {
+        const el = (Date.now() - start) / 1000;
+        const pct = Math.min(93, 93 * (1 - Math.exp((-el / est) * 1.6))); // 93%まで漸近
+        $("genFill").style.width = pct.toFixed(0) + "%";
+        $("genSub").textContent = `約${Math.round(el)}秒経過`;
+      }, 300);
+    }
+    function stopGenProgress(done) {
+      clearInterval(genTimer); genTimer = null;
+      if (done) { $("genFill").style.width = "100%"; $("genSub").textContent = "完成！"; }
+    }
 
     // 手打ちで空の献立を作成（AIなし）
     async function createManual() {
@@ -1881,8 +1925,12 @@
           <div class="subsec"><div class="sec-head"><span class="label">${dish.store_bought ? "買うもの" : "材料"}</span><span class="lead"></span></div>
             <ul class="ings">${(dish.ingredients || []).map((i) => `<li>${esc(i.name)}${i.amount ? ` ${esc(i.amount)}` : ""}</li>`).join("")}</ul></div>`;
         if (!dish.store_bought) {
-          inner += `<div class="subsec"><div class="sec-head"><span class="label">作り方</span><span class="lead"></span></div>
-            <ol class="steps">${(dish.steps || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ol></div>`;
+          const hasSteps = (dish.steps || []).length > 0;
+          inner += `<div class="subsec"><div class="sec-head"><span class="label">作り方</span><span class="lead"></span></div>`
+            + (hasSteps
+              ? `<ol class="steps">${dish.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
+              : `<p class="empty" style="padding:6px 0">この献立は「作り方なし」で作成しました。<br>鉛筆マークから追記するか、「✨ AIで変更」で作り直すと手順を付けられます。</p>`)
+            + `</div>`;
         }
         el.innerHTML = inner;
         body.appendChild(el);
