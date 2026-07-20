@@ -16,24 +16,30 @@
 - **1食だけ作り直し**
 
 ## 必要なもの
-- [Node.js](https://nodejs.org/) 22 以上（SQLite 内蔵機能 `node:sqlite` を使用）
+- [Node.js](https://nodejs.org/) 22 以上
 - Claude API キー（[Anthropic Console](https://console.anthropic.com/) で取得）
+- **Postgres データベース**（[Neon](https://neon.tech/) 推奨、または Supabase / ローカルPostgres）
 
 ## セットアップ
 ```bash
 # 1. 依存パッケージをインストール
 npm install
 
-# 2. APIキーを環境変数に設定
-#   PowerShell:
-$env:ANTHROPIC_API_KEY = "sk-ant-xxxxxxxx"
-#   macOS / Linux (bash):
-export ANTHROPIC_API_KEY="sk-ant-xxxxxxxx"
+# 2. 環境変数を設定（.env.example をコピーして .env を作成し、値を入れる）
+cp .env.example .env
+#   .env に必須項目を設定:
+#     ANTHROPIC_API_KEY=sk-ant-...
+#     DATABASE_URL=postgresql://...@...neon.tech/neondb?sslmode=require
 
-# 3. 起動
+# 3. 起動（.env を自動読み込み。テーブルは初回起動時に自動作成）
 npm start
 ```
 ブラウザで **http://localhost:3000** を開いてください。
+
+> 既存の SQLite（`data.db`）データを Postgres へ移行する場合は、`.env` に `DATABASE_URL` を設定した上で:
+> ```bash
+> npm run migrate:sqlite-to-pg
+> ```
 
 ## 使い方
 1. **アカウント登録／ログイン**（ユーザー名＋パスワード）

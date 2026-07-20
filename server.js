@@ -1,6 +1,7 @@
+import "dotenv/config";
 import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
-import { DatabaseSync } from "node:sqlite";
+import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
 const app = express();
@@ -12,57 +13,77 @@ const client = new Anthropic(); // ANTHROPIC_API_KEY を環境変数から読み
 const MAX_DAYS = 14;
 const MAX_SLOTS = 42; // 生成量の上限（14日 × 3食）
 
-// ---------- DB 初期化 ----------
-const db = new DatabaseSync(process.env.DB_PATH || "data.db");
-db.exec(`
-  CREATE TABLE IF NOT EXISTS households (
-    id TEXT PRIMARY KEY,
-    name TEXT,
-    share_token TEXT UNIQUE NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS meal_plans (
-    id TEXT PRIMARY KEY,
-    household_id TEXT NOT NULL,
-    start_date TEXT,
-    end_date TEXT,
-    people INTEGER,
-    max_cook_minutes INTEGER,
-    dish_count TEXT,
-    preferences TEXT,
-    avoid TEXT,
-    input_json TEXT NOT NULL,
-    data_json TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    username_lc TEXT UNIQUE NOT NULL,
-    pw_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS sessions (
-    token TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS memberships (
-    household_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'member',
-    created_at TEXT NOT NULL,
-    PRIMARY KEY (household_id, user_id)
-  );
-  CREATE TABLE IF NOT EXISTS pantry_items (
-    id TEXT PRIMARY KEY,
-    household_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    name_norm TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_hh_norm ON pantry_items (household_id, name_norm);
-`);
+// ---------- DB（Postgres / pg） ----------
+if (!process.env.DATABASE_URL) {
+  console.error("DATABASE_URL が未設定です。.env に接続文字列を設定してください（Neon/Supabase）。");
+}
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Neon 等のマネージドPostgresはSSL必須
+  ssl: /neon\.tech|sslmode=require|supabase/.test(process.env.DATABASE_URL || "")
+    ? { rejectUnauthorized: false }
+    : undefined,
+  max: 8,
+});
+pool.on("error", (err) => console.error("PG pool error:", err.message));
+
+// クエリヘルパー（$1, $2 ... のプレースホルダを使う）
+const q = (text, params) => pool.query(text, params);
+const one = async (text, params) => (await pool.query(text, params)).rows[0] || null;
+const all = async (text, params) => (await pool.query(text, params)).rows;
+
+async function initDb() {
+  await q(`
+    CREATE TABLE IF NOT EXISTS households (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      share_token TEXT UNIQUE NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS meal_plans (
+      id TEXT PRIMARY KEY,
+      household_id TEXT NOT NULL,
+      start_date TEXT,
+      end_date TEXT,
+      people INTEGER,
+      max_cook_minutes INTEGER,
+      dish_count TEXT,
+      preferences TEXT,
+      avoid TEXT,
+      input_json TEXT NOT NULL,
+      data_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      username_lc TEXT UNIQUE NOT NULL,
+      pw_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS memberships (
+      household_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (household_id, user_id)
+    );
+    CREATE TABLE IF NOT EXISTS pantry_items (
+      id TEXT PRIMARY KEY,
+      household_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      name_norm TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_hh_norm ON pantry_items (household_id, name_norm);
+    CREATE INDEX IF NOT EXISTS idx_plans_household ON meal_plans (household_id, created_at DESC);
+  `);
+}
 
 // 食材名の正規化（表記ゆれ吸収。フロントの normName と揃える）
 function normName(s) {
@@ -82,35 +103,37 @@ function verifyPassword(pw, stored) {
   const test = scryptSync(pw, Buffer.from(saltHex, "hex"), 64);
   return hash.length === test.length && timingSafeEqual(hash, test);
 }
-function createSession(userId) {
+async function createSession(userId) {
   const token = randomBytes(24).toString("base64url");
-  db.prepare("INSERT INTO sessions (token, user_id, created_at) VALUES (?, ?, ?)").run(
+  await q("INSERT INTO sessions (token, user_id, created_at) VALUES ($1, $2, $3)", [
     token,
     userId,
-    new Date().toISOString()
-  );
+    new Date().toISOString(),
+  ]);
   return token;
 }
 // 認証必須ミドルウェア（req.user をセット）
-function auth(req, res, next) {
-  const h = req.headers.authorization || "";
-  const token = h.startsWith("Bearer ") ? h.slice(7) : null;
-  const sess = token && db.prepare("SELECT * FROM sessions WHERE token = ?").get(token);
-  const user = sess && db.prepare("SELECT id, username FROM users WHERE id = ?").get(sess.user_id);
-  if (!user) return res.status(401).json({ error: "ログインが必要です。" });
-  req.user = user;
-  next();
+async function auth(req, res, next) {
+  try {
+    const h = req.headers.authorization || "";
+    const token = h.startsWith("Bearer ") ? h.slice(7) : null;
+    const sess = token ? await one("SELECT * FROM sessions WHERE token = $1", [token]) : null;
+    const user = sess ? await one("SELECT id, username FROM users WHERE id = $1", [sess.user_id]) : null;
+    if (!user) return res.status(401).json({ error: "ログインが必要です。" });
+    req.user = user;
+    next();
+  } catch (err) {
+    handleError(res, err);
+  }
 }
-function isMember(userId, householdId) {
-  return !!db
-    .prepare("SELECT 1 FROM memberships WHERE user_id = ? AND household_id = ?")
-    .get(userId, householdId);
+async function isMember(userId, householdId) {
+  return !!(await one("SELECT 1 FROM memberships WHERE user_id = $1 AND household_id = $2", [userId, householdId]));
 }
 // req.user が householdId のメンバーであることを要求。OKなら household 行を返す
-function requireMember(req, res, householdId) {
-  const hh = db.prepare("SELECT * FROM households WHERE id = ?").get(householdId);
+async function requireMember(req, res, householdId) {
+  const hh = await one("SELECT * FROM households WHERE id = $1", [householdId]);
   if (!hh) { res.status(404).json({ error: "世帯が見つかりません。" }); return null; }
-  if (!isMember(req.user.id, hh.id)) { res.status(403).json({ error: "この世帯へのアクセス権がありません。" }); return null; }
+  if (!(await isMember(req.user.id, hh.id))) { res.status(403).json({ error: "この世帯へのアクセス権がありません。" }); return null; }
   return hh;
 }
 
@@ -335,12 +358,11 @@ function validateTargets(targets) {
 }
 
 // 直近プランの料理名を集めて、マンネリ回避のヒントにする
-function getRecentDishNames(householdId, planLimit = 5, cap = 40) {
-  const rows = db
-    .prepare(
-      "SELECT data_json FROM meal_plans WHERE household_id = ? ORDER BY created_at DESC LIMIT ?"
-    )
-    .all(householdId, planLimit);
+async function getRecentDishNames(householdId, planLimit = 5, cap = 40) {
+  const rows = await all(
+    "SELECT data_json FROM meal_plans WHERE household_id = $1 ORDER BY created_at DESC LIMIT $2",
+    [householdId, planLimit]
+  );
   const names = [];
   for (const r of rows) {
     try {
@@ -369,13 +391,15 @@ function handleError(res, err) {
 
 // ---------- 認証 API ----------
 const userToClient = (u) => ({ id: u.id, username: u.username });
-const householdsOf = (userId) =>
-  db.prepare(
+async function householdsOf(userId) {
+  return await all(
     `SELECT h.id, h.name FROM households h JOIN memberships m ON m.household_id = h.id
-     WHERE m.user_id = ? ORDER BY m.created_at`
-  ).all(userId);
+     WHERE m.user_id = $1 ORDER BY m.created_at`,
+    [userId]
+  );
+}
 
-app.post("/api/auth/register", (req, res) => {
+app.post("/api/auth/register", async (req, res) => {
   try {
     const username = (req.body?.username || "").toString().trim();
     const password = (req.body?.password || "").toString();
@@ -384,52 +408,136 @@ app.post("/api/auth/register", (req, res) => {
     if (password.length < 6)
       return res.status(400).json({ error: "パスワードは6文字以上にしてください。" });
     const lc = username.toLowerCase();
-    if (db.prepare("SELECT 1 FROM users WHERE username_lc = ?").get(lc))
+    if (await one("SELECT 1 FROM users WHERE username_lc = $1", [lc]))
       return res.status(409).json({ error: "そのユーザー名は既に使われています。" });
     const id = randomUUID();
-    db.prepare(
-      "INSERT INTO users (id, username, username_lc, pw_hash, created_at) VALUES (?, ?, ?, ?, ?)"
-    ).run(id, username, lc, hashPassword(password), new Date().toISOString());
-    res.json({ token: createSession(id), user: { id, username } });
+    await q(
+      "INSERT INTO users (id, username, username_lc, pw_hash, created_at) VALUES ($1, $2, $3, $4, $5)",
+      [id, username, lc, hashPassword(password), new Date().toISOString()]
+    );
+    res.json({ token: await createSession(id), user: { id, username } });
   } catch (err) {
     handleError(res, err);
   }
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   try {
     const username = (req.body?.username || "").toString().trim();
     const password = (req.body?.password || "").toString();
-    const u = db.prepare("SELECT * FROM users WHERE username_lc = ?").get(username.toLowerCase());
+    const u = await one("SELECT * FROM users WHERE username_lc = $1", [username.toLowerCase()]);
     if (!u || !verifyPassword(password, u.pw_hash))
       return res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
-    res.json({ token: createSession(u.id), user: userToClient(u) });
+    res.json({ token: await createSession(u.id), user: userToClient(u) });
   } catch (err) {
     handleError(res, err);
   }
 });
 
-app.post("/api/auth/logout", auth, (req, res) => {
-  const token = (req.headers.authorization || "").slice(7);
-  db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
-  res.json({ ok: true });
+app.post("/api/auth/logout", auth, async (req, res) => {
+  try {
+    const token = (req.headers.authorization || "").slice(7);
+    await q("DELETE FROM sessions WHERE token = $1", [token]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
-app.get("/api/auth/me", auth, (req, res) => {
-  res.json({ user: req.user, households: householdsOf(req.user.id) });
+app.get("/api/auth/me", auth, async (req, res) => {
+  try {
+    res.json({ user: req.user, households: await householdsOf(req.user.id) });
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
 // ---------- 世帯 API（認証必須） ----------
-app.post("/api/households", auth, (req, res) => {
+app.post("/api/households", auth, async (req, res) => {
   try {
     const name = (req.body?.name || `${req.user.username}の世帯`).toString().slice(0, 40);
     const id = randomUUID();
     const now = new Date().toISOString();
-    db.prepare("INSERT INTO households (id, name, share_token, created_at) VALUES (?, ?, ?, ?)").run(
-      id, name, randomBytes(12).toString("base64url"), now
+    await q("INSERT INTO households (id, name, share_token, created_at) VALUES ($1, $2, $3, $4)", [
+      id, name, randomBytes(12).toString("base64url"), now,
+    ]);
+    await q("INSERT INTO memberships (household_id, user_id, role, created_at) VALUES ($1, $2, $3, $4)", [
+      id, req.user.id, "owner", now,
+    ]);
+    res.json({ id, name });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get("/api/households", auth, async (req, res) => {
+  try {
+    res.json(await householdsOf(req.user.id));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get("/api/households/:id/members", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const members = await all(
+      `SELECT u.username, m.role FROM memberships m JOIN users u ON u.id = m.user_id
+       WHERE m.household_id = $1 ORDER BY m.created_at`,
+      [req.params.id]
     );
-    db.prepare("INSERT INTO memberships (household_id, user_id, role, created_at) VALUES (?, ?, ?, ?)").run(
-      id, req.user.id, "owner", now
+    res.json(members);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 共同編集者をユーザー名で招待
+app.post("/api/households/:id/members", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const uname = (req.body?.username || "").toString().trim();
+    const target = await one("SELECT * FROM users WHERE username_lc = $1", [uname.toLowerCase()]);
+    if (!target) return res.status(404).json({ error: "そのユーザーは見つかりません。" });
+    if (await isMember(target.id, req.params.id)) return res.status(409).json({ error: "すでにメンバーです。" });
+    await q("INSERT INTO memberships (household_id, user_id, role, created_at) VALUES ($1, $2, $3, $4)", [
+      req.params.id, target.id, "member", new Date().toISOString(),
+    ]);
+    res.json({ ok: true, username: target.username });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------- 常備品リスト（世帯ごと・共有） ----------
+app.get("/api/households/:id/pantry", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const rows = await all(
+      "SELECT id, name FROM pantry_items WHERE household_id = $1 ORDER BY created_at",
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post("/api/households/:id/pantry", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const name = (req.body?.name || "").toString().trim().slice(0, 40);
+    if (!name) return res.status(400).json({ error: "食材名を入力してください。" });
+    const norm = normName(name);
+    const existing = await one(
+      "SELECT id, name FROM pantry_items WHERE household_id = $1 AND name_norm = $2",
+      [req.params.id, norm]
+    );
+    if (existing) return res.json(existing); // 重複は既存を返す（冪等）
+    const id = randomUUID();
+    await q(
+      "INSERT INTO pantry_items (id, household_id, name, name_norm, created_at) VALUES ($1, $2, $3, $4, $5)",
+      [id, req.params.id, name, norm, new Date().toISOString()]
     );
     res.json({ id, name });
   } catch (err) {
@@ -437,76 +545,33 @@ app.post("/api/households", auth, (req, res) => {
   }
 });
 
-app.get("/api/households", auth, (req, res) => {
-  res.json(householdsOf(req.user.id));
-});
-
-app.get("/api/households/:id/members", auth, (req, res) => {
-  if (!requireMember(req, res, req.params.id)) return;
-  const members = db.prepare(
-    `SELECT u.username, m.role FROM memberships m JOIN users u ON u.id = m.user_id
-     WHERE m.household_id = ? ORDER BY m.created_at`
-  ).all(req.params.id);
-  res.json(members);
-});
-
-// 共同編集者をユーザー名で招待
-app.post("/api/households/:id/members", auth, (req, res) => {
-  if (!requireMember(req, res, req.params.id)) return;
-  const uname = (req.body?.username || "").toString().trim();
-  const target = db.prepare("SELECT * FROM users WHERE username_lc = ?").get(uname.toLowerCase());
-  if (!target) return res.status(404).json({ error: "そのユーザーは見つかりません。" });
-  if (isMember(target.id, req.params.id)) return res.status(409).json({ error: "すでにメンバーです。" });
-  db.prepare("INSERT INTO memberships (household_id, user_id, role, created_at) VALUES (?, ?, ?, ?)").run(
-    req.params.id, target.id, "member", new Date().toISOString()
-  );
-  res.json({ ok: true, username: target.username });
-});
-
-// ---------- 常備品リスト（世帯ごと・共有） ----------
-app.get("/api/households/:id/pantry", auth, (req, res) => {
-  if (!requireMember(req, res, req.params.id)) return;
-  const rows = db.prepare(
-    "SELECT id, name FROM pantry_items WHERE household_id = ? ORDER BY created_at"
-  ).all(req.params.id);
-  res.json(rows);
-});
-
-app.post("/api/households/:id/pantry", auth, (req, res) => {
-  if (!requireMember(req, res, req.params.id)) return;
-  const name = (req.body?.name || "").toString().trim().slice(0, 40);
-  if (!name) return res.status(400).json({ error: "食材名を入力してください。" });
-  const norm = normName(name);
-  const existing = db.prepare(
-    "SELECT id, name FROM pantry_items WHERE household_id = ? AND name_norm = ?"
-  ).get(req.params.id, norm);
-  if (existing) return res.json(existing); // 重複は既存を返す（冪等）
-  const id = randomUUID();
-  db.prepare(
-    "INSERT INTO pantry_items (id, household_id, name, name_norm, created_at) VALUES (?, ?, ?, ?, ?)"
-  ).run(id, req.params.id, name, norm, new Date().toISOString());
-  res.json({ id, name });
-});
-
-app.delete("/api/households/:id/pantry/:itemId", auth, (req, res) => {
-  if (!requireMember(req, res, req.params.id)) return;
-  db.prepare("DELETE FROM pantry_items WHERE id = ? AND household_id = ?").run(
-    req.params.itemId, req.params.id
-  );
-  res.json({ ok: true });
+app.delete("/api/households/:id/pantry/:itemId", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    await q("DELETE FROM pantry_items WHERE id = $1 AND household_id = $2", [
+      req.params.itemId, req.params.id,
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
 // 旧・共有トークンの世帯を自分のアカウントに取り込む（移行用）
-app.post("/api/households/claim", auth, (req, res) => {
-  const token = (req.body?.shareToken || "").toString().trim();
-  const hh = db.prepare("SELECT * FROM households WHERE share_token = ?").get(token);
-  if (!hh) return res.status(404).json({ error: "世帯が見つかりません。" });
-  if (!isMember(req.user.id, hh.id)) {
-    db.prepare("INSERT INTO memberships (household_id, user_id, role, created_at) VALUES (?, ?, ?, ?)").run(
-      hh.id, req.user.id, "member", new Date().toISOString()
-    );
+app.post("/api/households/claim", auth, async (req, res) => {
+  try {
+    const token = (req.body?.shareToken || "").toString().trim();
+    const hh = await one("SELECT * FROM households WHERE share_token = $1", [token]);
+    if (!hh) return res.status(404).json({ error: "世帯が見つかりません。" });
+    if (!(await isMember(req.user.id, hh.id))) {
+      await q("INSERT INTO memberships (household_id, user_id, role, created_at) VALUES ($1, $2, $3, $4)", [
+        hh.id, req.user.id, "member", new Date().toISOString(),
+      ]);
+    }
+    res.json({ id: hh.id, name: hh.name });
+  } catch (err) {
+    handleError(res, err);
   }
-  res.json({ id: hh.id, name: hh.name });
 });
 
 // ---------- プラン API（認証＋メンバー必須） ----------
@@ -525,18 +590,23 @@ function planToClient(row) {
     days: JSON.parse(row.data_json).days,
   };
 }
-function loadPlanForUser(req, res) {
-  const row = db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(req.params.id);
+async function loadPlanForUser(req, res) {
+  const row = await one("SELECT * FROM meal_plans WHERE id = $1", [req.params.id]);
   if (!row) { res.status(404).json({ error: "プランが見つかりません。" }); return null; }
-  if (!isMember(req.user.id, row.household_id)) { res.status(403).json({ error: "アクセス権がありません。" }); return null; }
+  if (!(await isMember(req.user.id, row.household_id))) { res.status(403).json({ error: "アクセス権がありません。" }); return null; }
   return row;
 }
+
+const INSERT_PLAN = `INSERT INTO meal_plans
+  (id, household_id, start_date, end_date, people, max_cook_minutes, dish_count,
+   preferences, avoid, input_json, data_json, created_at)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`;
 
 app.post("/api/plans", auth, async (req, res) => {
   try {
     const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid } =
       req.body || {};
-    const household = requireMember(req, res, householdId);
+    const household = await requireMember(req, res, householdId);
     if (!household) return;
 
     const vErr = validateTargets(targets);
@@ -550,18 +620,12 @@ app.post("/api/plans", auth, async (req, res) => {
       avoid: (avoid || "").toString().trim(),
     };
 
-    const recentDishes = getRecentDishNames(household.id);
+    const recentDishes = await getRecentDishNames(household.id);
     const plan = await generate(targets, opts, { recentDishes });
 
     const dates = targets.map((t) => t.date).sort();
-    const id = randomUUID();
-    db.prepare(
-      `INSERT INTO meal_plans
-       (id, household_id, start_date, end_date, people, max_cook_minutes, dish_count,
-        preferences, avoid, input_json, data_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      id,
+    const row = await one(INSERT_PLAN, [
+      randomUUID(),
       household.id,
       dates[0],
       dates[dates.length - 1],
@@ -572,20 +636,19 @@ app.post("/api/plans", auth, async (req, res) => {
       opts.avoid,
       JSON.stringify({ targets, opts }),
       JSON.stringify(plan),
-      new Date().toISOString()
-    );
-
-    res.json(planToClient(db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(id)));
+      new Date().toISOString(),
+    ]);
+    res.json(planToClient(row));
   } catch (err) {
     handleError(res, err);
   }
 });
 
 // AIを使わず空の献立を作る（手打ち入力用・APIキー不要）
-app.post("/api/plans/manual", auth, (req, res) => {
+app.post("/api/plans/manual", auth, async (req, res) => {
   try {
     const { householdId, targets, people, dishCount } = req.body || {};
-    const household = requireMember(req, res, householdId);
+    const household = await requireMember(req, res, householdId);
     if (!household) return;
     const vErr = validateTargets(targets);
     if (vErr) return res.status(400).json({ error: vErr });
@@ -595,46 +658,47 @@ app.post("/api/plans/manual", auth, (req, res) => {
       .map((t) => ({ date: t.date, meals: t.slots.map((slot) => ({ slot, dishes: [] })) }))
       .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
     const dates = targets.map((t) => t.date).sort();
-    const id = randomUUID();
-    db.prepare(
-      `INSERT INTO meal_plans
-       (id, household_id, start_date, end_date, people, max_cook_minutes, dish_count,
-        preferences, avoid, input_json, data_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      id, household.id, dates[0], dates[dates.length - 1], p, null, dishCount || "main_side",
+    const row = await one(INSERT_PLAN, [
+      randomUUID(), household.id, dates[0], dates[dates.length - 1], p, null, dishCount || "main_side",
       "", "",
       JSON.stringify({ targets, opts: { people: p, manual: true } }),
       JSON.stringify({ days }),
-      new Date().toISOString()
-    );
-    res.json(planToClient(db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(id)));
+      new Date().toISOString(),
+    ]);
+    res.json(planToClient(row));
   } catch (err) {
     handleError(res, err);
   }
 });
 
-app.get("/api/plans", auth, (req, res) => {
-  const household = requireMember(req, res, req.query.householdId);
-  if (!household) return;
-  const rows = db
-    .prepare(
-      "SELECT * FROM meal_plans WHERE household_id = ? ORDER BY created_at DESC LIMIT 100"
-    )
-    .all(household.id);
-  res.json(rows.map(planToClient));
+app.get("/api/plans", auth, async (req, res) => {
+  try {
+    const household = await requireMember(req, res, req.query.householdId);
+    if (!household) return;
+    const rows = await all(
+      "SELECT * FROM meal_plans WHERE household_id = $1 ORDER BY created_at DESC LIMIT 100",
+      [household.id]
+    );
+    res.json(rows.map(planToClient));
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
-app.get("/api/plans/:id", auth, (req, res) => {
-  const row = loadPlanForUser(req, res);
-  if (!row) return;
-  res.json(planToClient(row));
+app.get("/api/plans/:id", auth, async (req, res) => {
+  try {
+    const row = await loadPlanForUser(req, res);
+    if (!row) return;
+    res.json(planToClient(row));
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
 // 献立の手動編集を保存（days をまるごと差し替え、任意で people 更新）
-app.post("/api/plans/:id", auth, (req, res) => {
+app.post("/api/plans/:id", auth, async (req, res) => {
   try {
-    const row = loadPlanForUser(req, res);
+    const row = await loadPlanForUser(req, res);
     if (!row) return;
     const { days, people } = req.body || {};
     if (!Array.isArray(days) || !days.every((d) => d && typeof d.date === "string" && Array.isArray(d.meals))) {
@@ -648,32 +712,33 @@ app.post("/api/plans/:id", auth, (req, res) => {
     const dates = days.map((d) => d.date).filter(Boolean).sort();
     const start = dates[0] || row.start_date;
     const end = dates[dates.length - 1] || row.end_date;
-    db.prepare("UPDATE meal_plans SET data_json = ?, people = ?, start_date = ?, end_date = ? WHERE id = ?").run(
-      JSON.stringify({ days }),
-      p,
-      start,
-      end,
-      row.id
+    const updated = await one(
+      "UPDATE meal_plans SET data_json = $1, people = $2, start_date = $3, end_date = $4 WHERE id = $5 RETURNING *",
+      [JSON.stringify({ days }), p, start, end, row.id]
     );
-    res.json(planToClient(db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(row.id)));
+    res.json(planToClient(updated));
   } catch (err) {
     handleError(res, err);
   }
 });
 
 // 献立の削除
-app.delete("/api/plans/:id", auth, (req, res) => {
-  const row = loadPlanForUser(req, res);
-  if (!row) return;
-  db.prepare("DELETE FROM meal_plans WHERE id = ?").run(row.id);
-  res.json({ ok: true });
+app.delete("/api/plans/:id", auth, async (req, res) => {
+  try {
+    const row = await loadPlanForUser(req, res);
+    if (!row) return;
+    await q("DELETE FROM meal_plans WHERE id = $1", [row.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
 // 1食だけ作り直し
 app.post("/api/plans/:id/regenerate", auth, async (req, res) => {
   try {
     const { date, slot } = req.body || {};
-    const row = loadPlanForUser(req, res);
+    const row = await loadPlanForUser(req, res);
     if (!row) return;
 
     const data = JSON.parse(row.data_json);
@@ -686,7 +751,7 @@ app.post("/api/plans/:id/regenerate", auth, async (req, res) => {
     const avoidDishes = [
       ...new Set(data.days.flatMap((d) => d.meals.flatMap((m) => m.dishes.map((x) => x.name)))),
     ];
-    const recentDishes = getRecentDishNames(row.household_id);
+    const recentDishes = await getRecentDishNames(row.household_id);
 
     const regenerated = await generate([{ date, slots: [slot] }], opts, {
       avoidDishes,
@@ -696,12 +761,11 @@ app.post("/api/plans/:id/regenerate", auth, async (req, res) => {
     if (!newDishes) throw new Error("EMPTY_RESPONSE");
 
     meal.dishes = newDishes;
-    db.prepare("UPDATE meal_plans SET data_json = ? WHERE id = ?").run(
-      JSON.stringify(data),
-      row.id
+    const updated = await one(
+      "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
+      [JSON.stringify(data), row.id]
     );
-
-    res.json(planToClient(db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(row.id)));
+    res.json(planToClient(updated));
   } catch (err) {
     handleError(res, err);
   }
@@ -713,7 +777,7 @@ app.post("/api/plans/:id/replace-dish", auth, async (req, res) => {
     const { date, slot, dishIndex, instruction } = req.body || {};
     const instr = (instruction || "").toString().trim();
     if (!instr) return res.status(400).json({ error: "どんな料理にするか入力してください。" });
-    const row = loadPlanForUser(req, res);
+    const row = await loadPlanForUser(req, res);
     if (!row) return;
 
     const data = JSON.parse(row.data_json);
@@ -738,17 +802,24 @@ app.post("/api/plans/:id/replace-dish", auth, async (req, res) => {
     });
 
     meal.dishes[idx] = newDish;
-    db.prepare("UPDATE meal_plans SET data_json = ? WHERE id = ?").run(
-      JSON.stringify(data),
-      row.id
+    const updated = await one(
+      "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
+      [JSON.stringify(data), row.id]
     );
-    res.json(planToClient(db.prepare("SELECT * FROM meal_plans WHERE id = ?").get(row.id)));
+    res.json(planToClient(updated));
   } catch (err) {
     handleError(res, err);
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`めにゅらく！ 起動: http://localhost:${PORT}`);
-});
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`めにゅらく！ 起動: http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("DB初期化に失敗しました:", err.message);
+    process.exit(1);
+  });
