@@ -41,6 +41,16 @@ npm start
 > npm run migrate:sqlite-to-pg
 > ```
 
+## デプロイ（Render）
+本番は [Render](https://render.com/) にデプロイ（公開URL: **https://menuraku.onrender.com**）。
+- リポジトリ直下の `render.yaml`（Blueprint）で構成（web / シンガポール / `npm install`→`npm start` / healthcheck `/`）。`main` への push で自動再デプロイ。
+- 環境変数はRenderのダッシュボードで設定（`ANTHROPIC_API_KEY` / `DATABASE_URL` / `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` / `APP_BASE_URL`。`FREE_AI_MEALS_PER_MONTH`・`SESSION_TTL_DAYS`・`NODE_VERSION` は `render.yaml` に既定値）。
+- Stripe Webhook は本番用にダッシュボードで `https://<公開URL>/api/billing/webhook` を登録（イベント: `checkout.session.completed` / `customer.subscription.updated` / `customer.subscription.deleted`）。その署名シークレットを `STRIPE_WEBHOOK_SECRET` に設定。ローカル検証は Stripe CLI の `stripe listen --forward-to localhost:3000/api/billing/webhook`。
+
+## 課金（フリーミアム）
+- 手動での献立入力・買い物リストは**無料**。**AI生成**は無料枠（既定 月10食、`FREE_AI_MEALS_PER_MONTH`）を超えると有料（月額サブスク）。判定はサーバー側（`entitlements` テーブル＋生成食数の事前チェック、超過は 402）。
+- 月額 Price は `npm run stripe:setup <円>` で作成し、表示された `price_...` を `STRIPE_PRICE_ID` に設定。
+
 ## 使い方
 1. **アカウント登録／ログイン**（ユーザー名＋パスワード）
 2. 初回は「世帯」を作成（あとで家族を招待できます）
