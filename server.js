@@ -32,57 +32,39 @@ const q = (text, params) => pool.query(text, params);
 const one = async (text, params) => (await pool.query(text, params)).rows[0] || null;
 const all = async (text, params) => (await pool.query(text, params)).rows;
 
+// スキーマ（各文を個別に実行する。CREATE TABLE IF NOT EXISTS はPostgresで競合すると
+// pg_type の重複エラーを出すことがあるため、良性エラーは握りつぶす）
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS households (
+    id TEXT PRIMARY KEY, name TEXT, share_token TEXT UNIQUE NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS meal_plans (
+    id TEXT PRIMARY KEY, household_id TEXT NOT NULL, start_date TEXT, end_date TEXT,
+    people INTEGER, max_cook_minutes INTEGER, dish_count TEXT, preferences TEXT, avoid TEXT,
+    input_json TEXT NOT NULL, data_json TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, username_lc TEXT UNIQUE NOT NULL,
+    pw_hash TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS memberships (
+    household_id TEXT NOT NULL, user_id TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'member',
+    created_at TEXT NOT NULL, PRIMARY KEY (household_id, user_id))`,
+  `CREATE TABLE IF NOT EXISTS pantry_items (
+    id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
+    created_at TEXT NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_hh_norm ON pantry_items (household_id, name_norm)`,
+  `CREATE INDEX IF NOT EXISTS idx_plans_household ON meal_plans (household_id, created_at DESC)`,
+];
 async function initDb() {
-  await q(`
-    CREATE TABLE IF NOT EXISTS households (
-      id TEXT PRIMARY KEY,
-      name TEXT,
-      share_token TEXT UNIQUE NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS meal_plans (
-      id TEXT PRIMARY KEY,
-      household_id TEXT NOT NULL,
-      start_date TEXT,
-      end_date TEXT,
-      people INTEGER,
-      max_cook_minutes INTEGER,
-      dish_count TEXT,
-      preferences TEXT,
-      avoid TEXT,
-      input_json TEXT NOT NULL,
-      data_json TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      username_lc TEXT UNIQUE NOT NULL,
-      pw_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS sessions (
-      token TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE TABLE IF NOT EXISTS memberships (
-      household_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'member',
-      created_at TEXT NOT NULL,
-      PRIMARY KEY (household_id, user_id)
-    );
-    CREATE TABLE IF NOT EXISTS pantry_items (
-      id TEXT PRIMARY KEY,
-      household_id TEXT NOT NULL,
-      name TEXT NOT NULL,
-      name_norm TEXT NOT NULL,
-      created_at TEXT NOT NULL
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_hh_norm ON pantry_items (household_id, name_norm);
-    CREATE INDEX IF NOT EXISTS idx_plans_household ON meal_plans (household_id, created_at DESC);
-  `);
+  for (const sql of SCHEMA_STATEMENTS) {
+    try {
+      await q(sql);
+    } catch (e) {
+      // 既に存在する場合の良性エラー（IF NOT EXISTS の競合など）は無視
+      if (/already exists|pg_type_typname|duplicate key value violates unique constraint "pg_/i.test(e.message)) continue;
+      throw e;
+    }
+  }
 }
 
 // 食材名の正規化（表記ゆれ吸収。フロントの normName と揃える）
