@@ -1,0 +1,36 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# 使い方: Render で「New +」→「Blueprint」→ このリポジトリ(Teplogi/menu_creator)を選択。
+# 秘密情報（sync:false）は値をここに書かず、初回デプロイ時にダッシュボードで入力します。
+services:
+  - type: web
+    name: menuraku
+    runtime: node
+    region: singapore          # Neon と同じシンガポールに合わせて低レイテンシに
+    plan: free                 # 無料。一定時間アクセスが無いとスリープし、初回アクセスは起動待ち(数十秒)。
+                               # 常時起動にするなら Render の UI で Starter 以上へ変更してください。
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true           # main への push で自動再デプロイ
+    envVars:
+      # --- 秘密情報: 初回にダッシュボードで入力（コミットしない） ---
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET   # ★本番用。ダッシュボードのWebhookで発行される whsec（ローカルの stripe listen とは別物）
+        sync: false
+      - key: APP_BASE_URL            # 例: https://menuraku.onrender.com（初回デプロイでURL確定後に設定）
+        sync: false
+      # --- 非秘密: 既定値 ---
+      - key: FREE_AI_MEALS_PER_MONTH
+        value: "10"
+      - key: SESSION_TTL_DAYS
+        value: "30"
+      - key: NODE_VERSION
+        value: "22"
