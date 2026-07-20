@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import Anthropic from "@anthropic-ai/sdk";
+import Stripe from "stripe";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -36,10 +37,94 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+// Stripe Webhook は署名検証に「生ボディ」が必要なため、express.json より前に生パーサで登録する。
+// （handleStripeWebhook は関数宣言なので巻き上げにより参照可能）
+app.post("/api/billing/webhook", express.raw({ type: "*/*" }), handleStripeWebhook);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
 const client = new Anthropic(); // ANTHROPIC_API_KEY を環境変数から読み込む
+
+// ---------- Stripe（課金 / フリーミアム） ----------
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || null;
+// 無料ユーザーが月に生成できる「食数」（回数ではなく、生成した食事の数で数える）
+const FREE_AI_MEALS_PER_MONTH = Number(process.env.FREE_AI_MEALS_PER_MONTH) || 10;
+// 課金が有効なのは「秘密鍵」と「価格ID」が両方そろっているときだけ。
+// 未設定の間は AI 生成を全ユーザーに開放する（開発・公開前でも普通に使える）。
+const billingEnabled = () => !!(stripe && STRIPE_PRICE_ID);
+if (!billingEnabled()) {
+  console.log("（課金は未設定: STRIPE_SECRET_KEY / STRIPE_PRICE_ID 未設定のため、AI生成は全開放されます）");
+}
+
+const currentYM = () => new Date().toISOString().slice(0, 7); // "YYYY-MM"
+async function hasActiveEntitlement(userId) {
+  const e = await one("SELECT status, current_period_end FROM entitlements WHERE user_id = $1", [userId]);
+  if (!e || e.status !== "active") return false;
+  if (e.current_period_end && e.current_period_end < new Date().toISOString()) return false;
+  return true;
+}
+async function getAiUsage(userId) {
+  const r = await one("SELECT count FROM ai_usage WHERE user_id = $1 AND ym = $2", [userId, currentYM()]);
+  return r ? r.count : 0;
+}
+async function incAiUsage(userId, n = 1) {
+  await q(
+    `INSERT INTO ai_usage (user_id, ym, count) VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, ym) DO UPDATE SET count = ai_usage.count + $3`,
+    [userId, currentYM(), n]
+  );
+}
+// リクエストから「生成する食数」を数える（targets の slots 合計）
+function aiCostFromTargets(targets) {
+  if (!Array.isArray(targets)) return 1;
+  const n = targets.reduce((sum, t) => sum + (Array.isArray(t?.slots) ? t.slots.length : 0), 0);
+  return Math.max(1, n);
+}
+// AI利用ゲート（auth の後段に置く）。課金未設定=全開放、加入済み=無制限、
+// 無料=月 FREE_AI_MEALS_PER_MONTH「食」まで。costFn(req) が今回生成する食数を返す。
+// 「残り枠 < 今回の食数」なら生成前に 402 で止める（大量生成を無料で取られる穴を塞ぐ）。
+// 消費はここではせず、各ハンドラが「成功時のみ」 incAiUsage(userId, req.aiCost) する。
+function requireAi(costFn) {
+  return async (req, res, next) => {
+    try {
+      if (!billingEnabled()) { req.aiPaid = true; return next(); }
+      if (await hasActiveEntitlement(req.user.id)) { req.aiPaid = true; return next(); }
+      const cost = Math.max(1, costFn ? costFn(req) : 1);
+      const used = await getAiUsage(req.user.id);
+      const remaining = Math.max(0, FREE_AI_MEALS_PER_MONTH - used);
+      if (cost > remaining) {
+        return res.status(402).json({
+          code: "UPGRADE_REQUIRED",
+          error:
+            remaining <= 0
+              ? `今月の無料AI生成（${FREE_AI_MEALS_PER_MONTH}食）を使い切りました。プレミアムにアップグレードすると使い放題です。`
+              : `今回の生成（${cost}食分）は無料枠の残り（${remaining}食）を超えます。期間を短くするか、プレミアムで使い放題に。`,
+          freeLimit: FREE_AI_MEALS_PER_MONTH,
+          freeRemaining: remaining,
+          requested: cost,
+        });
+      }
+      req.aiPaid = false;
+      req.aiCost = cost;
+      return next();
+    } catch (err) {
+      handleError(res, err);
+    }
+  };
+}
+async function getOrCreateStripeCustomer(user) {
+  const e = await one("SELECT stripe_customer_id FROM entitlements WHERE user_id = $1", [user.id]);
+  if (e?.stripe_customer_id) return e.stripe_customer_id;
+  const customer = await stripe.customers.create({ name: user.username, metadata: { userId: user.id } });
+  await q(
+    `INSERT INTO entitlements (user_id, provider, status, stripe_customer_id, updated_at)
+     VALUES ($1, 'stripe', 'inactive', $2, $3)
+     ON CONFLICT (user_id) DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id, updated_at = EXCLUDED.updated_at`,
+    [user.id, customer.id, new Date().toISOString()]
+  );
+  return customer.id;
+}
 
 // ---------- レート制限 ----------
 const jsonTooMany = (msg) => (req, res) => res.status(429).json({ error: msg });
@@ -107,6 +192,17 @@ const SCHEMA_STATEMENTS = [
     created_at TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_hh_norm ON pantry_items (household_id, name_norm)`,
   `CREATE INDEX IF NOT EXISTS idx_plans_household ON meal_plans (household_id, created_at DESC)`,
+  // 課金: 加入状態（provider 列で将来 RevenueCat 等も同居可能）
+  `CREATE TABLE IF NOT EXISTS entitlements (
+    user_id TEXT PRIMARY KEY, provider TEXT NOT NULL DEFAULT 'stripe',
+    status TEXT NOT NULL DEFAULT 'inactive', plan TEXT,
+    stripe_customer_id TEXT, stripe_subscription_id TEXT,
+    current_period_end TEXT, updated_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_entitlements_customer ON entitlements (stripe_customer_id)`,
+  // 無料枠カウンタ（ユーザー×年月）
+  `CREATE TABLE IF NOT EXISTS ai_usage (
+    user_id TEXT NOT NULL, ym TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, ym))`,
 ];
 async function initDb() {
   for (const sql of SCHEMA_STATEMENTS) {
@@ -645,7 +741,7 @@ const INSERT_PLAN = `INSERT INTO meal_plans
    preferences, avoid, input_json, data_json, created_at)
   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`;
 
-app.post("/api/plans", auth, aiLimiter, async (req, res) => {
+app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
   try {
     const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid } =
       req.body || {};
@@ -681,6 +777,7 @@ app.post("/api/plans", auth, aiLimiter, async (req, res) => {
       JSON.stringify(plan),
       new Date().toISOString(),
     ]);
+    if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1); // 無料は成功時のみ食数分を消費
     res.json(planToClient(row));
   } catch (err) {
     handleError(res, err);
@@ -778,7 +875,7 @@ app.delete("/api/plans/:id", auth, async (req, res) => {
 });
 
 // 1食だけ作り直し
-app.post("/api/plans/:id/regenerate", auth, aiLimiter, async (req, res) => {
+app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1), async (req, res) => {
   try {
     const { date, slot } = req.body || {};
     const row = await loadPlanForUser(req, res);
@@ -808,6 +905,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, async (req, res) => {
       "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
       [JSON.stringify(data), row.id]
     );
+    if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1);
     res.json(planToClient(updated));
   } catch (err) {
     handleError(res, err);
@@ -815,7 +913,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, async (req, res) => {
 });
 
 // 料理名・指示を指定して、その1品だけをAIで差し替え（機能5）
-app.post("/api/plans/:id/replace-dish", auth, aiLimiter, async (req, res) => {
+app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1), async (req, res) => {
   try {
     const { date, slot, dishIndex, instruction } = req.body || {};
     const instr = (instruction || "").toString().trim();
@@ -849,11 +947,131 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, async (req, res) => {
       "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
       [JSON.stringify(data), row.id]
     );
+    if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1);
     res.json(planToClient(updated));
   } catch (err) {
     handleError(res, err);
   }
 });
+
+// ---------- 課金 API（Stripe） ----------
+const appBaseUrl = (req) => process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
+
+// 現在の課金状態＋無料枠の残りをフロントに返す
+app.get("/api/billing/status", auth, async (req, res) => {
+  try {
+    const active = billingEnabled() ? await hasActiveEntitlement(req.user.id) : false;
+    const e = await one("SELECT plan, current_period_end FROM entitlements WHERE user_id = $1", [req.user.id]);
+    const used = await getAiUsage(req.user.id);
+    res.json({
+      billingEnabled: billingEnabled(),
+      active,
+      plan: active ? e?.plan || "monthly" : null,
+      currentPeriodEnd: active ? e?.current_period_end || null : null,
+      freeLimit: FREE_AI_MEALS_PER_MONTH,
+      freeUsed: used,
+      freeRemaining: Math.max(0, FREE_AI_MEALS_PER_MONTH - used),
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 申込（Checkout セッション作成）→ フロントは返ってきた url に遷移
+app.post("/api/billing/checkout", auth, async (req, res) => {
+  try {
+    if (!billingEnabled()) return res.status(503).json({ error: "課金は現在利用できません。" });
+    const customerId = await getOrCreateStripeCustomer(req.user);
+    const base = appBaseUrl(req);
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: STRIPE_PRICE_ID, quantity: 1 }],
+      client_reference_id: req.user.id,
+      allow_promotion_codes: true,
+      success_url: `${base}/?billing=success`,
+      cancel_url: `${base}/?billing=cancel`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 解約・カード変更（Customer Portal）→ フロントは返ってきた url に遷移
+app.post("/api/billing/portal", auth, async (req, res) => {
+  try {
+    if (!billingEnabled()) return res.status(503).json({ error: "課金は現在利用できません。" });
+    const e = await one("SELECT stripe_customer_id FROM entitlements WHERE user_id = $1", [req.user.id]);
+    if (!e?.stripe_customer_id) return res.status(400).json({ error: "課金情報が見つかりません。" });
+    const session = await stripe.billingPortal.sessions.create({
+      customer: e.stripe_customer_id,
+      return_url: `${appBaseUrl(req)}/`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// Stripe Webhook 本体（生ボディで署名検証。ルート登録は express.json より前で実施済み）
+async function handleStripeWebhook(req, res) {
+  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) return res.status(503).end();
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      req.headers["stripe-signature"],
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("Webhook署名検証に失敗:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  try {
+    await processStripeEvent(event);
+    res.json({ received: true });
+  } catch (err) {
+    console.error("Webhook処理エラー:", err.message);
+    res.status(500).end(); // 500 を返すと Stripe が再送してくれる
+  }
+}
+
+async function processStripeEvent(event) {
+  const now = new Date().toISOString();
+  if (event.type === "checkout.session.completed") {
+    const s = event.data.object;
+    const userId = s.client_reference_id;
+    if (!userId) return;
+    let periodEnd = null;
+    if (s.subscription) {
+      const sub = await stripe.subscriptions.retrieve(s.subscription);
+      periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+    }
+    await q(
+      `INSERT INTO entitlements
+        (user_id, provider, status, plan, stripe_customer_id, stripe_subscription_id, current_period_end, updated_at)
+       VALUES ($1, 'stripe', 'active', 'monthly', $2, $3, $4, $5)
+       ON CONFLICT (user_id) DO UPDATE SET
+         status = 'active', plan = 'monthly',
+         stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, entitlements.stripe_customer_id),
+         stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, entitlements.stripe_subscription_id),
+         current_period_end = COALESCE(EXCLUDED.current_period_end, entitlements.current_period_end),
+         updated_at = EXCLUDED.updated_at`,
+      [userId, s.customer, s.subscription, periodEnd, now]
+    );
+  } else if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") {
+    const sub = event.data.object;
+    const isActive = sub.status === "active" || sub.status === "trialing";
+    const status = event.type === "customer.subscription.deleted" ? "canceled" : isActive ? "active" : sub.status;
+    const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+    await q(
+      `UPDATE entitlements SET status = $1, current_period_end = $2, stripe_subscription_id = $3, updated_at = $4
+       WHERE stripe_customer_id = $5`,
+      [status, periodEnd, sub.id, now, sub.customer]
+    );
+  }
+}
 
 const PORT = process.env.PORT || 3000;
 initDb()

@@ -337,6 +337,14 @@
     .slot-chip.slot-edit { border: none; cursor: pointer; }
     .move-panel { background: var(--orange-soft); border-radius: 14px; padding: 16px; margin: 0 0 16px; }
     .mp-title { font-weight: 800; color: var(--orange-dark); font-size: .95rem; margin-bottom: 12px; }
+    /* ---- プラン / ペイウォール ---- */
+    .plan-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }
+    .plan-badge { font-size: .78rem; font-weight: 800; padding: 3px 10px; border-radius: 999px; }
+    .plan-badge.premium { background: linear-gradient(135deg, #ffb347, #f5831f); color: #fff; }
+    .plan-badge.free { background: #efe7dd; color: #7a6f63; }
+    .plan-note { font-size: .88rem; color: var(--muted); }
+    .pw-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .pw-list li { font-size: .92rem; color: var(--ink); line-height: 1.4; }
     .move-panel .ef { display: block; margin-bottom: 12px; }
     .move-panel .ef > span { display: block; font-size: .78rem; font-weight: 700; color: #6f665c; margin-bottom: 6px; }
     .move-panel input { background: #fff; }
@@ -620,6 +628,7 @@
         </label>
 
         <p id="error"></p>
+        <p id="aiQuotaHint" class="hint" style="display:none;margin:0 0 8px"></p>
         <button type="submit" class="btn-primary" id="submitBtn">AIで作成する</button>
         <button type="button" class="btn-ghost" id="manualBtn" onclick="createManual()">自分で入力する（AIなし）</button>
       </form>
@@ -672,6 +681,10 @@
           <button class="copybtn" onclick="addPantry()">追加</button>
         </div>
         <div id="pantryList" class="pantrylist"></div>
+      </div>
+      <div class="card" id="billingCard" style="display:none">
+        <div class="sec-head"><span class="label">プラン</span><span class="lead"></span></div>
+        <div id="billingBody"></div>
       </div>
       <div class="card">
         <div class="sec-head"><span class="label">アカウント</span><span class="lead"></span></div>
@@ -739,6 +752,7 @@
     let backHandler = null;   // 戻るボタンの遷移先
     let pantryItems = [];     // 常備品リスト（現在の世帯）[{id,name}]
     let pantryBuySet = new Set(); // 「これは買う」で常備品から外した材料（正規化名・プランごと）
+    let billingStatus = null; // { billingEnabled, active, plan, currentPeriodEnd, freeLimit, freeUsed, freeRemaining }
 
     const $ = (id) => document.getElementById(id);
     // 食材名の正規化（表記ゆれ吸収。server.js の normName と揃える）
@@ -783,7 +797,16 @@
     }
     async function apiOK(path, opts) {
       const { res, data } = await api(path, opts);
-      if (!res.ok) throw new Error((data && data.error) || `エラー（${res.status}）`);
+      if (!res.ok) {
+        // 無料枠オーバー（402）は中央でペイウォールを表示。呼び出し側は e.upgrade で二重表示を抑止。
+        if (res.status === 402 && data && data.code === "UPGRADE_REQUIRED") {
+          showPaywall(data);
+          const err = new Error(data.error || "アップグレードが必要です。");
+          err.upgrade = true;
+          throw err;
+        }
+        throw new Error((data && data.error) || `エラー（${res.status}）`);
+      }
       return data;
     }
 
@@ -800,6 +823,8 @@
     async function showCreate() {
       backHandler = goHome;
       showView("create", "献立を作成", { back: true });
+      $("aiQuotaHint").style.display = "none";
+      loadBillingStatus().then(updateAiQuotaHint); // 無料枠の残数を先出し
       // 既定の期間（今日〜3日後）でカレンダーを初期化
       const today = new Date();
       rangeStart = fmt(today);
@@ -884,7 +909,15 @@
     function addDays(ds, n) { const d = parseDate(ds); d.setDate(d.getDate() + n); return fmt(d); }
 
     // ---------- 初期化・認証 ----------
+    function handleBillingReturn() {
+      const p = new URLSearchParams(location.search).get("billing");
+      if (!p) return;
+      history.replaceState(null, "", location.pathname); // URLからクエリを消す
+      if (p === "success") setTimeout(() => alert("ご登録ありがとうございます！プレミアムが有効になりました。反映まで数秒かかる場合があります。"), 300);
+      else if (p === "cancel") setTimeout(() => alert("お手続きをキャンセルしました。"), 300);
+    }
     async function init() {
+      handleBillingReturn();
       authToken = localStorage.getItem("authToken");
       if (authToken) {
         const { res, data } = await api("/api/auth/me");
@@ -896,6 +929,7 @@
     async function afterLogin() {
       const saved = localStorage.getItem("householdId");
       household = households.find((h) => h.id === saved) || households[0] || null;
+      loadBillingStatus(); // 残数・加入状態を先読み（ペイウォール即応のため）
       if (!household) return showSetup();
       localStorage.setItem("householdId", household.id);
       await goHome();
@@ -926,8 +960,89 @@
     async function logout() {
       try { await api("/api/auth/logout", { method: "POST" }); } catch {}
       authToken = null; currentUser = null; household = null; households = [];
+      billingStatus = null;
       localStorage.removeItem("authToken"); localStorage.removeItem("householdId");
       showAuth();
+    }
+
+    // ---------- 課金（プラン / アップグレード） ----------
+    async function loadBillingStatus() {
+      try { billingStatus = await apiOK("/api/billing/status"); }
+      catch { billingStatus = null; }
+      return billingStatus;
+    }
+    function renderBillingCard() {
+      const card = $("billingCard");
+      if (!card) return;
+      const b = billingStatus;
+      // 課金が未設定（STRIPE未設定）なら、プランUI自体を出さない
+      if (!b || !b.billingEnabled) { card.style.display = "none"; return; }
+      card.style.display = "";
+      if (b.active) {
+        const until = b.currentPeriodEnd ? new Date(b.currentPeriodEnd).toLocaleDateString("ja-JP") : "";
+        $("billingBody").innerHTML =
+          `<div class="plan-row"><span class="plan-badge premium">プレミアム</span>` +
+          `<span class="plan-note">AI生成が使い放題${until ? "・次回更新 " + esc(until) : ""}</span></div>` +
+          `<button class="btn-ghost" onclick="openPortal()">プランを管理（解約・カード変更）</button>`;
+      } else {
+        $("billingBody").innerHTML =
+          `<div class="plan-row"><span class="plan-badge free">無料プラン</span>` +
+          `<span class="plan-note">今月のAI生成 残り <b>${b.freeRemaining}</b> / ${b.freeLimit} 食</span></div>` +
+          `<button class="btn-primary" style="width:100%" onclick="startCheckout()">プレミアムにアップグレード</button>` +
+          `<p class="hint" style="margin:8px 0 0">手動での献立入力・買い物リストはずっと無料です。</p>`;
+      }
+    }
+    async function startCheckout() {
+      try {
+        const { url } = await apiOK("/api/billing/checkout", { method: "POST" });
+        if (url) window.location.href = url;
+      } catch (e) { if (!e.upgrade) alert(e.message); }
+    }
+    async function openPortal() {
+      try {
+        const { url } = await apiOK("/api/billing/portal", { method: "POST" });
+        if (url) window.location.href = url;
+      } catch (e) { if (!e.upgrade) alert(e.message); }
+    }
+    function ensurePaywallModal() {
+      let ov = $("paywallModal");
+      if (ov) return ov;
+      ov = document.createElement("div");
+      ov.id = "paywallModal"; ov.className = "modal-overlay"; ov.style.display = "none";
+      ov.innerHTML =
+        `<div class="modal-card">` +
+        `<div class="mp-title">プレミアムにアップグレード</div>` +
+        `<p id="paywallMsg" style="color:var(--muted);font-size:.92rem;margin:.2rem 0 .9rem"></p>` +
+        `<ul class="pw-list">` +
+        `<li>✨ AI献立の作成・作り直し・1品差し替えが<b>使い放題</b></li>` +
+        `<li>🗓️ 期間をまとめて指定して自動作成</li>` +
+        `<li>🛒 手動入力・買い物リストは無料のまま</li>` +
+        `</ul>` +
+        `<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">` +
+        `<button class="btn-ghost" onclick="closePaywall()">とじる</button>` +
+        `<button class="btn-primary" onclick="startCheckout()">アップグレードする</button>` +
+        `</div></div>`;
+      document.body.appendChild(ov);
+      ov.addEventListener("click", (e) => { if (e.target === ov) closePaywall(); });
+      return ov;
+    }
+    function showPaywall(info) {
+      const ov = ensurePaywallModal();
+      const lim = (info && info.freeLimit != null) ? info.freeLimit : (billingStatus ? billingStatus.freeLimit : "");
+      $("paywallMsg").textContent = (info && info.error) || `今月の無料AI生成（${lim}食）を使い切りました。`;
+      ov.style.display = "flex";
+      loadBillingStatus(); // 残数などを更新
+    }
+    function closePaywall() { const ov = $("paywallModal"); if (ov) ov.style.display = "none"; }
+    // 作成画面に無料枠の残数を先出し（無料ユーザーのみ。加入者・課金未設定では非表示）
+    function updateAiQuotaHint() {
+      const el = $("aiQuotaHint");
+      if (!el) return;
+      const b = billingStatus;
+      if (!b || !b.billingEnabled || b.active) { el.style.display = "none"; return; }
+      el.style.display = "";
+      el.innerHTML = `無料枠：今月あと <b>${b.freeRemaining}</b> / ${b.freeLimit} 食。` +
+        `これを超える期間は<a href="#" onclick="startCheckout();return false;">プレミアム</a>で使い放題です。`;
     }
 
     // ---------- 世帯（作成・引き継ぎ・切替・メンバー） ----------
@@ -985,6 +1100,7 @@
       $("meName").textContent = currentUser ? currentUser.username : "";
       renderHousehold(); // 世帯（メンバー・招待・切替）
       loadPantry();
+      loadBillingStatus().then(renderBillingCard); // プラン（課金）
     }
 
     // ---------- べんり機能（近日公開） ----------
@@ -1543,7 +1659,7 @@
       try {
         showOverview(await apiOK("/api/plans", { method: "POST", body: payload }));
       } catch (e2) {
-        $("error").textContent = e2.message;
+        if (!e2.upgrade) $("error").textContent = e2.message;
       } finally {
         $("overlay").classList.remove("on");
         $("submitBtn").disabled = false;
@@ -1796,7 +1912,7 @@
         closeReplaceModal();
         renderRecipe();
       } catch (e) {
-        $("replaceHint").textContent = e.message;
+        if (!e.upgrade) $("replaceHint").textContent = e.message;
         go.disabled = false; go.textContent = "AIで作り直す";
       }
     }
@@ -1984,7 +2100,7 @@
         currentPlan = await apiOK(`/api/plans/${currentPlan.id}/regenerate`, { method: "POST", body: { date, slot } });
         renderRecipe();
       } catch (e) {
-        alert(e.message);
+        if (!e.upgrade) alert(e.message);
         btn.disabled = false;
         btn.innerHTML = original;
       }
