@@ -1054,9 +1054,9 @@ async function processStripeEvent(event) {
        VALUES ($1, 'stripe', 'active', 'monthly', $2, $3, $4, $5)
        ON CONFLICT (user_id) DO UPDATE SET
          status = 'active', plan = 'monthly',
-         stripe_customer_id = EXCLUDED.stripe_customer_id,
-         stripe_subscription_id = EXCLUDED.stripe_subscription_id,
-         current_period_end = EXCLUDED.current_period_end,
+         stripe_customer_id = COALESCE(EXCLUDED.stripe_customer_id, entitlements.stripe_customer_id),
+         stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, entitlements.stripe_subscription_id),
+         current_period_end = COALESCE(EXCLUDED.current_period_end, entitlements.current_period_end),
          updated_at = EXCLUDED.updated_at`,
       [userId, s.customer, s.subscription, periodEnd, now]
     );
