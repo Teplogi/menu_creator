@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="/icon.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#f5831f" />
-  <meta name="description" content="共働き夫婦・同棲カップルのためのAI献立アプリ。ふたりの献立と買い物リストを自動で作成・共有。「今日、何作ろう？」から解放されます。" />
+  <meta name="description" content="共働き夫婦・同棲カップルのためのAI献立アプリ。ふたりの献立と買い物リストを自動で作成・共有。「今日何作ろう」からの解放！" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="めにゅらく！" />
   <style>
@@ -584,7 +584,7 @@
       <div class="lp">
         <div class="lp-hero">
           <img src="/icon.png" class="lp-logo" alt="めにゅらく！" width="88" height="88" />
-          <h1 class="lp-h1">「今日、何作ろう？」<br />から解放される。</h1>
+          <h1 class="lp-h1">「今日何作ろう」<br />からの解放！</h1>
           <p class="lp-sub">共働き夫婦や同棲カップルのためのAI献立アプリ。期間を選ぶだけで、毎日の献立も買い物リストも自動。ふたりで共有できます。</p>
           <button class="btn-primary lp-cta" onclick="startFromLanding('register')">無料ではじめる</button>
           <p class="lp-login">アカウントをお持ちの方は <a href="#" onclick="startFromLanding('login');return false;">ログイン</a></p>
@@ -635,15 +635,15 @@
       </div>
     </section>
 
-    <!-- 世帯の設定（作成・引き継ぎ） -->
+    <!-- グループの設定（作成・引き継ぎ） -->
     <section class="view" id="view-setup">
       <div class="card stack">
         <div style="text-align:center">
-          <h2 style="margin:2px 0 2px">世帯を作りましょう</h2>
-          <p style="color:var(--muted);font-size:.9rem;margin:0">献立を保存する「世帯」を作ります。あとでパートナーや家族を招待できます。</p>
+          <h2 style="margin:2px 0 2px">グループを作りましょう</h2>
+          <p style="color:var(--muted);font-size:.9rem;margin:0">献立を保存する「グループ」を作ります。あとでパートナーや家族を招待できます。</p>
         </div>
-        <label class="field"><span class="t">世帯の名前</span><input type="text" id="hhName" placeholder="例: ふたりのごはん / 田中家" /></label>
-        <button class="btn-primary" id="createHhBtn" onclick="createHousehold()">世帯を作ってはじめる</button>
+        <label class="field"><span class="t">グループの名前</span><input type="text" id="hhName" placeholder="例: ふたりのごはん / 田中家" /></label>
+        <button class="btn-primary" id="createHhBtn" onclick="createHousehold()">グループを作ってはじめる</button>
         <button class="btn-ghost" id="claimOld" style="display:none" onclick="claimOldHousehold()">以前のデータ（この端末）を引き継ぐ</button>
       </div>
     </section>
@@ -737,15 +737,15 @@
       <div id="shopBody"></div>
     </section>
 
-    <!-- 世帯とメンバー -->
-    <!-- 設定（世帯・常備品・アカウント） -->
+    <!-- グループとメンバー -->
+    <!-- 設定（グループ・常備品・アカウント） -->
     <section class="view" id="view-settings">
       <div class="card">
-        <div class="sec-head"><span class="label" id="hhViewName">世帯</span><span class="lead"></span></div>
+        <div class="sec-head"><span class="label" id="hhViewName">グループ</span><span class="lead"></span></div>
         <div class="sec-head"><span class="label">メンバー</span><span class="lead"></span></div>
         <div id="memberList"></div>
         <div class="sec-head" style="margin-top:14px"><span class="label">共同編集者を招待</span><span class="lead"></span></div>
-        <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">相手の<b>ユーザー名</b>を入れると、この世帯を一緒に使えます。</p>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">相手の<b>ユーザー名</b>を入れると、このグループを一緒に使えます。</p>
         <div class="urlbox">
           <input type="text" id="inviteInput" placeholder="相手のユーザー名" />
           <button class="copybtn" onclick="inviteMember()">招待</button>
@@ -753,9 +753,9 @@
         <p class="hint" id="inviteHint"></p>
       </div>
       <div class="card">
-        <div class="sec-head"><span class="label">世帯を切り替え</span><span class="lead"></span></div>
+        <div class="sec-head"><span class="label">グループを切り替え</span><span class="lead"></span></div>
         <div id="hhList" class="hhlist"></div>
-        <button class="btn-ghost" onclick="showSetup()">＋ 新しい世帯を作る</button>
+        <button class="btn-ghost" onclick="showSetup()">＋ 新しいグループを作る</button>
       </div>
       <div class="card">
         <div class="sec-head"><span class="label">常備品リスト</span><span class="lead"></span></div>
@@ -806,7 +806,7 @@
         <div id="notifEnabled" style="display:none">
           <div class="toggle-row">今日の夕食リマインド<label class="switch"><input type="checkbox" id="ntDinner" onchange="saveNotifPref('dinner_reminder', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
           <div class="toggle-row">献立づくりリマインド（週1）<label class="switch"><input type="checkbox" id="ntPlan" onchange="saveNotifPref('plan_reminder', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
-          <div class="toggle-row">世帯メンバーの更新通知<label class="switch"><input type="checkbox" id="ntMember" onchange="saveNotifPref('member_update', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
+          <div class="toggle-row">グループメンバーの更新通知<label class="switch"><input type="checkbox" id="ntMember" onchange="saveNotifPref('member_update', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
           <div style="display:flex;gap:8px;margin-top:2px">
             <button class="btn-ghost" onclick="testNotif()">テスト送信</button>
             <button class="btn-ghost" onclick="disableNotifications()">通知をオフにする</button>
@@ -870,7 +870,7 @@
     let authToken = null;
     let currentUser = null;   // { id, username }
     let households = [];       // [{ id, name }]
-    let household = null;      // 選択中の世帯
+    let household = null;      // 選択中のグループ
     let authMode = "login";
     let homeMode = localStorage.getItem("homeMode") || "list"; // list | calendar
     let plansCache = [];       // ホームで取得したプラン一覧
@@ -883,7 +883,7 @@
     let currentRecipe = null; // { date, slot }
     let editingDishIdx = null; // 編集中の料理インデックス
     let backHandler = null;   // 戻るボタンの遷移先
-    let pantryItems = [];     // 常備品リスト（現在の世帯）[{id,name}]
+    let pantryItems = [];     // 常備品リスト（現在のグループ）[{id,name}]
     let pantryBuySet = new Set(); // 「これは買う」で常備品から外した材料（正規化名・プランごと）
     let billingStatus = null; // { billingEnabled, active, plan, currentPeriodEnd, freeLimit, freeUsed, freeRemaining }
 
@@ -907,10 +907,10 @@
       $("title").textContent = title;
       $("backBtn").classList.toggle("hidden", !back);
       const noChrome = id === "auth" || id === "setup" || id === "landing";
-      $("appbar").classList.toggle("hidden", noChrome); // ログイン/世帯作成ではアプリバー非表示（カードにロゴあり）
+      $("appbar").classList.toggle("hidden", noChrome); // ログイン/グループ作成ではアプリバー非表示（カードにロゴあり）
       $("tabbar").classList.toggle("hidden", noChrome);
       $("shareBtn").style.visibility = noChrome ? "hidden" : "visible";
-      $("appLogo").style.display = id === "home" ? "inline-block" : "none"; // ホームだけロゴ＋世帯名
+      $("appLogo").style.display = id === "home" ? "inline-block" : "none"; // ホームだけロゴ＋グループ名
       $("tab-home").classList.toggle("on", tab === "home");
       $("tab-shop").classList.toggle("on", tab === "shop");
       $("tab-soon").classList.toggle("on", tab === "soon");
@@ -948,7 +948,7 @@
     function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); }
     function showSetup() {
       $("claimOld").style.display = localStorage.getItem("householdToken") ? "block" : "none";
-      showView("setup", "世帯の設定");
+      showView("setup", "グループの設定");
     }
     async function goHome() {
       await loadHome();
@@ -1180,7 +1180,7 @@
         `これを超える期間は<a href="#" onclick="startCheckout();return false;">プレミアム</a>で使い放題です。`;
     }
 
-    // ---------- 世帯（作成・引き継ぎ・切替・メンバー） ----------
+    // ---------- グループ（作成・引き継ぎ・切替・メンバー） ----------
     async function createHousehold() {
       const name = $("hhName").value.trim();
       $("createHhBtn").disabled = true;
@@ -1206,7 +1206,7 @@
       await goHome();
     }
 
-    const showHouseholdView = () => showSettingsView(); // 世帯は設定に統合
+    const showHouseholdView = () => showSettingsView(); // グループは設定に統合
     async function renderHousehold() {
       $("hhViewName").textContent = household ? household.name : "";
       $("hhList").innerHTML = households.map((h) =>
@@ -1233,7 +1233,7 @@
     }
     function renderSettings() {
       $("meName").textContent = currentUser ? currentUser.username : "";
-      renderHousehold(); // 世帯（メンバー・招待・切替）
+      renderHousehold(); // グループ（メンバー・招待・切替）
       loadPantry();
       loadStoreItems(); // 行きつけスーパーの食材
       loadBillingStatus().then(renderBillingCard); // プラン（課金）

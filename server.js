@@ -306,8 +306,8 @@ async function isMember(userId, householdId) {
 // req.user が householdId のメンバーであることを要求。OKなら household 行を返す
 async function requireMember(req, res, householdId) {
   const hh = await one("SELECT * FROM households WHERE id = $1", [householdId]);
-  if (!hh) { res.status(404).json({ error: "世帯が見つかりません。" }); return null; }
-  if (!(await isMember(req.user.id, hh.id))) { res.status(403).json({ error: "この世帯へのアクセス権がありません。" }); return null; }
+  if (!hh) { res.status(404).json({ error: "グループが見つかりません。" }); return null; }
+  if (!(await isMember(req.user.id, hh.id))) { res.status(403).json({ error: "このグループへのアクセス権がありません。" }); return null; }
   return hh;
 }
 
@@ -692,7 +692,7 @@ app.get("/api/auth/me", auth, async (req, res) => {
 // ---------- 世帯 API（認証必須） ----------
 app.post("/api/households", auth, async (req, res) => {
   try {
-    const name = (req.body?.name || `${req.user.username}の世帯`).toString().slice(0, 40);
+    const name = (req.body?.name || `${req.user.username}のグループ`).toString().slice(0, 40);
     const id = randomUUID();
     const now = new Date().toISOString();
     await q("INSERT INTO households (id, name, share_token, created_at) VALUES ($1, $2, $3, $4)", [
@@ -849,7 +849,7 @@ app.post("/api/households/claim", auth, async (req, res) => {
   try {
     const token = (req.body?.shareToken || "").toString().trim();
     const hh = await one("SELECT * FROM households WHERE share_token = $1", [token]);
-    if (!hh) return res.status(404).json({ error: "世帯が見つかりません。" });
+    if (!hh) return res.status(404).json({ error: "グループが見つかりません。" });
     if (!(await isMember(req.user.id, hh.id))) {
       await q("INSERT INTO memberships (household_id, user_id, role, created_at) VALUES ($1, $2, $3, $4)", [
         hh.id, req.user.id, "member", new Date().toISOString(),
