@@ -6,8 +6,8 @@ services:
     name: menuraku
     runtime: node
     region: singapore          # Neon と同じシンガポールに合わせて低レイテンシに
-    plan: free                 # 無料。一定時間アクセスが無いとスリープし、初回アクセスは起動待ち(数十秒)。
-                               # 常時起動にするなら Render の UI で Starter 以上へ変更してください。
+    plan: starter              # Starter($7/月)＝常時起動（スリープなし）。0.5 CPU / 512 MB。
+                               # ※有効化には Render に支払い方法(カード)の登録が必要。無料に戻すなら plan: free。
     branch: main
     buildCommand: npm install
     startCommand: npm start
