@@ -272,6 +272,8 @@
     .soon-ds { color: var(--muted); font-size: .82rem; line-height: 1.4; }
     .soon-lock { flex: none; opacity: .5; }
     /* 常備品リスト（設定画面のチップ） */
+    .store-sub { font-size: .84rem; font-weight: 800; margin: 0 0 6px; }
+    .store-sub span { font-weight: 600; color: var(--muted); font-size: .78rem; }
     .pantrylist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
     .pantrychip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-soft);
       color: var(--orange-dark); font-size: .85rem; font-weight: 700; border-radius: 999px; padding: 5px 6px 5px 12px; }
@@ -764,6 +766,22 @@
         </div>
         <div id="pantryList" class="pantrylist"></div>
       </div>
+      <div class="card">
+        <div class="sec-head"><span class="label">行きつけスーパーの食材</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">よく行くスーパーの品ぞろえを登録すると、AI献立に反映されます。<b>買いにくい食材は使われなくなり</b>、買いやすい食材は<b>優先的に</b>使われます。</p>
+        <div class="store-sub" style="color:#2e8b63">🛒 買いやすい食材<span>（優先して使う）</span></div>
+        <div class="urlbox">
+          <input type="text" id="storeEasyInput" placeholder="食材名（例: 鶏むね肉）" />
+          <button class="copybtn" onclick="addStoreItem('easy')">追加</button>
+        </div>
+        <div id="storeEasyList" class="pantrylist"></div>
+        <div class="store-sub" style="color:var(--orange-dark);margin-top:16px">🚫 買いにくい食材<span>（献立で使わない）</span></div>
+        <div class="urlbox">
+          <input type="text" id="storeHardInput" placeholder="食材名（例: パクチー）" />
+          <button class="copybtn" onclick="addStoreItem('hard')">追加</button>
+        </div>
+        <div id="storeHardList" class="pantrylist"></div>
+      </div>
       <div class="card" id="billingCard" style="display:none">
         <div class="sec-head"><span class="label">プラン</span><span class="lead"></span></div>
         <div id="billingBody"></div>
@@ -1189,6 +1207,7 @@
       $("meName").textContent = currentUser ? currentUser.username : "";
       renderHousehold(); // 世帯（メンバー・招待・切替）
       loadPantry();
+      loadStoreItems(); // 行きつけスーパーの食材
       loadBillingStatus().then(renderBillingCard); // プラン（課金）
     }
 
@@ -1244,6 +1263,44 @@
       try {
         await apiOK(`/api/households/${household.id}/pantry/${id}`, { method: "DELETE" });
         await loadPantry();
+      } catch (e) { alert(e.message); }
+    }
+
+    // ---------- 行きつけスーパーの食材（買いやすい/買いにくい） ----------
+    let storeItems = [];
+    async function loadStoreItems() {
+      try { storeItems = await apiOK(`/api/households/${household.id}/store-items`); }
+      catch { storeItems = []; }
+      renderStoreItems();
+    }
+    function renderStoreItems() {
+      for (const kind of ["easy", "hard"]) {
+        const wrap = $(kind === "easy" ? "storeEasyList" : "storeHardList");
+        if (!wrap) continue;
+        const items = storeItems.filter((it) => it.kind === kind);
+        if (!items.length) { wrap.innerHTML = `<p class="empty" style="padding:8px 0">まだ登録がありません。</p>`; continue; }
+        wrap.innerHTML = items.map((it) =>
+          `<span class="pantrychip">${esc(it.name)}<button data-id="${esc(it.id)}" aria-label="削除">×</button></span>`
+        ).join("");
+        wrap.querySelectorAll("button").forEach((b) =>
+          b.addEventListener("click", () => deleteStoreItem(b.dataset.id)));
+      }
+    }
+    async function addStoreItem(kind) {
+      const inp = $(kind === "easy" ? "storeEasyInput" : "storeHardInput");
+      const name = inp.value.trim();
+      if (!name) return;
+      try {
+        await apiOK(`/api/households/${household.id}/store-items`, { method: "POST", body: { name, kind } });
+        inp.value = "";
+        await loadStoreItems();
+        inp.focus();
+      } catch (e) { alert(e.message); }
+    }
+    async function deleteStoreItem(id) {
+      try {
+        await apiOK(`/api/households/${household.id}/store-items/${id}`, { method: "DELETE" });
+        await loadStoreItems();
       } catch (e) { alert(e.message); }
     }
     // 買い物リストの食材が常備品に該当するか（正規化＋部分一致で表記ゆれ吸収）

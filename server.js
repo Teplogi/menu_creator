@@ -191,6 +191,11 @@ const SCHEMA_STATEMENTS = [
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
     created_at TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_hh_norm ON pantry_items (household_id, name_norm)`,
+  // 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
+  `CREATE TABLE IF NOT EXISTS store_items (
+    id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
+    kind TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_store_hh_kind_norm ON store_items (household_id, kind, name_norm)`,
   `CREATE INDEX IF NOT EXISTS idx_plans_household ON meal_plans (household_id, created_at DESC)`,
   // 課金: 加入状態（provider 列で将来 RevenueCat 等も同居可能）
   `CREATE TABLE IF NOT EXISTS entitlements (
@@ -342,7 +347,7 @@ const DISH_COUNT_DIRECTIVE = {
 };
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "" } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "", storeHard = [], storeEasy = [] } = {}) {
   const { people, maxCookMinutes, dishCount, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -362,6 +367,12 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], style
       : "各料理の cook_minutes に調理時間の目安（分）の数値を入れる。",
     preferences ? `好み・要望: ${preferences}` : "好み・要望: 特になし（栄養バランスよく、和洋中を織り交ぜる）",
     avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
+    storeHard && storeHard.length
+      ? `次の食材は近くのスーパーで入手しにくいため、料理・材料に一切使わないこと（絶対）: ${storeHard.join("、")}`
+      : "",
+    storeEasy && storeEasy.length
+      ? `次の食材は手に入りやすいので、無理のない範囲で優先的に活用するとよい（必須ではない・偏りすぎない範囲で）: ${storeEasy.join("、")}`
+      : "",
     avoidDishes && avoidDishes.length
       ? `次の料理名とは重複させないこと: ${avoidDishes.join("、")}`
       : "",
@@ -543,6 +554,18 @@ async function getRecentDishNames(householdId, planLimit = 5, cap = 40) {
     } catch {}
   }
   return [...new Set(names)].slice(0, cap);
+}
+
+// 世帯の「行きつけスーパー」設定を { easy:[名前...], hard:[名前...] } で返す
+async function getStoreItems(householdId) {
+  const rows = await all(
+    "SELECT name, kind FROM store_items WHERE household_id = $1 ORDER BY created_at",
+    [householdId]
+  );
+  return {
+    easy: rows.filter((r) => r.kind === "easy").map((r) => r.name),
+    hard: rows.filter((r) => r.kind === "hard").map((r) => r.name),
+  };
 }
 
 function handleError(res, err) {
@@ -728,6 +751,56 @@ app.delete("/api/households/:id/pantry/:itemId", auth, async (req, res) => {
   }
 });
 
+// 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
+app.get("/api/households/:id/store-items", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const rows = await all(
+      "SELECT id, name, kind FROM store_items WHERE household_id = $1 ORDER BY created_at",
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post("/api/households/:id/store-items", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const name = (req.body?.name || "").toString().trim().slice(0, 40);
+    const kind = req.body?.kind === "hard" ? "hard" : req.body?.kind === "easy" ? "easy" : null;
+    if (!name) return res.status(400).json({ error: "食材名を入力してください。" });
+    if (!kind) return res.status(400).json({ error: "種類が正しくありません。" });
+    const norm = normName(name);
+    const existing = await one(
+      "SELECT id, name, kind FROM store_items WHERE household_id = $1 AND kind = $2 AND name_norm = $3",
+      [req.params.id, kind, norm]
+    );
+    if (existing) return res.json(existing); // 重複は既存を返す（冪等）
+    const id = randomUUID();
+    await q(
+      "INSERT INTO store_items (id, household_id, name, name_norm, kind, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+      [id, req.params.id, name, norm, kind, new Date().toISOString()]
+    );
+    res.json({ id, name, kind });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.delete("/api/households/:id/store-items/:itemId", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    await q("DELETE FROM store_items WHERE id = $1 AND household_id = $2", [
+      req.params.itemId, req.params.id,
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // 旧・共有トークンの世帯を自分のアカウントに取り込む（移行用）
 app.post("/api/households/claim", auth, async (req, res) => {
   try {
@@ -793,7 +866,8 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
     };
 
     const recentDishes = await getRecentDishNames(household.id);
-    const plan = await generate(targets, opts, { recentDishes });
+    const store = await getStoreItems(household.id);
+    const plan = await generate(targets, opts, { recentDishes, storeHard: store.hard, storeEasy: store.easy });
     if (!opts.includeSteps) stripSteps(plan); // モデルが返しても作り方を確実に除去
 
     const dates = targets.map((t) => t.date).sort();
@@ -839,6 +913,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       includeSteps: includeSteps !== false,
     };
     const recentDishes = await getRecentDishNames(household.id);
+    const store = await getStoreItems(household.id);
 
     res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
@@ -857,7 +932,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
           const r = await generate(
             [{ date: u.date, slots: [u.slot] }],
             opts,
-            { recentDishes, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length] },
+            { recentDishes, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeHard: store.hard, storeEasy: store.easy },
             SINGLE_MODEL
           );
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
@@ -1008,10 +1083,13 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1), async
       ...new Set(data.days.flatMap((d) => d.meals.flatMap((m) => m.dishes.map((x) => x.name)))),
     ];
     const recentDishes = await getRecentDishNames(row.household_id);
+    const store = await getStoreItems(row.household_id);
 
     const regenerated = await generate([{ date, slots: [slot] }], opts, {
       avoidDishes,
       recentDishes,
+      storeHard: store.hard,
+      storeEasy: store.easy,
     }, SINGLE_MODEL); // 1食作り直しは単発操作＝速い Haiku
     const newDishes = regenerated.days?.[0]?.meals?.[0]?.dishes;
     if (!newDishes) throw new Error("EMPTY_RESPONSE");
