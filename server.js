@@ -347,7 +347,7 @@ const DISH_COUNT_DIRECTIVE = {
 };
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "", storeHard = [], storeEasy = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
   const { people, maxCookMinutes, dishCount, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -367,12 +367,14 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], style
       : "各料理の cook_minutes に調理時間の目安（分）の数値を入れる。",
     preferences ? `好み・要望: ${preferences}` : "好み・要望: 特になし（栄養バランスよく、和洋中を織り交ぜる）",
     avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
-    storeHard && storeHard.length
-      ? `次の食材は近くのスーパーで入手しにくいため、料理・材料に一切使わないこと（絶対）: ${storeHard.join("、")}`
+    storeAvoid && storeAvoid.length
+      ? `次の食材はアレルギー・苦手のため、料理・材料に一切使わないこと（絶対）: ${storeAvoid.join("、")}`
       : "",
-    storeEasy && storeEasy.length
-      ? `次の食材は手に入りやすいので、無理のない範囲で優先的に活用するとよい（必須ではない・偏りすぎない範囲で）: ${storeEasy.join("、")}`
+    storeSoft && storeSoft.length
+      ? `次の食材は入手しにくいので、できるだけ使わないでください（基本は控える。他に適切な選択肢が無いときだけ、たまに使うのは可）: ${storeSoft.join("、")}`
       : "",
+    // 「買いやすい」は生成に反映しない（特別扱いすると1食ずつ生成する仕組み上どうしても偏るため、
+    //  “普通に使える＝特別扱いしない”＝バリエーション最優先とする。リストは管理用に保持）
     avoidDishes && avoidDishes.length
       ? `次の料理名とは重複させないこと: ${avoidDishes.join("、")}`
       : "",
@@ -556,15 +558,17 @@ async function getRecentDishNames(householdId, planLimit = 5, cap = 40) {
   return [...new Set(names)].slice(0, cap);
 }
 
-// 世帯の「行きつけスーパー」設定を { easy:[名前...], hard:[名前...] } で返す
+// 世帯の食材設定を { avoid:[絶対NG], soft:[控えめ], easy:[買いやすい] } で返す
 async function getStoreItems(householdId) {
   const rows = await all(
     "SELECT name, kind FROM store_items WHERE household_id = $1 ORDER BY created_at",
     [householdId]
   );
+  const pick = (k) => rows.filter((r) => r.kind === k).map((r) => r.name);
   return {
-    easy: rows.filter((r) => r.kind === "easy").map((r) => r.name),
-    hard: rows.filter((r) => r.kind === "hard").map((r) => r.name),
+    avoid: pick("avoid"),
+    soft: [...pick("soft"), ...pick("hard")], // hard は旧仕様（控えめ扱い）
+    easy: pick("easy"),
   };
 }
 
@@ -769,7 +773,7 @@ app.post("/api/households/:id/store-items", auth, async (req, res) => {
   try {
     if (!(await requireMember(req, res, req.params.id))) return;
     const name = (req.body?.name || "").toString().trim().slice(0, 40);
-    const kind = req.body?.kind === "hard" ? "hard" : req.body?.kind === "easy" ? "easy" : null;
+    const kind = ["avoid", "soft", "easy"].includes(req.body?.kind) ? req.body.kind : null;
     if (!name) return res.status(400).json({ error: "食材名を入力してください。" });
     if (!kind) return res.status(400).json({ error: "種類が正しくありません。" });
     const norm = normName(name);
@@ -867,7 +871,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
 
     const recentDishes = await getRecentDishNames(household.id);
     const store = await getStoreItems(household.id);
-    const plan = await generate(targets, opts, { recentDishes, storeHard: store.hard, storeEasy: store.easy });
+    const plan = await generate(targets, opts, { recentDishes, storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy });
     if (!opts.includeSteps) stripSteps(plan); // モデルが返しても作り方を確実に除去
 
     const dates = targets.map((t) => t.date).sort();
@@ -932,7 +936,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
           const r = await generate(
             [{ date: u.date, slots: [u.slot] }],
             opts,
-            { recentDishes, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeHard: store.hard, storeEasy: store.easy },
+            { recentDishes, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
             SINGLE_MODEL
           );
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
@@ -1088,7 +1092,8 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1), async
     const regenerated = await generate([{ date, slots: [slot] }], opts, {
       avoidDishes,
       recentDishes,
-      storeHard: store.hard,
+      storeAvoid: store.avoid,
+      storeSoft: store.soft,
       storeEasy: store.easy,
     }, SINGLE_MODEL); // 1食作り直しは単発操作＝速い Haiku
     const newDishes = regenerated.days?.[0]?.meals?.[0]?.dishes;

@@ -767,20 +767,29 @@
         <div id="pantryList" class="pantrylist"></div>
       </div>
       <div class="card">
-        <div class="sec-head"><span class="label">行きつけスーパーの食材</span><span class="lead"></span></div>
-        <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">よく行くスーパーの品ぞろえを登録すると、AI献立に反映されます。<b>買いにくい食材は使われなくなり</b>、買いやすい食材は<b>優先的に</b>使われます。</p>
-        <div class="store-sub" style="color:#2e8b63">🛒 買いやすい食材<span>（優先して使う）</span></div>
+        <div class="sec-head"><span class="label">食材の設定</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 14px">食材ごとに扱いを登録すると、AI献立に反映されます。バリエーションは常に最優先なので、<b>「控えめ」も完全には禁止せず、たまには登場します。</b></p>
+
+        <div class="store-sub" style="color:#c0392b">🚫 使わない食材<span>（アレルギー・苦手 → 絶対に使わない）</span></div>
+        <div class="urlbox">
+          <input type="text" id="storeAvoidInput" placeholder="食材名（例: えび）" />
+          <button class="copybtn" onclick="addStoreItem('avoid')">追加</button>
+        </div>
+        <div id="storeAvoidList" class="pantrylist"></div>
+
+        <div class="store-sub" style="color:var(--orange-dark);margin-top:16px">🕓 控えめにする食材<span>（買いにくい等 → できるだけ避けるが、たまにはOK）</span></div>
+        <div class="urlbox">
+          <input type="text" id="storeSoftInput" placeholder="食材名（例: パクチー）" />
+          <button class="copybtn" onclick="addStoreItem('soft')">追加</button>
+        </div>
+        <div id="storeSoftList" class="pantrylist"></div>
+
+        <div class="store-sub" style="color:#2e8b63;margin-top:16px">🛒 買いやすい食材<span>（特別扱いせず、普通に使われます）</span></div>
         <div class="urlbox">
           <input type="text" id="storeEasyInput" placeholder="食材名（例: 鶏むね肉）" />
           <button class="copybtn" onclick="addStoreItem('easy')">追加</button>
         </div>
         <div id="storeEasyList" class="pantrylist"></div>
-        <div class="store-sub" style="color:var(--orange-dark);margin-top:16px">🚫 買いにくい食材<span>（献立で使わない）</span></div>
-        <div class="urlbox">
-          <input type="text" id="storeHardInput" placeholder="食材名（例: パクチー）" />
-          <button class="copybtn" onclick="addStoreItem('hard')">追加</button>
-        </div>
-        <div id="storeHardList" class="pantrylist"></div>
       </div>
       <div class="card" id="billingCard" style="display:none">
         <div class="sec-head"><span class="label">プラン</span><span class="lead"></span></div>
@@ -1273,11 +1282,14 @@
       catch { storeItems = []; }
       renderStoreItems();
     }
+    const STORE_LIST_ID = { avoid: "storeAvoidList", soft: "storeSoftList", easy: "storeEasyList" };
+    const STORE_INPUT_ID = { avoid: "storeAvoidInput", soft: "storeSoftInput", easy: "storeEasyInput" };
     function renderStoreItems() {
-      for (const kind of ["easy", "hard"]) {
-        const wrap = $(kind === "easy" ? "storeEasyList" : "storeHardList");
+      for (const kind of ["avoid", "soft", "easy"]) {
+        const wrap = $(STORE_LIST_ID[kind]);
         if (!wrap) continue;
-        const items = storeItems.filter((it) => it.kind === kind);
+        // 旧仕様の 'hard' は「控えめ(soft)」として表示
+        const items = storeItems.filter((it) => it.kind === kind || (kind === "soft" && it.kind === "hard"));
         if (!items.length) { wrap.innerHTML = `<p class="empty" style="padding:8px 0">まだ登録がありません。</p>`; continue; }
         wrap.innerHTML = items.map((it) =>
           `<span class="pantrychip">${esc(it.name)}<button data-id="${esc(it.id)}" aria-label="削除">×</button></span>`
@@ -1287,7 +1299,7 @@
       }
     }
     async function addStoreItem(kind) {
-      const inp = $(kind === "easy" ? "storeEasyInput" : "storeHardInput");
+      const inp = $(STORE_INPUT_ID[kind]);
       const name = inp.value.trim();
       if (!name) return;
       try {
