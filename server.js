@@ -379,7 +379,7 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], style
       ? `次の料理名とは重複させないこと: ${avoidDishes.join("、")}`
       : "",
     recentDishes && recentDishes.length
-      ? `この世帯が最近作った料理です。マンネリを避けるため、これらとは違う料理・味付け・ジャンルを優先すること: ${recentDishes.join("、")}`
+      ? `この世帯で最近（ここ2〜3週間）作った主菜です。同じ・似た主菜が続くとマンネリになるので、これらとは違う主菜（別の主材料・調理法）にすること（特に重要）。※副菜は繰り返してもよい: ${recentDishes.join("、")}`
       : "",
     styleHint
       ? `参考の方向性: 今回は「${styleHint}」寄りで、他と被らない一皿を歓迎します（絶対条件ではありません）。`
@@ -547,18 +547,21 @@ function validateTargets(targets) {
   return null;
 }
 
-// 直近プランの料理名を集めて、マンネリ回避のヒントにする
-async function getRecentDishNames(householdId, planLimit = 5, cap = 40) {
+// 直近（既定21日）に作った「主菜」の料理名を集めて、メインのマンネリ回避に使う。
+// 副菜（味噌汁・サラダ等）は自然な繰り返しを許容するため対象にしない。
+async function getRecentDishNames(householdId, { days = 21, planLimit = 12, cap = 30 } = {}) {
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
   const rows = await all(
-    "SELECT data_json FROM meal_plans WHERE household_id = $1 ORDER BY created_at DESC LIMIT $2",
-    [householdId, planLimit]
+    "SELECT data_json FROM meal_plans WHERE household_id = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT $3",
+    [householdId, cutoff, planLimit]
   );
   const names = [];
   for (const r of rows) {
     try {
       for (const day of JSON.parse(r.data_json).days || [])
         for (const meal of day.meals || [])
-          for (const dish of meal.dishes || []) if (dish.name) names.push(dish.name);
+          for (const dish of meal.dishes || [])
+            if (dish.name && dish.role === "主菜") names.push(dish.name);
     } catch {}
   }
   return [...new Set(names)].slice(0, cap);
