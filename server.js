@@ -4,6 +4,7 @@ import helmet from "helmet";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
+import webpush from "web-push";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -26,6 +27,7 @@ app.use(
         connectSrc: ["'self'"],
         fontSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
+        workerSrc: ["'self'"], // Service Worker（/sw.js）を許可（プッシュ通知/PWA用）
         baseUri: ["'self'"],
         frameAncestors: ["'self'"],
         formAction: ["'self'"],
@@ -44,6 +46,18 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
 const client = new Anthropic(); // ANTHROPIC_API_KEY を環境変数から読み込む
+
+// ---------- Web Push（プッシュ通知 / PWA） ----------
+// VAPID鍵が両方そろっているときだけ通知を有効化する（未設定でもアプリは普通に動く）。
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:peitullysblack@gmail.com";
+const pushEnabled = () => !!(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+if (pushEnabled()) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+  console.log("（プッシュ通知は未設定: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY 未設定のため無効）");
+}
 
 // ---------- Stripe（課金 / フリーミアム） ----------
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -208,6 +222,22 @@ const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS ai_usage (
     user_id TEXT NOT NULL, ym TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, ym))`,
+  // プッシュ通知: 端末ごとの購読情報（1ユーザーが複数端末を持てる）
+  `CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id TEXT PRIMARY KEY, user_id TEXT NOT NULL, endpoint TEXT UNIQUE NOT NULL,
+    p256dh TEXT NOT NULL, auth TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_push_sub_user ON push_subscriptions (user_id)`,
+  // プッシュ通知: 種類ごとのON/OFF（ユーザー単位。既定は全ON）
+  `CREATE TABLE IF NOT EXISTS notification_prefs (
+    user_id TEXT PRIMARY KEY,
+    dinner_reminder BOOLEAN NOT NULL DEFAULT true,
+    plan_reminder BOOLEAN NOT NULL DEFAULT true,
+    member_update BOOLEAN NOT NULL DEFAULT true,
+    updated_at TEXT NOT NULL)`,
+  // 定期通知の二重送信防止（user×種類×日/週キー）
+  `CREATE TABLE IF NOT EXISTS push_sent_log (
+    user_id TEXT NOT NULL, kind TEXT NOT NULL, day TEXT NOT NULL,
+    PRIMARY KEY (user_id, kind, day))`,
 ];
 async function initDb() {
   for (const sql of SCHEMA_STATEMENTS) {
@@ -831,6 +861,142 @@ app.post("/api/households/claim", auth, async (req, res) => {
   }
 });
 
+// ---------- プッシュ通知（Web Push / PWA） ----------
+// ユーザーの通知設定を取得（無ければ既定=全ON を作成）。
+async function getNotifPrefs(userId) {
+  let p = await one("SELECT * FROM notification_prefs WHERE user_id = $1", [userId]);
+  if (!p) {
+    await q(
+      "INSERT INTO notification_prefs (user_id, updated_at) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING",
+      [userId, new Date().toISOString()]
+    );
+    p = await one("SELECT * FROM notification_prefs WHERE user_id = $1", [userId]);
+  }
+  return p || { dinner_reminder: true, plan_reminder: true, member_update: true };
+}
+
+// 1ユーザーの全端末へ送信（kind の設定がOFFなら送らない）。無効な購読は掃除する。
+async function pushToUser(userId, kind, payload) {
+  if (!pushEnabled()) return 0;
+  const pref = await getNotifPrefs(userId);
+  if (kind && pref[kind] === false) return 0;
+  const subs = await all("SELECT * FROM push_subscriptions WHERE user_id = $1", [userId]);
+  let sent = 0;
+  for (const s of subs) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+        JSON.stringify(payload)
+      );
+      sent++;
+    } catch (e) {
+      // 端末が購読解除/失効（404/410）なら購読を削除
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) {
+        await q("DELETE FROM push_subscriptions WHERE endpoint = $1", [s.endpoint]).catch(() => {});
+      } else {
+        console.error("push送信エラー:", (e && e.message) || e);
+      }
+    }
+  }
+  return sent;
+}
+
+// 世帯の「本人以外」のメンバーへ送信。
+async function pushToHouseholdOthers(householdId, excludeUserId, kind, payload) {
+  const members = await all("SELECT user_id FROM memberships WHERE household_id = $1", [householdId]);
+  for (const m of members) {
+    if (m.user_id === excludeUserId) continue;
+    await pushToUser(m.user_id, kind, payload);
+  }
+}
+
+// 献立の作成を世帯の他メンバーへ通知（fire-and-forget で呼ぶ）
+async function notifyPlanCreated(householdId, actor, row) {
+  const md = (d) => (d ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
+  const range = row.start_date === row.end_date ? md(row.start_date) : `${md(row.start_date)}〜${md(row.end_date)}`;
+  await pushToHouseholdOthers(householdId, actor.id, "member_update", {
+    title: "めにゅらく！",
+    body: `${actor.username}さんが献立（${range}）を作りました`,
+    url: "/",
+    tag: "plan-" + row.id,
+  });
+}
+
+app.get("/api/push/config", (req, res) => {
+  res.json({ enabled: pushEnabled(), publicKey: pushEnabled() ? VAPID_PUBLIC_KEY : null });
+});
+
+app.post("/api/push/subscribe", auth, async (req, res) => {
+  try {
+    const sub = req.body?.subscription;
+    if (!sub || !sub.endpoint || !sub.keys?.p256dh || !sub.keys?.auth)
+      return res.status(400).json({ error: "購読情報が正しくありません。" });
+    await q(
+      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (endpoint) DO UPDATE SET user_id = $2, p256dh = $4, auth = $5`,
+      [randomUUID(), req.user.id, sub.endpoint, sub.keys.p256dh, sub.keys.auth, new Date().toISOString()]
+    );
+    await getNotifPrefs(req.user.id); // 既定設定を用意
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post("/api/push/unsubscribe", auth, async (req, res) => {
+  try {
+    const endpoint = req.body?.endpoint;
+    if (endpoint) await q("DELETE FROM push_subscriptions WHERE endpoint = $1 AND user_id = $2", [endpoint, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get("/api/push/prefs", auth, async (req, res) => {
+  try {
+    const p = await getNotifPrefs(req.user.id);
+    res.json({
+      dinner_reminder: p.dinner_reminder !== false,
+      plan_reminder: p.plan_reminder !== false,
+      member_update: p.member_update !== false,
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post("/api/push/prefs", auth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const cur = await getNotifPrefs(req.user.id);
+    const val = (k) => (typeof b[k] === "boolean" ? b[k] : cur[k] !== false);
+    await q(
+      `UPDATE notification_prefs SET dinner_reminder = $2, plan_reminder = $3, member_update = $4, updated_at = $5
+       WHERE user_id = $1`,
+      [req.user.id, val("dinner_reminder"), val("plan_reminder"), val("member_update"), new Date().toISOString()]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// テスト通知（設定画面の「テスト送信」用。kind無し＝設定に関わらず必ず届く）
+app.post("/api/push/test", auth, async (req, res) => {
+  try {
+    const n = await pushToUser(req.user.id, null, {
+      title: "めにゅらく！",
+      body: "通知のテストです。これが届けば設定完了です🎉",
+      url: "/",
+    });
+    res.json({ ok: true, sent: n });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // ---------- プラン API（認証＋メンバー必須） ----------
 function planToClient(row) {
   return {
@@ -899,6 +1065,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
       new Date().toISOString(),
     ]);
     if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1); // 無料は成功時のみ食数分を消費
+    notifyPlanCreated(household.id, req.user, row).catch(() => {}); // 世帯の他メンバーへ通知
     res.json(planToClient(row));
   } catch (err) {
     handleError(res, err);
@@ -980,6 +1147,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       JSON.stringify({ targets, opts }), JSON.stringify({ days }), new Date().toISOString(),
     ]);
     if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1);
+    notifyPlanCreated(household.id, req.user, row).catch(() => {}); // 世帯の他メンバーへ通知
     send({ type: "done", plan: planToClient(row) });
     res.end();
   } catch (err) {
@@ -1282,12 +1450,103 @@ async function processStripeEvent(event) {
   }
 }
 
+// ---------- 定期通知スケジューラ（今日の夕食 / 週1の献立づくり） ----------
+// 日本時間(JST=UTC+9)の「壁掛け時計」を得る（getUTC* で読むとJSTの時分になる）。
+function jstNow() {
+  return new Date(Date.now() + 9 * 3600 * 1000);
+}
+// 二重送信防止: 初回だけ true を返す（同 user×kind×日 は1回のみ）。
+async function markSentOnce(userId, kind, dayKey) {
+  const r = await q(
+    "INSERT INTO push_sent_log (user_id, kind, day) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    [userId, kind, dayKey]
+  );
+  return r.rowCount > 0;
+}
+async function userHasPush(userId) {
+  return !!(await one("SELECT 1 FROM push_subscriptions WHERE user_id = $1", [userId]));
+}
+
+// 今日の夕食リマインド（夕方に1回）
+async function sendDinnerReminders() {
+  const today = jstNow().toISOString().slice(0, 10);
+  const plans = await all(
+    "SELECT household_id, data_json FROM meal_plans WHERE start_date <= $1 AND end_date >= $1 ORDER BY created_at DESC",
+    [today]
+  );
+  const mainByHh = new Map(); // 世帯→今日の夕食の主菜（最新プラン優先）
+  for (const p of plans) {
+    if (mainByHh.has(p.household_id)) continue;
+    let main = null;
+    try {
+      const day = (JSON.parse(p.data_json).days || []).find((d) => d.date === today);
+      const dinner = day && (day.meals || []).find((m) => m.slot === "夕食");
+      const dishes = (dinner && dinner.dishes) || [];
+      main = (dishes.find((d) => d.role === "主菜") || dishes[0] || {}).name || null;
+    } catch {}
+    if (main) mainByHh.set(p.household_id, main);
+  }
+  for (const [hid, main] of mainByHh) {
+    const members = await all("SELECT user_id FROM memberships WHERE household_id = $1", [hid]);
+    for (const m of members) {
+      const pref = await getNotifPrefs(m.user_id);
+      if (pref.dinner_reminder === false) continue;
+      if (!(await userHasPush(m.user_id))) continue;
+      if (!(await markSentOnce(m.user_id, "dinner_reminder", today))) continue;
+      await pushToUser(m.user_id, "dinner_reminder", {
+        title: "今日の夕食",
+        body: `今日は「${main}」です。買い物・下ごしらえはお早めに🍳`,
+        url: "/",
+        tag: "dinner-" + today,
+      });
+    }
+  }
+}
+
+// 週1の献立づくりリマインド（日曜の午前に1回）
+async function sendPlanReminders() {
+  const now = jstNow();
+  if (now.getUTCDay() !== 0) return; // 日曜のみ
+  const today = now.toISOString().slice(0, 10);
+  const users = await all("SELECT DISTINCT user_id FROM push_subscriptions");
+  for (const u of users) {
+    const pref = await getNotifPrefs(u.user_id);
+    if (pref.plan_reminder === false) continue;
+    if (!(await markSentOnce(u.user_id, "plan_reminder", today))) continue;
+    await pushToUser(u.user_id, "plan_reminder", {
+      title: "今週の献立づくり",
+      body: "そろそろ来週の献立を作りませんか？期間を選ぶだけでAIが提案します📝",
+      url: "/",
+      tag: "planreminder-" + today,
+    });
+  }
+}
+
+let schedulerBusy = false;
+async function schedulerTick() {
+  if (!pushEnabled() || schedulerBusy) return;
+  schedulerBusy = true;
+  try {
+    const h = jstNow().getUTCHours();
+    if (h >= 16 && h < 22) await sendDinnerReminders(); // 夕方〜夜
+    if (h >= 10 && h < 20) await sendPlanReminders(); // 日曜の日中（関数内で曜日判定）
+  } catch (e) {
+    console.error("scheduler error:", (e && e.message) || e);
+  } finally {
+    schedulerBusy = false;
+  }
+}
+
 const PORT = process.env.PORT || 3000;
 initDb()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`めにゅらく！ 起動: http://localhost:${PORT}`);
     });
+    if (pushEnabled()) {
+      setInterval(schedulerTick, 15 * 60 * 1000); // 15分ごとに判定
+      setTimeout(schedulerTick, 20 * 1000); // 起動20秒後に一度
+    }
   })
   .catch((err) => {
     console.error("DB初期化に失敗しました:", err.message);

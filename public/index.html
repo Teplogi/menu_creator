@@ -795,6 +795,25 @@
         <div class="sec-head"><span class="label">プラン</span><span class="lead"></span></div>
         <div id="billingBody"></div>
       </div>
+      <div class="card" id="notifCard">
+        <div class="sec-head"><span class="label">通知（プッシュ）</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">ホーム画面に追加して通知をオンにすると、献立や買い物のお知らせが届きます。<b>種類ごとにON/OFF</b>できます。うるさくならないよう、まとめて1回だけ届きます。</p>
+        <div id="notifUnsupported" class="hint" style="display:none">この端末・ブラウザは通知に対応していません。<b>iPhoneは「ホーム画面に追加」した状態＋iOS16.4以降</b>で使えます。</div>
+        <div id="notifDisabled" style="display:none">
+          <button class="btn-primary" id="notifEnableBtn" onclick="enableNotifications()">通知をオンにする</button>
+          <p class="hint" id="notifEnableHint"></p>
+        </div>
+        <div id="notifEnabled" style="display:none">
+          <div class="toggle-row">今日の夕食リマインド<label class="switch"><input type="checkbox" id="ntDinner" onchange="saveNotifPref('dinner_reminder', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
+          <div class="toggle-row">献立づくりリマインド（週1）<label class="switch"><input type="checkbox" id="ntPlan" onchange="saveNotifPref('plan_reminder', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
+          <div class="toggle-row">世帯メンバーの更新通知<label class="switch"><input type="checkbox" id="ntMember" onchange="saveNotifPref('member_update', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
+          <div style="display:flex;gap:8px;margin-top:2px">
+            <button class="btn-ghost" onclick="testNotif()">テスト送信</button>
+            <button class="btn-ghost" onclick="disableNotifications()">通知をオフにする</button>
+          </div>
+          <p class="hint" id="notifStatusHint"></p>
+        </div>
+      </div>
       <div class="card">
         <div class="sec-head"><span class="label">アカウント</span><span class="lead"></span></div>
         <p style="font-size:.9rem;margin:0 0 10px">ログイン中: <b id="meName"></b></p>
@@ -1218,6 +1237,7 @@
       loadPantry();
       loadStoreItems(); // 行きつけスーパーの食材
       loadBillingStatus().then(renderBillingCard); // プラン（課金）
+      refreshNotifUI(); // 通知（プッシュ）の状態を反映
     }
 
     // ---------- べんり機能（近日公開） ----------
@@ -2890,6 +2910,116 @@
 
     // 期間は showCreate() でカレンダー範囲ピッカーから設定する
 
+    // ---------- プッシュ通知（PWA） ----------
+    let swReg = null;
+    async function registerServiceWorker() {
+      if (!("serviceWorker" in navigator)) return;
+      try {
+        swReg = await navigator.serviceWorker.register("/sw.js");
+      } catch (e) {
+        console.warn("SW登録に失敗:", e);
+      }
+    }
+    function notifSupported() {
+      return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+    }
+    function urlBase64ToUint8Array(base64String) {
+      const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const raw = atob(base64);
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+      return arr;
+    }
+    // 通知UIの状態（未対応 / OFF / ON）を出し分ける
+    async function refreshNotifUI() {
+      const card = $("notifCard");
+      if (!card) return;
+      const unsup = $("notifUnsupported"), off = $("notifDisabled"), on = $("notifEnabled");
+      unsup.style.display = off.style.display = on.style.display = "none";
+      if (!notifSupported()) { unsup.style.display = "block"; return; }
+      // サーバー側で通知が有効か（VAPID設定済みか）
+      let cfg = null;
+      try { cfg = await (await fetch("/api/push/config")).json(); } catch {}
+      if (!cfg || !cfg.enabled) { unsup.style.display = "block"; unsup.textContent = "通知は現在準備中です。"; return; }
+      if (!swReg) await registerServiceWorker();
+      const sub = swReg ? await swReg.pushManager.getSubscription() : null;
+      if (Notification.permission === "granted" && sub) {
+        on.style.display = "block";
+        await loadNotifPrefs();
+      } else {
+        off.style.display = "block";
+        $("notifEnableHint").textContent =
+          Notification.permission === "denied"
+            ? "通知がブロックされています。端末の設定から許可してください。"
+            : "";
+      }
+    }
+    async function enableNotifications() {
+      const btn = $("notifEnableBtn");
+      try {
+        if (!notifSupported()) return;
+        btn.disabled = true; btn.textContent = "設定中…";
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") {
+          $("notifEnableHint").textContent = "通知が許可されませんでした。";
+          return;
+        }
+        if (!swReg) await registerServiceWorker();
+        await navigator.serviceWorker.ready;
+        const cfg = await (await fetch("/api/push/config")).json();
+        if (!cfg.enabled || !cfg.publicKey) { $("notifEnableHint").textContent = "通知は現在準備中です。"; return; }
+        let sub = await swReg.pushManager.getSubscription();
+        if (!sub) {
+          sub = await swReg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(cfg.publicKey),
+          });
+        }
+        await apiOK("/api/push/subscribe", { method: "POST", body: { subscription: sub.toJSON() } });
+        await refreshNotifUI();
+      } catch (e) {
+        $("notifEnableHint").textContent = "設定に失敗しました：" + (e.message || e);
+      } finally {
+        btn.disabled = false; btn.textContent = "通知をオンにする";
+      }
+    }
+    async function disableNotifications() {
+      try {
+        const sub = swReg ? await swReg.pushManager.getSubscription() : null;
+        if (sub) {
+          await api("/api/push/unsubscribe", { method: "POST", body: { endpoint: sub.endpoint } });
+          await sub.unsubscribe();
+        }
+      } catch (e) { console.warn(e); }
+      await refreshNotifUI();
+    }
+    async function loadNotifPrefs() {
+      try {
+        const p = await apiOK("/api/push/prefs");
+        $("ntDinner").checked = p.dinner_reminder !== false;
+        $("ntPlan").checked = p.plan_reminder !== false;
+        $("ntMember").checked = p.member_update !== false;
+      } catch {}
+    }
+    async function saveNotifPref(kind, value) {
+      try {
+        await apiOK("/api/push/prefs", { method: "POST", body: { [kind]: !!value } });
+      } catch (e) {
+        $("notifStatusHint").textContent = "保存に失敗しました。";
+      }
+    }
+    async function testNotif() {
+      const hint = $("notifStatusHint");
+      try {
+        const r = await apiOK("/api/push/test", { method: "POST" });
+        hint.textContent = r.sent > 0 ? "テスト通知を送信しました。" : "送信先の端末が見つかりませんでした。";
+      } catch (e) {
+        hint.textContent = "送信に失敗しました：" + (e.message || e);
+      }
+    }
+
+    registerServiceWorker();
     init();
   </script>
 </body>

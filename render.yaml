@@ -27,6 +27,12 @@ services:
         sync: false
       - key: APP_BASE_URL            # 例: https://menuraku.onrender.com（初回デプロイでURL確定後に設定）
         sync: false
+      - key: VAPID_PUBLIC_KEY        # ★プッシュ通知用。ローカルの .env と同じ値をダッシュボードで入力
+        sync: false
+      - key: VAPID_PRIVATE_KEY       # ★秘密。.env と同じ値を入力（外部に出さない）
+        sync: false
+      - key: VAPID_SUBJECT           # 例: mailto:peitullysblack@gmail.com
+        sync: false
       # --- 非秘密: 既定値 ---
       - key: FREE_AI_MEALS_PER_MONTH
         value: "10"
