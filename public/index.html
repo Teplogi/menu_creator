@@ -8,7 +8,7 @@
   <link rel="apple-touch-icon" href="/icon.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#f5831f" />
-  <meta name="description" content="共働き家庭向けの時短献立づくり。AIが献立を作成、買い物リストも自動集約。" />
+  <meta name="description" content="共働き夫婦・同棲カップルのためのAI献立アプリ。ふたりの献立と買い物リストを自動で作成・共有。「今日、何作ろう？」から解放されます。" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="めにゅらく！" />
   <style>
@@ -585,7 +585,7 @@
         <div class="lp-hero">
           <img src="/icon.png" class="lp-logo" alt="めにゅらく！" width="88" height="88" />
           <h1 class="lp-h1">「今日、何作ろう？」<br />から解放される。</h1>
-          <p class="lp-sub">共働き家庭のためのAI献立アプリ。期間を選ぶだけで、毎日の献立も買い物リストも自動でつくれます。</p>
+          <p class="lp-sub">共働き夫婦や同棲カップルのためのAI献立アプリ。期間を選ぶだけで、毎日の献立も買い物リストも自動。ふたりで共有できます。</p>
           <button class="btn-primary lp-cta" onclick="startFromLanding('register')">無料ではじめる</button>
           <p class="lp-login">アカウントをお持ちの方は <a href="#" onclick="startFromLanding('login');return false;">ログイン</a></p>
         </div>
@@ -593,7 +593,7 @@
         <div class="lp-benefits">
           <div class="lp-card"><div class="lp-ic">🗓️</div><h3>期間を選ぶだけ</h3><p>AIが数日〜2週間分の献立をまとめて提案。調理時間や苦手な食材も考慮します。</p></div>
           <div class="lp-card"><div class="lp-ic">🛒</div><h3>買い物リストが自動</h3><p>献立の材料を週ごとに自動でまとめます。買い忘れを防いで、買い物がぐっとラクに。</p></div>
-          <div class="lp-card"><div class="lp-ic">👨‍👩‍👧</div><h3>家族と共有</h3><p>世帯を家族と共有して、みんなで献立を確認・編集できます。</p></div>
+          <div class="lp-card"><div class="lp-ic">🧑‍🤝‍🧑</div><h3>パートナーと共有</h3><p>献立も買い物リストもふたりで共有。「今日どうする？」のやり取りが減ります。もちろん家族でもOK。</p></div>
         </div>
 
         <div class="lp-steps">
@@ -619,7 +619,7 @@
       <div class="card stack">
         <div class="auth-hero">
           <img class="auth-logo" src="/icon.png" alt="めにゅらく！" width="96" height="96" />
-          <p class="auth-tagline">共働き家庭の、時短献立づくり</p>
+          <p class="auth-tagline">ふたりの毎日に、時短献立を</p>
         </div>
         <div class="segmented">
           <button type="button" class="seg on" id="tab-login" onclick="setAuthMode('login')">ログイン</button>
@@ -640,9 +640,9 @@
       <div class="card stack">
         <div style="text-align:center">
           <h2 style="margin:2px 0 2px">世帯を作りましょう</h2>
-          <p style="color:var(--muted);font-size:.9rem;margin:0">献立を保存する「世帯」を作ります。あとで家族を招待できます。</p>
+          <p style="color:var(--muted);font-size:.9rem;margin:0">献立を保存する「世帯」を作ります。あとでパートナーや家族を招待できます。</p>
         </div>
-        <label class="field"><span class="t">世帯の名前</span><input type="text" id="hhName" placeholder="例: 田中家" /></label>
+        <label class="field"><span class="t">世帯の名前</span><input type="text" id="hhName" placeholder="例: ふたりのごはん / 田中家" /></label>
         <button class="btn-primary" id="createHhBtn" onclick="createHousehold()">世帯を作ってはじめる</button>
         <button class="btn-ghost" id="claimOld" style="display:none" onclick="claimOldHousehold()">以前のデータ（この端末）を引き継ぐ</button>
       </div>
