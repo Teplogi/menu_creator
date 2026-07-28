@@ -194,6 +194,8 @@ const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, username_lc TEXT UNIQUE NOT NULL,
     pw_hash TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  // 表示名（アプリ内で表示。ログイン用 username とは別。未設定なら username にフォールバック）
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expires_at TEXT`,
@@ -292,7 +294,7 @@ async function auth(req, res, next) {
       await q("DELETE FROM sessions WHERE token = $1", [token]).catch(() => {});
       return res.status(401).json({ error: "セッションの有効期限が切れました。再度ログインしてください。" });
     }
-    const user = sess ? await one("SELECT id, username FROM users WHERE id = $1", [sess.user_id]) : null;
+    const user = sess ? await one("SELECT id, username, display_name FROM users WHERE id = $1", [sess.user_id]) : null;
     if (!user) return res.status(401).json({ error: "ログインが必要です。" });
     req.user = user;
     next();
@@ -627,7 +629,9 @@ function handleError(res, err) {
 }
 
 // ---------- 認証 API ----------
-const userToClient = (u) => ({ id: u.id, username: u.username });
+const userToClient = (u) => ({ id: u.id, username: u.username, displayName: u.display_name || u.username });
+// 通知やメンバー表示に使う「表示名」。未設定なら username にフォールバック。
+const displayNameOf = (u) => (u && (u.display_name || u.username)) || "";
 async function householdsOf(userId) {
   return await all(
     `SELECT h.id, h.name FROM households h JOIN memberships m ON m.household_id = h.id
@@ -652,7 +656,7 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
       "INSERT INTO users (id, username, username_lc, pw_hash, created_at) VALUES ($1, $2, $3, $4, $5)",
       [id, username, lc, hashPassword(password), new Date().toISOString()]
     );
-    res.json({ token: await createSession(id), user: { id, username } });
+    res.json({ token: await createSession(id), user: { id, username, displayName: username } });
   } catch (err) {
     handleError(res, err);
   }
@@ -683,7 +687,19 @@ app.post("/api/auth/logout", auth, async (req, res) => {
 
 app.get("/api/auth/me", auth, async (req, res) => {
   try {
-    res.json({ user: req.user, households: await householdsOf(req.user.id) });
+    res.json({ user: userToClient(req.user), households: await householdsOf(req.user.id) });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 表示名の変更（ログイン用 username は変えない）。空にすると username に戻る。
+app.post("/api/auth/profile", auth, async (req, res) => {
+  try {
+    const dn = (req.body?.displayName ?? "").toString().trim();
+    if (dn.length > 20) return res.status(400).json({ error: "表示名は20文字以内にしてください。" });
+    await q("UPDATE users SET display_name = $1 WHERE id = $2", [dn || null, req.user.id]);
+    res.json({ displayName: dn || req.user.username });
   } catch (err) {
     handleError(res, err);
   }
@@ -692,7 +708,7 @@ app.get("/api/auth/me", auth, async (req, res) => {
 // ---------- 世帯 API（認証必須） ----------
 app.post("/api/households", auth, async (req, res) => {
   try {
-    const name = (req.body?.name || `${req.user.username}のグループ`).toString().slice(0, 40);
+    const name = (req.body?.name || `${displayNameOf(req.user)}のグループ`).toString().slice(0, 40);
     const id = randomUUID();
     const now = new Date().toISOString();
     await q("INSERT INTO households (id, name, share_token, created_at) VALUES ($1, $2, $3, $4)", [
@@ -715,15 +731,30 @@ app.get("/api/households", auth, async (req, res) => {
   }
 });
 
+// グループ名の変更（メンバーなら可）
+app.post("/api/households/:id/rename", auth, async (req, res) => {
+  try {
+    const hh = await requireMember(req, res, req.params.id);
+    if (!hh) return;
+    const name = (req.body?.name ?? "").toString().trim();
+    if (!name) return res.status(400).json({ error: "グループ名を入力してください。" });
+    const trimmed = name.slice(0, 40);
+    await q("UPDATE households SET name = $1 WHERE id = $2", [trimmed, hh.id]);
+    res.json({ id: hh.id, name: trimmed });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 app.get("/api/households/:id/members", auth, async (req, res) => {
   try {
     if (!(await requireMember(req, res, req.params.id))) return;
-    const members = await all(
-      `SELECT u.username, m.role FROM memberships m JOIN users u ON u.id = m.user_id
+    const rows = await all(
+      `SELECT u.username, u.display_name, m.role FROM memberships m JOIN users u ON u.id = m.user_id
        WHERE m.household_id = $1 ORDER BY m.created_at`,
       [req.params.id]
     );
-    res.json(members);
+    res.json(rows.map((m) => ({ username: m.username, displayName: m.display_name || m.username, role: m.role })));
   } catch (err) {
     handleError(res, err);
   }
@@ -916,7 +947,7 @@ async function notifyPlanCreated(householdId, actor, row) {
   const range = row.start_date === row.end_date ? md(row.start_date) : `${md(row.start_date)}〜${md(row.end_date)}`;
   await pushToHouseholdOthers(householdId, actor.id, "member_update", {
     title: "めにゅらく！",
-    body: `${actor.username}さんが献立（${range}）を作りました`,
+    body: `${displayNameOf(actor)}さんが献立（${range}）を作りました`,
     url: "/",
     tag: "plan-" + row.id,
   });

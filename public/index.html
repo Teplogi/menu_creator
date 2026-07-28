@@ -742,7 +742,13 @@
     <section class="view" id="view-settings">
       <div class="card">
         <div class="sec-head"><span class="label" id="hhViewName">グループ</span><span class="lead"></span></div>
-        <div class="sec-head"><span class="label">メンバー</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">グループの名前（アプリ内で表示）。あとから変更できます。</p>
+        <div class="urlbox">
+          <input type="text" id="groupNameInput" placeholder="グループ名（例: ふたりのごはん）" maxlength="40" />
+          <button class="copybtn" onclick="renameGroup()">保存</button>
+        </div>
+        <p class="hint" id="groupNameHint"></p>
+        <div class="sec-head" style="margin-top:14px"><span class="label">メンバー</span><span class="lead"></span></div>
         <div id="memberList"></div>
         <div class="sec-head" style="margin-top:14px"><span class="label">共同編集者を招待</span><span class="lead"></span></div>
         <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">相手の<b>ユーザー名</b>を入れると、このグループを一緒に使えます。</p>
@@ -815,8 +821,18 @@
         </div>
       </div>
       <div class="card">
+        <div class="sec-head"><span class="label">表示名</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">アプリ内であなたを表す名前です（メンバー一覧や通知に表示）。<b>ログイン用のユーザー名とは別</b>で、いつでも変更できます。</p>
+        <div class="urlbox">
+          <input type="text" id="displayNameInput" placeholder="例: たろう" maxlength="20" />
+          <button class="copybtn" onclick="saveDisplayName()">保存</button>
+        </div>
+        <p class="hint" id="displayNameHint"></p>
+      </div>
+      <div class="card">
         <div class="sec-head"><span class="label">アカウント</span><span class="lead"></span></div>
-        <p style="font-size:.9rem;margin:0 0 10px">ログイン中: <b id="meName"></b></p>
+        <p style="font-size:.9rem;margin:0 0 4px">ログイン用ユーザー名: <b id="meName"></b></p>
+        <p style="font-size:.8rem;color:var(--muted);margin:0 0 12px">これはログインに使うIDです（変更できません）。</p>
         <button class="btn-ghost" onclick="logout()">ログアウト</button>
         <p class="legal-links"><a href="/terms.html" target="_blank" rel="noopener">利用規約</a> ・ <a href="/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a> ・ <a href="/tokushoho.html" target="_blank" rel="noopener">特定商取引法に基づく表記</a></p>
       </div>
@@ -1209,6 +1225,8 @@
     const showHouseholdView = () => showSettingsView(); // グループは設定に統合
     async function renderHousehold() {
       $("hhViewName").textContent = household ? household.name : "";
+      if (household) $("groupNameInput").value = household.name || "";
+      $("groupNameHint").textContent = "";
       $("hhList").innerHTML = households.map((h) =>
         `<button class="hhitem ${h.id === household.id ? "on" : ""}" data-id="${esc(h.id)}">${esc(h.name)}</button>`
       ).join("");
@@ -1219,7 +1237,7 @@
       try {
         const members = await apiOK(`/api/households/${household.id}/members`);
         $("memberList").innerHTML = members.map((m) =>
-          `<div class="member"><span class="mn">${esc(m.username)}</span>${m.role === "owner" ? '<span class="mrole">オーナー</span>' : ""}</div>`
+          `<div class="member"><span class="mn">${esc(m.displayName || m.username)}</span>${m.role === "owner" ? '<span class="mrole">オーナー</span>' : ""}</div>`
         ).join("");
       } catch (e) { $("memberList").innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
     }
@@ -1233,6 +1251,8 @@
     }
     function renderSettings() {
       $("meName").textContent = currentUser ? currentUser.username : "";
+      if (currentUser) $("displayNameInput").value = currentUser.displayName || currentUser.username || "";
+      $("displayNameHint").textContent = "";
       renderHousehold(); // グループ（メンバー・招待・切替）
       loadPantry();
       loadStoreItems(); // 行きつけスーパーの食材
@@ -1366,10 +1386,37 @@
       $("inviteHint").textContent = "";
       try {
         const r = await apiOK(`/api/households/${household.id}/members`, { method: "POST", body: { username } });
-        $("inviteHint").textContent = `${r.username} さんを追加しました ✓`;
+        $("inviteHint").textContent = `${r.displayName || r.username} さんを追加しました ✓`;
         $("inviteInput").value = "";
         renderHousehold();
       } catch (e) { $("inviteHint").textContent = e.message; }
+    }
+
+    async function saveDisplayName() {
+      const displayName = $("displayNameInput").value.trim();
+      $("displayNameHint").textContent = "";
+      try {
+        const r = await apiOK("/api/auth/profile", { method: "POST", body: { displayName } });
+        if (currentUser) currentUser.displayName = r.displayName;
+        $("displayNameInput").value = r.displayName;
+        $("displayNameHint").textContent = "保存しました ✓";
+        renderHousehold(); // メンバー一覧の自分の表示名を更新
+      } catch (e) { $("displayNameHint").textContent = e.message; }
+    }
+
+    async function renameGroup() {
+      const name = $("groupNameInput").value.trim();
+      $("groupNameHint").textContent = "";
+      if (!name) { $("groupNameHint").textContent = "グループ名を入力してください。"; return; }
+      try {
+        const r = await apiOK(`/api/households/${household.id}/rename`, { method: "POST", body: { name } });
+        household.name = r.name;
+        const h = households.find((x) => x.id === household.id);
+        if (h) h.name = r.name;
+        $("hhViewName").textContent = r.name;
+        $("groupNameHint").textContent = "保存しました ✓";
+        // ホーム見出しのグループ名は次にホームを開いたとき（showView）に反映される
+      } catch (e) { $("groupNameHint").textContent = e.message; }
     }
 
     // ---------- ホーム（一覧 / カレンダー） ----------
