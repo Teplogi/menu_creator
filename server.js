@@ -40,6 +40,9 @@ app.use(
     },
     // 別オリジンのアイコン等は無いが、将来のCDN埋め込みに備えて緩めに
     crossOriginEmbedderPolicy: false,
+    // Googleログインのポップアップ(accounts.google.com)が親ウィンドウへ結果を返せるように。
+    // 既定の same-origin だとポップアップ通信が遮断され、白い画面で固まる。
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
   })
 );
 // Stripe Webhook は署名検証に「生ボディ」が必要なため、express.json より前に生パーサで登録する。

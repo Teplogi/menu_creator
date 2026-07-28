@@ -1099,6 +1099,7 @@
       $("tab-register").classList.toggle("on", mode === "register");
       $("authBtn").textContent = mode === "login" ? "ログイン" : "登録してはじめる";
       $("authErr").textContent = "";
+      renderGoogleButton(); // タブに合わせてGoogleボタンの表記も更新（登録/ログイン）
     }
     function submitAuth() { doAuth(authMode === "login" ? "/api/auth/login" : "/api/auth/register"); }
     async function doAuth(path) {
@@ -1128,7 +1129,9 @@
       if (!el) return;
       $("googleAuth").style.display = "block";
       el.innerHTML = "";
-      google.accounts.id.renderButton(el, { theme: "outline", size: "large", text: "continue_with", shape: "pill", locale: "ja", width: 260 });
+      // 新規登録タブは「登録」、ログインタブは「ログイン」の表記にする（GISの許容テキスト内で出し分け）
+      const text = authMode === "login" ? "signin_with" : "signup_with";
+      google.accounts.id.renderButton(el, { theme: "outline", size: "large", text, shape: "pill", locale: "ja", width: 260 });
     }
     window.onGoogleLibraryLoad = renderGoogleButton; // GISスクリプト読込完了時に呼ばれる
     (async () => {
