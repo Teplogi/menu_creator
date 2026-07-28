@@ -5,6 +5,7 @@ import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import webpush from "web-push";
+import { OAuth2Client } from "google-auth-library";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -20,11 +21,13 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        // Googleログイン（Google Identity Services）用に accounts.google.com を許可
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com/gsi/client"],
         scriptSrcAttr: ["'unsafe-inline'"], // onclick 等のインラインハンドラを許可（既定の'none'だとUIが壊れる）
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
-        connectSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com/gsi/style"],
+        imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
+        connectSrc: ["'self'", "https://accounts.google.com/gsi/"],
+        frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
         fontSrc: ["'self'", "data:"],
         objectSrc: ["'none'"],
         workerSrc: ["'self'"], // Service Worker（/sw.js）を許可（プッシュ通知/PWA用）
@@ -58,6 +61,13 @@ if (pushEnabled()) {
 } else {
   console.log("（プッシュ通知は未設定: VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY 未設定のため無効）");
 }
+
+// ---------- Googleログイン（Google Identity Services / IDトークン検証） ----------
+// クライアントID（非秘密）が設定されているときだけ有効。秘密鍵は使わない（IDトークンの署名検証のみ）。
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+const googleEnabled = () => !!GOOGLE_CLIENT_ID;
+const googleClient = googleEnabled() ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+if (!googleEnabled()) console.log("（Googleログインは未設定: GOOGLE_CLIENT_ID 未設定のため無効）");
 
 // ---------- Stripe（課金 / フリーミアム） ----------
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
@@ -196,6 +206,11 @@ const SCHEMA_STATEMENTS = [
     pw_hash TEXT NOT NULL, created_at TEXT NOT NULL)`,
   // 表示名（アプリ内で表示。ログイン用 username とは別。未設定なら username にフォールバック）
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT`,
+  // Googleログイン: google_sub（Googleの一意ID）・email。Google専用ユーザーは pw_hash が NULL。
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`,
+  `ALTER TABLE users ALTER COLUMN pw_hash DROP NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users (google_sub)`,
   `CREATE TABLE IF NOT EXISTS sessions (
     token TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expires_at TEXT`,
@@ -632,6 +647,18 @@ function handleError(res, err) {
 const userToClient = (u) => ({ id: u.id, username: u.username, displayName: u.display_name || u.username });
 // 通知やメンバー表示に使う「表示名」。未設定なら username にフォールバック。
 const displayNameOf = (u) => (u && (u.display_name || u.username)) || "";
+
+// Googleユーザー用に一意な username（ログインID）を自動生成する。
+// 招待は username で行うため、Googleユーザーにも handle を用意しておく。
+async function generateUniqueUsername(seed) {
+  let base = (seed || "user").toString().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 14);
+  if (base.length < 2) base = "user";
+  for (let i = 0; i < 20; i++) {
+    const cand = i === 0 ? base : `${base}${randomBytes(3).toString("hex")}`;
+    if (!(await one("SELECT 1 FROM users WHERE username_lc = $1", [cand.toLowerCase()]))) return cand;
+  }
+  return `user${randomUUID().slice(0, 8)}`;
+}
 async function householdsOf(userId) {
   return await all(
     `SELECT h.id, h.name FROM households h JOIN memberships m ON m.household_id = h.id
@@ -667,8 +694,55 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
     const username = (req.body?.username || "").toString().trim();
     const password = (req.body?.password || "").toString();
     const u = await one("SELECT * FROM users WHERE username_lc = $1", [username.toLowerCase()]);
-    if (!u || !verifyPassword(password, u.pw_hash))
+    if (!u || !u.pw_hash || !verifyPassword(password, u.pw_hash))
       return res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
+    res.json({ token: await createSession(u.id), user: userToClient(u) });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// クライアントに渡す認証設定（Googleログインの有効可否とクライアントID＝非秘密）
+app.get("/api/auth/config", (req, res) => {
+  res.json({ googleEnabled: googleEnabled(), googleClientId: googleEnabled() ? GOOGLE_CLIENT_ID : null });
+});
+
+// Googleログイン: クライアントの IDトークン(credential) を検証し、既存Googleユーザーはログイン、
+// 未登録なら新規作成。現行の username/password ユーザーとは別アカウント（メール連携は将来）。
+app.post("/api/auth/google", authLimiter, async (req, res) => {
+  try {
+    if (!googleEnabled()) return res.status(400).json({ error: "Googleログインは利用できません。" });
+    const credential = (req.body?.credential || "").toString();
+    if (!credential) return res.status(400).json({ error: "認証情報がありません。" });
+
+    let payload;
+    try {
+      const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+      payload = ticket.getPayload();
+    } catch {
+      return res.status(401).json({ error: "Google認証に失敗しました。もう一度お試しください。" });
+    }
+    if (!payload || !payload.sub) return res.status(401).json({ error: "Google認証に失敗しました。" });
+
+    const sub = payload.sub;
+    const email = payload.email || null;
+    const gname = (payload.name || payload.given_name || "").toString().slice(0, 20) || null;
+
+    let u = await one("SELECT * FROM users WHERE google_sub = $1", [sub]);
+    if (!u) {
+      const id = randomUUID();
+      const seed = email ? email.split("@")[0] : "user";
+      const username = await generateUniqueUsername(seed);
+      await q(
+        `INSERT INTO users (id, username, username_lc, pw_hash, display_name, google_sub, email, created_at)
+         VALUES ($1, $2, $3, NULL, $4, $5, $6, $7)`,
+        [id, username, username.toLowerCase(), gname, sub, email, new Date().toISOString()]
+      );
+      u = await one("SELECT * FROM users WHERE id = $1", [id]);
+    } else if (email && u.email !== email) {
+      await q("UPDATE users SET email = $1 WHERE id = $2", [email, u.id]); // メール更新に追随
+      u.email = email;
+    }
     res.json({ token: await createSession(u.id), user: userToClient(u) });
   } catch (err) {
     handleError(res, err);

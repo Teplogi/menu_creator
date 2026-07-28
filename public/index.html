@@ -11,6 +11,7 @@
   <meta name="description" content="共働き夫婦・同棲カップルのためのAI献立アプリ。ふたりの献立と買い物リストを自動で作成・共有。「今日何作ろう」からの解放！" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="めにゅらく！" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
       --orange: #f5831f;
@@ -56,6 +57,8 @@
     .auth-hero { text-align: center; margin: 8px 0 6px; }
     .auth-logo { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 8px 22px rgba(245,131,31,.28); display: inline-block; }
     .auth-tagline { margin: 12px 0 4px; color: var(--muted); font-size: .9rem; font-weight: 700; }
+    .auth-or { display: flex; align-items: center; gap: 10px; margin: 14px 4px; color: var(--muted); font-size: .8rem; font-weight: 700; }
+    .auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
     .card + .card { margin-top: 16px; }
     .view { display: none; }
     .view.active { display: block; }
@@ -621,6 +624,10 @@
           <img class="auth-logo" src="/icon.png" alt="めにゅらく！" width="96" height="96" />
           <p class="auth-tagline">ふたりの毎日に、時短献立を</p>
         </div>
+        <div id="googleAuth" style="display:none">
+          <div id="googleBtn" style="display:flex;justify-content:center"></div>
+          <div class="auth-or"><span>または</span></div>
+        </div>
         <div class="segmented">
           <button type="button" class="seg on" id="tab-login" onclick="setAuthMode('login')">ログイン</button>
           <button type="button" class="seg" id="tab-register" onclick="setAuthMode('register')">新規登録</button>
@@ -960,8 +967,8 @@
     }
 
     function showLanding() { showView("landing", "めにゅらく！"); }
-    function startFromLanding(mode) { setAuthMode(mode || "register"); showView("auth", "めにゅらく！"); }
-    function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); }
+    function startFromLanding(mode) { setAuthMode(mode || "register"); showView("auth", "めにゅらく！"); renderGoogleButton(); }
+    function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); renderGoogleButton(); }
     function showSetup() {
       $("claimOld").style.display = localStorage.getItem("householdToken") ? "block" : "none";
       showView("setup", "グループの設定");
@@ -1108,6 +1115,39 @@
       } catch (e) { $("authErr").textContent = e.message; }
       finally { $("authBtn").disabled = false; }
     }
+
+    // ---------- Googleログイン（Google Identity Services） ----------
+    let googleClientId = null, googleInited = false;
+    function renderGoogleButton() {
+      if (!googleClientId || !(window.google && google.accounts && google.accounts.id)) return;
+      if (!googleInited) {
+        google.accounts.id.initialize({ client_id: googleClientId, callback: handleGoogleCredential });
+        googleInited = true;
+      }
+      const el = $("googleBtn");
+      if (!el) return;
+      $("googleAuth").style.display = "block";
+      el.innerHTML = "";
+      google.accounts.id.renderButton(el, { theme: "outline", size: "large", text: "continue_with", shape: "pill", locale: "ja", width: 260 });
+    }
+    window.onGoogleLibraryLoad = renderGoogleButton; // GISスクリプト読込完了時に呼ばれる
+    (async () => {
+      try {
+        const cfg = await (await fetch("/api/auth/config")).json();
+        if (cfg.googleEnabled && cfg.googleClientId) { googleClientId = cfg.googleClientId; renderGoogleButton(); }
+      } catch {}
+    })();
+    async function handleGoogleCredential(response) {
+      $("authErr").textContent = "";
+      try {
+        const data = await apiOK("/api/auth/google", { method: "POST", body: { credential: response.credential } });
+        authToken = data.token; localStorage.setItem("authToken", authToken);
+        currentUser = data.user;
+        households = (await apiOK("/api/auth/me")).households;
+        await afterLogin();
+      } catch (e) { $("authErr").textContent = e.message || "Googleログインに失敗しました。"; }
+    }
+
     async function logout() {
       try { await api("/api/auth/logout", { method: "POST" }); } catch {}
       authToken = null; currentUser = null; household = null; households = [];

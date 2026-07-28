@@ -33,6 +33,9 @@ services:
         sync: false
       - key: VAPID_SUBJECT           # 例: mailto:peitullysblack@gmail.com
         sync: false
+      # --- Googleログイン: クライアントIDは非秘密なので値を直書き（クライアントに埋め込む公開情報） ---
+      - key: GOOGLE_CLIENT_ID
+        value: "654211998942-jgahkneb1no0ucj19g1p4b8utl55cu3s.apps.googleusercontent.com"
       # --- 非秘密: 既定値 ---
       - key: FREE_AI_MEALS_PER_MONTH
         value: "10"
