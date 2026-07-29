@@ -732,7 +732,9 @@
         </div>
         <p class="hint" style="margin:-4px 0 10px">「おまかせ」はご飯を中心に、麺・パンの日も時々混ぜます。「麺類」＋「主菜のみ」でラーメン一杯だけ、なども作れます。</p>
 
-        <label class="field"><span class="t">避けたい食材・アレルギー</span><input type="text" id="avoid" placeholder="例: えび、そば" /></label>
+        <label class="field"><span class="t">避けたい食材・アレルギー</span>
+          <p id="avoidReminder" style="margin:2px 0 0;font-size:.85rem;color:var(--muted);line-height:1.7">読み込み中…</p>
+        </label>
         <label class="field"><span class="t">好み・要望</span>
           <textarea id="preferences" placeholder="例: 和食多めで、野菜をたっぷり。子どもも食べやすいもの。"></textarea>
         </label>
@@ -1022,6 +1024,7 @@
       $("aiQuotaHint").style.display = "none";
       loadBillingStatus().then(updateAiQuotaHint); // 無料枠の残数を先出し
       loadPresets(); // 要望テンプレを読み込み
+      loadCreateAvoidReminder(); // 設定の「使わない食材」を除外リマインダーに表示
       // 既定の期間（今日〜3日後）でカレンダーを初期化
       const today = new Date();
       rangeStart = fmt(today);
@@ -1034,6 +1037,18 @@
         plansCache = await apiOK("/api/plans?householdId=" + encodeURIComponent(household.id));
         renderRangePicker(); rebuildDays();
       } catch {}
+    }
+
+    // 作成画面に「設定の使わない食材」を除外リマインダーとして表示（アレルギー等は設定に一本化）
+    async function loadCreateAvoidReminder() {
+      const el = $("avoidReminder");
+      if (!el || !household) return;
+      let items = [];
+      try { items = await apiOK(`/api/households/${household.id}/store-items`); } catch {}
+      const avoid = items.filter((x) => x.kind === "avoid").map((x) => x.name);
+      el.innerHTML = avoid.length
+        ? `除外中：<b style="color:#c0392b">${avoid.map(esc).join("、")}</b>　<a href="#" onclick="showSettingsView();return false;">設定で編集</a>`
+        : `設定の「使わない食材」が毎回自動で除外されます。<a href="#" onclick="showSettingsView();return false;">設定で追加</a>`;
     }
 
     // ---------- 要望テンプレ ----------
@@ -2107,7 +2122,6 @@
         dishCount: $("dishCount").value,
         staple: $("staple").value,
         preferences: $("preferences").value.trim(),
-        avoid: $("avoid").value.trim(),
         includeSteps: !$("noSteps").checked,
         overwrite,
       };
