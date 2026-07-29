@@ -609,7 +609,7 @@
         <div class="lp-price">
           <h2 class="lp-h2" style="margin-top:0">料金</h2>
           <p class="lp-price-lead"><b>無料</b>ではじめられます</p>
-          <p class="lp-price-note">手動での献立入力・買い物リストはずっと無料。AIによる献立作成は<b>月10食分まで無料</b>、それ以上使いたい方は<b>プレミアム（月480円・税込）</b>で使い放題です。</p>
+          <p class="lp-price-note">手動での献立入力・買い物リストはずっと無料。AI献立作成は<b>月10食分</b>＋<b>AI修正5回</b>まで無料、もっと使いたい方は<b>プレミアム（月480円・税込）</b>で使い放題です。</p>
         </div>
 
         <button class="btn-primary lp-cta" onclick="startFromLanding('register')">無料ではじめる</button>
@@ -1181,7 +1181,7 @@
       } else {
         $("billingBody").innerHTML =
           `<div class="plan-row"><span class="plan-badge free">無料プラン</span>` +
-          `<span class="plan-note">今月のAI生成 残り <b>${b.freeRemaining}</b> / ${b.freeLimit} 食</span></div>` +
+          `<span class="plan-note">今月の無料枠：献立 残り <b>${b.freeRemaining}</b>/${b.freeLimit}食 ・ AI修正 残り <b>${b.editRemaining ?? "-"}</b>/${b.editLimit ?? "-"}回</span></div>` +
           `<button class="btn-primary" style="width:100%" onclick="startCheckout()">プレミアムにアップグレード</button>` +
           `<p class="hint" style="margin:8px 0 0">手動での献立入力・買い物リストはずっと無料です。</p>`;
       }
@@ -1235,8 +1235,8 @@
       const b = billingStatus;
       if (!b || !b.billingEnabled || b.active) { el.style.display = "none"; return; }
       el.style.display = "";
-      el.innerHTML = `無料枠：今月あと <b>${b.freeRemaining}</b> / ${b.freeLimit} 食。` +
-        `これを超える期間は<a href="#" onclick="startCheckout();return false;">プレミアム</a>で使い放題です。`;
+      el.innerHTML = `無料枠：今月あと 献立 <b>${b.freeRemaining}</b>/${b.freeLimit}食 ・ AI修正 <b>${b.editRemaining ?? "-"}</b>/${b.editLimit ?? "-"}回。` +
+        `これを超える分は<a href="#" onclick="startCheckout();return false;">プレミアム</a>で使い放題です。`;
     }
 
     // ---------- グループ（作成・引き継ぎ・切替・メンバー） ----------

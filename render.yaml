@@ -37,8 +37,11 @@ services:
       - key: GOOGLE_CLIENT_ID
         value: "654211998942-jgahkneb1no0ucj19g1p4b8utl55cu3s.apps.googleusercontent.com"
       # --- 非秘密: 既定値 ---
+      # ★β期間は無料枠を多めにしてテスターが自由に試せるように。公開時に 10 / 5 へ戻す。
       - key: FREE_AI_MEALS_PER_MONTH
-        value: "10"
+        value: "150"           # 公開時は "10"
+      - key: FREE_AI_EDITS_PER_MONTH
+        value: "50"            # AI修正の無料枠（別枠）。公開時は "5"
       - key: SESSION_TTL_DAYS
         value: "30"
       - key: NODE_VERSION
