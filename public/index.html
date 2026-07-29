@@ -386,6 +386,18 @@
     .toggle-field input { margin-top: 3px; flex: none; width: 18px; height: 18px; accent-color: var(--orange); }
     .toggle-field span { display: flex; flex-direction: column; gap: 2px; }
     .toggle-field small { color: var(--muted); font-size: .8rem; line-height: 1.5; }
+    /* 要望テンプレ */
+    .preset-row { margin: -4px 0 4px; }
+    .preset-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .preset-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-soft);
+      color: var(--orange-dark); border: 1px solid var(--line); border-radius: 999px;
+      padding: 4px 6px 4px 11px; font-size: .82rem; font-weight: 700; max-width: 100%; }
+    .preset-chip .pt { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+    .preset-chip .px { border: none; background: none; color: var(--orange-dark); opacity: .55; cursor: pointer;
+      font-size: 1rem; line-height: 1; padding: 0 2px; flex: none; }
+    .preset-chip .px:hover { opacity: 1; }
+    .preset-save { border: none; background: none; color: var(--orange-dark); font-weight: 700; font-size: .8rem;
+      cursor: pointer; padding: 6px 2px; text-decoration: underline; }
     /* ---- 生成プログレスバー ---- */
     .genbar { height: 8px; border-radius: 999px; background: rgba(255,255,255,.35); overflow: hidden; margin: 6px 0; }
     .genbar-fill { height: 100%; width: 0%; background: #fff; border-radius: 999px; transition: width .4s ease; }
@@ -712,6 +724,10 @@
         <label class="field"><span class="t">好み・要望</span>
           <textarea id="preferences" placeholder="例: 和食多めで、野菜をたっぷり。子どもも食べやすいもの。"></textarea>
         </label>
+        <div class="preset-row">
+          <div id="presetChips" class="preset-chips"></div>
+          <button type="button" class="preset-save" id="presetSaveBtn" onclick="savePresetFromField()">＋ いまの要望をテンプレ保存</button>
+        </div>
 
         <label class="toggle-field">
           <input type="checkbox" id="noSteps" />
@@ -983,6 +999,7 @@
       showView("create", "献立を作成", { back: true });
       $("aiQuotaHint").style.display = "none";
       loadBillingStatus().then(updateAiQuotaHint); // 無料枠の残数を先出し
+      loadPresets(); // 要望テンプレを読み込み
       // 既定の期間（今日〜3日後）でカレンダーを初期化
       const today = new Date();
       rangeStart = fmt(today);
@@ -995,6 +1012,52 @@
         plansCache = await apiOK("/api/plans?householdId=" + encodeURIComponent(household.id));
         renderRangePicker(); rebuildDays();
       } catch {}
+    }
+
+    // ---------- 要望テンプレ ----------
+    let presets = [];
+    async function loadPresets() {
+      const wrap = $("presetChips");
+      if (!household) { presets = []; if (wrap) wrap.innerHTML = ""; return; }
+      try { presets = await apiOK(`/api/households/${household.id}/presets`); }
+      catch { presets = []; }
+      renderPresets();
+    }
+    function renderPresets() {
+      const wrap = $("presetChips");
+      if (!wrap) return;
+      wrap.innerHTML = presets.map((p) =>
+        `<span class="preset-chip" data-id="${esc(p.id)}">` +
+        `<span class="pt" title="タップで要望に追加">${esc(p.text)}</span>` +
+        `<button type="button" class="px" title="削除">×</button></span>`
+      ).join("");
+      wrap.querySelectorAll(".preset-chip").forEach((el) => {
+        const p = presets.find((x) => x.id === el.dataset.id);
+        if (!p) return;
+        el.querySelector(".pt").addEventListener("click", () => insertPreset(p.text));
+        el.querySelector(".px").addEventListener("click", () => deletePreset(p.id));
+      });
+    }
+    function insertPreset(text) {
+      const ta = $("preferences");
+      const cur = ta.value.trim();
+      if (!cur) ta.value = text;
+      else if (!cur.includes(text)) ta.value = cur + "、" + text;
+      ta.focus();
+    }
+    async function savePresetFromField() {
+      const text = $("preferences").value.trim();
+      if (!text) { $("preferences").focus(); return; }
+      try {
+        await apiOK(`/api/households/${household.id}/presets`, { method: "POST", body: { text } });
+        await loadPresets();
+      } catch (e) { alert(e.message); }
+    }
+    async function deletePreset(id) {
+      try {
+        await apiOK(`/api/households/${household.id}/presets/${id}`, { method: "DELETE" });
+        await loadPresets();
+      } catch (e) { alert(e.message); }
     }
 
     // ---------- 期間カレンダー（範囲選択） ----------

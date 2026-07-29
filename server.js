@@ -235,6 +235,10 @@ const SCHEMA_STATEMENTS = [
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
     created_at TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_pantry_hh_norm ON pantry_items (household_id, name_norm)`,
+  // 要望テンプレ（作成画面の「要望」欄に入れる定型文。グループ共有）
+  `CREATE TABLE IF NOT EXISTS preference_presets (
+    id TEXT PRIMARY KEY, household_id TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_presets_hh ON preference_presets (household_id, created_at)`,
   // 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
   `CREATE TABLE IF NOT EXISTS store_items (
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
@@ -908,6 +912,56 @@ app.delete("/api/households/:id/pantry/:itemId", auth, async (req, res) => {
     if (!(await requireMember(req, res, req.params.id))) return;
     await q("DELETE FROM pantry_items WHERE id = $1 AND household_id = $2", [
       req.params.itemId, req.params.id,
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------- 要望テンプレ（世帯ごと・共有） ----------
+app.get("/api/households/:id/presets", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const rows = await all(
+      "SELECT id, text FROM preference_presets WHERE household_id = $1 ORDER BY created_at",
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.post("/api/households/:id/presets", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const text = (req.body?.text || "").toString().trim().slice(0, 80);
+    if (!text) return res.status(400).json({ error: "テンプレの内容を入力してください。" });
+    const count = await one("SELECT count(*)::int AS n FROM preference_presets WHERE household_id = $1", [req.params.id]);
+    if (count && count.n >= 20) return res.status(400).json({ error: "テンプレは20件までです。不要なものを削除してください。" });
+    // 同一テキストの重複は既存を返す（冪等）
+    const existing = await one(
+      "SELECT id, text FROM preference_presets WHERE household_id = $1 AND lower(text) = lower($2)",
+      [req.params.id, text]
+    );
+    if (existing) return res.json(existing);
+    const id = randomUUID();
+    await q(
+      "INSERT INTO preference_presets (id, household_id, text, created_at) VALUES ($1, $2, $3, $4)",
+      [id, req.params.id, text, new Date().toISOString()]
+    );
+    res.json({ id, text });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.delete("/api/households/:id/presets/:presetId", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    await q("DELETE FROM preference_presets WHERE id = $1 AND household_id = $2", [
+      req.params.presetId, req.params.id,
     ]);
     res.json({ ok: true });
   } catch (err) {
