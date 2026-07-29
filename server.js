@@ -410,10 +410,17 @@ const DISH_COUNT_DIRECTIVE = {
   main_side: "各食事は主菜1品と副菜1品を作る。",
   main_side_soup: "各食事は主菜1品・副菜1品・汁物1品を作る。",
 };
+// 主食タイプ。any=おまかせ（ご飯中心＋時々麺/パン）、rice/noodle/bread=固定。
+const STAPLE_DIRECTIVE = {
+  any: "主食は指定なし。基本はご飯だが、麺類・パン・丼ものの日も適度に混ぜて、毎日ご飯に偏らないようにする（マンネリ回避）。",
+  rice: "主食はご飯（白米）を前提にし、それに合う主菜（おかず）にする。",
+  noodle: "主食は麺類にする。主菜は麺料理そのもの（ラーメン・うどん・そば・パスタ・焼きそば・冷やし中華 等）にする。品数が少ない場合は一皿で完結してよい。",
+  bread: "主食はパン。ご飯前提の和風のおかず（生姜焼き・照り焼き・煮物・焼き魚など）は選ばず、パンに合う洋風の献立にする。主菜は、パンそのものを主役にした料理（サンドイッチ・ピザトースト・フレンチトースト・ホットドッグ・パングラタン等）か、パンに添える洋風料理（シチュー・ポトフ・スープ・オムレツ・ソーセージ・グラタン等）にする。パンやその材料も材料リストに含める。",
+};
 
 // ---------- 生成ロジック ----------
 function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
-  const { people, maxCookMinutes, dishCount, preferences, avoid } = opts;
+  const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
     .map((t) => `- ${t.date} : ${t.slots.join(" / ")}`)
@@ -427,6 +434,7 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], style
     "",
     `人数: ${people}人分（材料の分量は人数に合わせる）`,
     DISH_COUNT_DIRECTIVE[dishCount] || DISH_COUNT_DIRECTIVE.main_side,
+    STAPLE_DIRECTIVE[staple] || STAPLE_DIRECTIVE.any,
     maxCookMinutes
       ? `各料理は調理時間の目安が ${maxCookMinutes} 分以内になるようにし、cook_minutes に目安（分）の数値を入れる。`
       : "各料理の cook_minutes に調理時間の目安（分）の数値を入れる。",
@@ -1202,7 +1210,7 @@ const INSERT_PLAN = `INSERT INTO meal_plans
 
 app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
   try {
-    const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid, includeSteps } =
+    const { householdId, targets, people, maxCookMinutes, dishCount, staple, preferences, avoid, includeSteps } =
       req.body || {};
     const household = await requireMember(req, res, householdId);
     if (!household) return;
@@ -1214,6 +1222,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
       people: Number(people) > 0 ? Number(people) : 2,
       maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
       dishCount: dishCount || "main_side",
+      staple: staple || "any",
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false, // false で「作り方は生成しない（献立だけ）」
@@ -1252,7 +1261,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
 app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
   const send = (obj) => { try { res.write(JSON.stringify(obj) + "\n"); } catch {} };
   try {
-    const { householdId, targets, people, maxCookMinutes, dishCount, preferences, avoid, includeSteps } =
+    const { householdId, targets, people, maxCookMinutes, dishCount, staple, preferences, avoid, includeSteps } =
       req.body || {};
     const household = await requireMember(req, res, householdId);
     if (!household) return;
@@ -1263,6 +1272,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       people: Number(people) > 0 ? Number(people) : 2,
       maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
       dishCount: dishCount || "main_side",
+      staple: staple || "any",
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false,

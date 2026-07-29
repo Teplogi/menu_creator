@@ -712,13 +712,24 @@
           </label>
         </div>
 
-        <label class="field"><span class="t">品数</span>
-          <select id="dishCount">
-            <option value="main">主菜のみ</option>
-            <option value="main_side" selected>主菜＋副菜</option>
-            <option value="main_side_soup">主菜＋副菜＋汁物</option>
-          </select>
-        </label>
+        <div class="row2">
+          <label class="field"><span class="t">主食</span>
+            <select id="staple">
+              <option value="any" selected>おまかせ</option>
+              <option value="rice">ご飯</option>
+              <option value="noodle">麺類</option>
+              <option value="bread">パン</option>
+            </select>
+          </label>
+          <label class="field"><span class="t">品数</span>
+            <select id="dishCount">
+              <option value="main">主菜のみ</option>
+              <option value="main_side" selected>主菜＋副菜</option>
+              <option value="main_side_soup">主菜＋副菜＋汁物</option>
+            </select>
+          </label>
+        </div>
+        <p class="hint" style="margin:-4px 0 10px">「おまかせ」はご飯を中心に、麺・パンの日も時々混ぜます。「麺類」＋「主菜のみ」でラーメン一杯だけ、なども作れます。</p>
 
         <label class="field"><span class="t">避けたい食材・アレルギー</span><input type="text" id="avoid" placeholder="例: えび、そば" /></label>
         <label class="field"><span class="t">好み・要望</span>
@@ -1981,6 +1992,7 @@
         people: $("people").value,
         maxCookMinutes: $("cookTime").value,
         dishCount: $("dishCount").value,
+        staple: $("staple").value,
         preferences: $("preferences").value.trim(),
         avoid: $("avoid").value.trim(),
         includeSteps: !$("noSteps").checked,
