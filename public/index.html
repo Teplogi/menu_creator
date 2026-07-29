@@ -635,6 +635,7 @@
         <div class="auth-hero">
           <img class="auth-logo" src="/icon.png" alt="めにゅらく！" width="96" height="96" />
           <p class="auth-tagline">ふたりの毎日に、時短献立を</p>
+          <p id="joinNote" style="display:none;font-size:.85rem;color:var(--orange-dark);font-weight:700;margin:8px 0 0;line-height:1.6">🎉 招待リンクから開いています。<br>ログインまたは登録すると、グループに参加できます。</p>
         </div>
         <div id="googleAuth" style="display:none">
           <div id="googleBtn" style="display:flex;justify-content:center"></div>
@@ -784,13 +785,22 @@
         <p class="hint" id="groupNameHint"></p>
         <div class="sec-head" style="margin-top:14px"><span class="label">メンバー</span><span class="lead"></span></div>
         <div id="memberList"></div>
-        <div class="sec-head" style="margin-top:14px"><span class="label">共同編集者を招待</span><span class="lead"></span></div>
-        <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">相手の<b>ユーザー名</b>を入れると、このグループを一緒に使えます。</p>
+        <div class="sec-head" style="margin-top:14px"><span class="label">パートナーを招待</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">この<b>招待リンク</b>をLINEなどで送るだけ。相手がリンクを開くと、このグループに参加できます。</p>
         <div class="urlbox">
-          <input type="text" id="inviteInput" placeholder="相手のユーザー名" />
-          <button class="copybtn" onclick="inviteMember()">招待</button>
+          <input type="text" id="inviteLink" readonly placeholder="リンクを生成中…" onclick="this.select()" />
+          <button class="copybtn" onclick="copyInviteLink()">コピー</button>
         </div>
-        <p class="hint" id="inviteHint"></p>
+        <p class="hint" id="inviteLinkHint"></p>
+        <p style="font-size:.78rem;color:var(--muted);margin:2px 0 0"><a href="#" onclick="rotateInviteLink();return false;">リンクを再発行</a>（古いリンクを無効にしたいとき）</p>
+        <details style="margin-top:12px">
+          <summary style="font-size:.82rem;color:var(--muted);cursor:pointer">ユーザー名で招待する</summary>
+          <div class="urlbox" style="margin-top:8px">
+            <input type="text" id="inviteInput" placeholder="相手のユーザー名" />
+            <button class="copybtn" onclick="inviteMember()">招待</button>
+          </div>
+          <p class="hint" id="inviteHint"></p>
+        </details>
       </div>
       <div class="card">
         <div class="sec-head"><span class="label">グループを切り替え</span><span class="lead"></span></div>
@@ -994,8 +1004,9 @@
     }
 
     function showLanding() { showView("landing", "めにゅらく！"); }
-    function startFromLanding(mode) { setAuthMode(mode || "register"); showView("auth", "めにゅらく！"); renderGoogleButton(); }
-    function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); renderGoogleButton(); }
+    function startFromLanding(mode) { setAuthMode(mode || "register"); showView("auth", "めにゅらく！"); renderGoogleButton(); updateJoinNote(); }
+    function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); renderGoogleButton(); updateJoinNote(); }
+    function updateJoinNote() { const n = $("joinNote"); if (n) n.style.display = sessionStorage.getItem("joinToken") ? "block" : "none"; }
     function showSetup() {
       $("claimOld").style.display = localStorage.getItem("householdToken") ? "block" : "none";
       showView("setup", "グループの設定");
@@ -1150,21 +1161,44 @@
     }
     async function init() {
       handleBillingReturn();
+      captureJoinToken(); // 招待リンク(?join=)のトークンを保持
       authToken = localStorage.getItem("authToken");
       if (authToken) {
         const { res, data } = await api("/api/auth/me");
         if (res.ok) { currentUser = data.user; households = data.households; return afterLogin(); }
         authToken = null; localStorage.removeItem("authToken");
       }
+      if (sessionStorage.getItem("joinToken")) return startFromLanding("register"); // 招待リンク→登録/ログインへ
       showLanding(); // 未ログインの初回訪問はまず紹介ページ（そこから登録/ログインへ）
     }
     async function afterLogin() {
+      const joined = await processPendingJoin(); // 招待リンクからの参加を優先処理
       const saved = localStorage.getItem("householdId");
-      household = households.find((h) => h.id === saved) || households[0] || null;
+      household = (joined && households.find((h) => h.id === joined.id))
+        || households.find((h) => h.id === saved) || households[0] || null;
       loadBillingStatus(); // 残数・加入状態を先読み（ペイウォール即応のため）
       if (!household) return showSetup();
       localStorage.setItem("householdId", household.id);
       await goHome();
+      if (joined) setTimeout(() => alert(`「${joined.name}」に参加しました！`), 250);
+    }
+    // 招待リンク（?join=token）の処理
+    function captureJoinToken() {
+      const t = new URLSearchParams(location.search).get("join");
+      if (t) sessionStorage.setItem("joinToken", t);
+    }
+    function cleanJoinFromUrl() {
+      try { const u = new URL(location.href); if (u.searchParams.has("join")) { u.searchParams.delete("join"); history.replaceState(null, "", u.pathname + (u.search || "")); } } catch {}
+    }
+    async function processPendingJoin() {
+      const token = sessionStorage.getItem("joinToken");
+      if (!token) return null;
+      try {
+        const hh = await apiOK("/api/households/claim", { method: "POST", body: { shareToken: token } });
+        households = (await apiOK("/api/auth/me")).households; // 参加後の一覧に更新
+        return hh;
+      } catch { return null; }
+      finally { sessionStorage.removeItem("joinToken"); cleanJoinFromUrl(); }
     }
 
     function setAuthMode(mode) {
@@ -1302,6 +1336,43 @@
       loadBillingStatus(); // 残数などを更新
     }
     function closePaywall() { const ov = $("paywallModal"); if (ov) ov.style.display = "none"; }
+
+    // 汎用の確認ダイアログ（Promise<boolean> を返す）
+    function confirmDialog(message, okText = "OK", cancelText = "キャンセル") {
+      return new Promise((resolve) => {
+        let ov = $("confirmModal");
+        if (!ov) {
+          ov = document.createElement("div");
+          ov.id = "confirmModal"; ov.className = "modal-overlay"; ov.style.display = "none";
+          ov.innerHTML =
+            `<div class="modal-card">` +
+            `<p id="confirmMsg" style="font-size:.95rem;line-height:1.7;margin:.2rem 0 1rem;white-space:pre-wrap"></p>` +
+            `<div style="display:flex;gap:10px;justify-content:flex-end">` +
+            `<button class="btn-ghost" id="confirmCancel"></button>` +
+            `<button class="btn-primary" id="confirmOk"></button></div></div>`;
+          document.body.appendChild(ov);
+        }
+        $("confirmMsg").textContent = message;
+        $("confirmOk").textContent = okText;
+        $("confirmCancel").textContent = cancelText;
+        const close = (val) => { ov.style.display = "none"; resolve(val); };
+        $("confirmOk").onclick = () => close(true);
+        $("confirmCancel").onclick = () => close(false);
+        ov.onclick = (e) => { if (e.target === ov) close(false); };
+        ov.style.display = "flex";
+      });
+    }
+    // 選んだ日程のうち、既に献立がある (日付|食事) の数を返す
+    function overlappingSlots(targets) {
+      const want = new Set();
+      for (const t of targets) for (const s of t.slots) want.add(t.date + "|" + s);
+      const hit = new Set();
+      for (const p of (plansCache || []))
+        for (const d of (p.days || []))
+          for (const m of (d.meals || []))
+            if ((m.dishes || []).length && want.has(d.date + "|" + m.slot)) hit.add(d.date + "|" + m.slot);
+      return hit.size;
+    }
     // 作成画面に無料枠の残数を先出し（無料ユーザーのみ。加入者・課金未設定では非表示）
     function updateAiQuotaHint() {
       const el = $("aiQuotaHint");
@@ -1350,6 +1421,8 @@
       $("hhList").querySelectorAll(".hhitem").forEach((b) =>
         b.addEventListener("click", () => { const h = households.find((x) => x.id === b.dataset.id); if (h && h.id !== household.id) selectHousehold(h); }));
       $("inviteHint").textContent = "";
+      $("inviteLinkHint").textContent = "";
+      loadInviteLink();
       $("memberList").innerHTML = '<p class="empty">読み込み中…</p>';
       try {
         const members = await apiOK(`/api/households/${household.id}/members`);
@@ -1507,6 +1580,35 @@
         $("inviteInput").value = "";
         renderHousehold();
       } catch (e) { $("inviteHint").textContent = e.message; }
+    }
+
+    // ---------- 招待リンク ----------
+    async function loadInviteLink() {
+      const el = $("inviteLink");
+      if (!el || !household) return;
+      try {
+        const r = await apiOK(`/api/households/${household.id}/share`);
+        el.value = r.url;
+      } catch { el.value = ""; el.placeholder = "リンクの取得に失敗しました"; }
+    }
+    async function copyInviteLink() {
+      const el = $("inviteLink");
+      if (!el || !el.value) return;
+      try {
+        await navigator.clipboard.writeText(el.value);
+        $("inviteLinkHint").textContent = "リンクをコピーしました ✓ LINEなどで相手に送ってください。";
+      } catch {
+        el.select(); document.execCommand && document.execCommand("copy");
+        $("inviteLinkHint").textContent = "リンクを選択しました。長押し／右クリックでコピーしてください。";
+      }
+    }
+    async function rotateInviteLink() {
+      if (!(await confirmDialog("招待リンクを再発行しますか？\n今のリンクは無効になり、新しいリンクを送り直す必要があります。", "再発行する", "やめる"))) return;
+      try {
+        const r = await apiOK(`/api/households/${household.id}/share/rotate`, { method: "POST" });
+        $("inviteLink").value = r.url;
+        $("inviteLinkHint").textContent = "新しいリンクを発行しました。古いリンクは無効です。";
+      } catch (e) { $("inviteLinkHint").textContent = e.message; }
     }
 
     async function saveDisplayName() {
@@ -1986,6 +2088,17 @@
       const targets = collectTargets();
       if (!targets.length) { $("error").textContent = "作る日と食事を1つ以上選んでください。"; return; }
 
+      // すでに献立がある日程が含まれるなら、上書き確認
+      const dup = overlappingSlots(targets);
+      let overwrite = false;
+      if (dup > 0) {
+        overwrite = await confirmDialog(
+          `選んだ日程のうち ${dup} 食分には、すでに献立があります。\n上書きして作り直しますか？（元の献立は置き換わります）`,
+          "上書きして作成", "キャンセル"
+        );
+        if (!overwrite) return; // キャンセル＝何もしない
+      }
+
       const payload = {
         householdId: household.id,
         targets,
@@ -1996,6 +2109,7 @@
         preferences: $("preferences").value.trim(),
         avoid: $("avoid").value.trim(),
         includeSteps: !$("noSteps").checked,
+        overwrite,
       };
 
       $("submitBtn").disabled = true;
@@ -2112,11 +2226,20 @@
       $("error").textContent = "";
       const targets = collectTargets();
       if (!targets.length) { $("error").textContent = "作る日と食事を1つ以上選んでください。"; return; }
+      const dup = overlappingSlots(targets);
+      let overwrite = false;
+      if (dup > 0) {
+        overwrite = await confirmDialog(
+          `選んだ日程のうち ${dup} 食分には、すでに献立があります。\n上書きしますか？（元の献立は置き換わります）`,
+          "上書きして作成", "キャンセル"
+        );
+        if (!overwrite) return;
+      }
       $("manualBtn").disabled = true;
       try {
         const plan = await apiOK("/api/plans/manual", {
           method: "POST",
-          body: { householdId: household.id, targets, people: $("people").value, dishCount: $("dishCount").value },
+          body: { householdId: household.id, targets, people: $("people").value, dishCount: $("dishCount").value, overwrite },
         });
         showOverview(plan);
       } catch (e) { $("error").textContent = e.message; }

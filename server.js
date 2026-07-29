@@ -898,6 +898,30 @@ app.post("/api/households/:id/members", auth, async (req, res) => {
   }
 });
 
+// 招待リンク（共有トークン付きURL）を取得。メンバーのみ。
+app.get("/api/households/:id/share", auth, async (req, res) => {
+  try {
+    const hh = await requireMember(req, res, req.params.id);
+    if (!hh) return;
+    res.json({ token: hh.share_token, url: `${appBaseUrl(req)}/?join=${hh.share_token}` });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 招待リンクを再発行（古いリンクを無効化したいとき）。メンバーのみ。
+app.post("/api/households/:id/share/rotate", auth, async (req, res) => {
+  try {
+    const hh = await requireMember(req, res, req.params.id);
+    if (!hh) return;
+    const token = randomBytes(12).toString("base64url");
+    await q("UPDATE households SET share_token = $1 WHERE id = $2", [token, hh.id]);
+    res.json({ token, url: `${appBaseUrl(req)}/?join=${token}` });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // ---------- 常備品リスト（世帯ごと・共有） ----------
 app.get("/api/households/:id/pantry", auth, async (req, res) => {
   try {
@@ -1227,6 +1251,34 @@ const INSERT_PLAN = `INSERT INTO meal_plans
    preferences, avoid, input_json, data_json, created_at)
   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`;
 
+// 「上書き」用: 対象の (日付|食事) と重なる既存の食事を、他のプランから取り除く。
+// 空になった日は削除し、日が全部無くなったプランは削除する。exceptId=今作った新プランは対象外。
+async function removeOverlappingMeals(householdId, exceptId, targets) {
+  const want = new Set();
+  for (const t of targets || []) for (const slot of t.slots || []) want.add(`${t.date}|${slot}`);
+  if (want.size === 0) return;
+  const rows = await all("SELECT id, data_json FROM meal_plans WHERE household_id = $1 AND id <> $2", [householdId, exceptId]);
+  for (const row of rows) {
+    let data;
+    try { data = JSON.parse(row.data_json); } catch { continue; }
+    let changed = false;
+    for (const day of data.days || []) {
+      const before = (day.meals || []).length;
+      day.meals = (day.meals || []).filter((m) => !want.has(`${day.date}|${m.slot}`));
+      if (day.meals.length !== before) changed = true;
+    }
+    if (!changed) continue;
+    data.days = (data.days || []).filter((d) => (d.meals || []).length > 0);
+    if (data.days.length === 0) {
+      await q("DELETE FROM meal_plans WHERE id = $1", [row.id]);
+    } else {
+      const dates = data.days.map((d) => d.date).sort();
+      await q("UPDATE meal_plans SET data_json = $1, start_date = $2, end_date = $3 WHERE id = $4",
+        [JSON.stringify(data), dates[0], dates[dates.length - 1], row.id]);
+    }
+  }
+}
+
 app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
   try {
     const { householdId, targets, people, maxCookMinutes, dishCount, staple, preferences, avoid, includeSteps } =
@@ -1268,6 +1320,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
       new Date().toISOString(),
     ]);
     if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1, req.aiKind); // 無料は成功時のみ食数分を消費
+    if (req.body?.overwrite) await removeOverlappingMeals(household.id, row.id, targets); // 上書き=重複する既存の食事を除去
     notifyPlanCreated(household.id, req.user, row).catch(() => {}); // 世帯の他メンバーへ通知
     res.json(planToClient(row));
   } catch (err) {
@@ -1357,6 +1410,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       JSON.stringify({ targets, opts }), JSON.stringify({ days }), new Date().toISOString(),
     ]);
     if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1, req.aiKind);
+    if (req.body?.overwrite) await removeOverlappingMeals(household.id, row.id, targets); // 上書き=重複する既存の食事を除去
     notifyPlanCreated(household.id, req.user, row).catch(() => {}); // 世帯の他メンバーへ通知
     send({ type: "done", plan: planToClient(row) });
     res.end();
@@ -1387,6 +1441,7 @@ app.post("/api/plans/manual", auth, async (req, res) => {
       JSON.stringify({ days }),
       new Date().toISOString(),
     ]);
+    if (req.body?.overwrite) await removeOverlappingMeals(household.id, row.id, targets); // 上書き=重複する既存の食事を除去
     res.json(planToClient(row));
   } catch (err) {
     handleError(res, err);
