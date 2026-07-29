@@ -524,6 +524,13 @@ function effectiveMainRotation(avoidText) {
   const eff = MAIN_ROTATION.filter((m) => !m.bad.some((k) => a.includes(k)));
   return eff.length >= 2 ? eff : MAIN_ROTATION; // 絞りすぎたら通常に戻す（避けたい食材はプロンプトで担保）
 }
+const MAIN_LABELS = MAIN_ROTATION.map((m) => m.label);
+// 固定ローテーションのフォールバック（プランナー失敗時）。初日の日付で開始位置をずらす。
+function fallbackMainHints(units, avoidText) {
+  const rot = effectiveMainRotation(avoidText);
+  const off = Number((units[0]?.date || "").slice(8, 10)) || 0;
+  return units.map((_, i) => rot[(i + off) % rot.length].label);
+}
 
 async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
   const stream = client.messages.stream({
@@ -545,6 +552,56 @@ async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
   );
   if (!toolBlock) throw new Error("EMPTY_RESPONSE");
   return toolBlock.input; // { days: [...] }
+}
+
+// 主材料の割り当て表を先に作る（プランナー）。ユーザーの要望の配分（例:「肉5日魚2日」）を
+// 反映しつつ、同じ主材料が連続しないよう散らす。並列生成の前に1回だけ呼ぶ。失敗時は固定ローテ。
+const MAIN_PLAN_SCHEMA = {
+  type: "object",
+  properties: {
+    assignments: {
+      type: "array",
+      items: { type: "string", enum: MAIN_LABELS },
+      description: "各食事の主菜の主材料。meals と同じ順・同じ個数で返す。",
+    },
+  },
+  required: ["assignments"],
+  additionalProperties: false,
+};
+async function planMainIngredients(units, opts, avoidText) {
+  const allowed = effectiveMainRotation(avoidText).map((m) => m.label);
+  const list = units.map((u, i) => `${i + 1}. ${u.date} ${u.slot}`).join("\n");
+  const prompt = [
+    `次の${units.length}食に、各食事の「主菜の主材料」を1つずつ割り当ててください。`,
+    "食事一覧（この順・この数ちょうどで assignments を返す）:",
+    list,
+    "",
+    `ユーザーの要望: ${opts.preferences ? `「${opts.preferences}」` : "特になし"}`,
+    avoidText ? `避けたい食材（この主材料は使わない）: ${avoidText}` : "",
+    "",
+    "ルール（重要）:",
+    "- 要望に主材料の配分・希望（例:「肉を5日・魚を2日」「魚多め」「野菜中心の日を作る」「鶏を多めに」など）があれば、それを最優先で正確に反映する（日数・比率を必ず守る）。",
+    "- 要望に配分の指定が無ければ、栄養バランスよく散らす。",
+    "- いずれの場合も、同じ主材料が2日以上連続しないようにする（要望と両立できる範囲で）。",
+    `- 各要素は必ず次のいずれか: ${allowed.join(" / ")}`,
+    "- assignments は食事とちょうど同じ数・同じ順で返す。",
+  ].filter(Boolean).join("\n");
+  try {
+    const stream = client.messages.stream({
+      model: SINGLE_MODEL,
+      max_tokens: 1000,
+      tools: [{ name: "assign_mains", description: "各食事の主菜の主材料を割り当てる。", input_schema: MAIN_PLAN_SCHEMA }],
+      tool_choice: { type: "tool", name: "assign_mains" },
+      messages: [{ role: "user", content: prompt }],
+    });
+    const msg = await stream.finalMessage();
+    const tb = msg.content.find((b) => b.type === "tool_use" && b.name === "assign_mains");
+    const arr = tb?.input?.assignments;
+    if (Array.isArray(arr) && arr.length === units.length && arr.every((x) => MAIN_LABELS.includes(x))) return arr;
+  } catch (e) {
+    console.error("主材料プランナー失敗:", (e && e.message) || e);
+  }
+  return fallbackMainHints(units, avoidText); // 失敗時は固定ローテーション
 }
 
 // 「作り方は生成しない」モード用。生成後にサーバー側で作り方(steps)を確実に削除する。
@@ -1360,15 +1417,14 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
     for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
     send({ type: "start", total: units.length, units: units.map((u) => ({ date: u.date, slot: u.slot })) });
 
-    // 主材料を食事ごとに割り当てる（並列でも主材料が連続しないよう保証）。避けたい食材は候補から除外。
+    // 主材料の割り当てを先に決める（要望の配分を反映＋連続回避）。2食以上のときだけプランナーを使う。
     const avoidText = [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、");
-    const mainRot = effectiveMainRotation(avoidText);
-    const mainOff = Number((targets[0]?.date || "").slice(8, 10)) || 0;
+    const mainHints = units.length >= 2 ? await planMainIngredients(units, opts, avoidText) : units.map(() => "");
 
     const collected = new Map();
     await mapLimit(units, 4, async (u, i) => {
       let dishes = [];
-      const mainHint = mainRot[(i + mainOff) % mainRot.length].label; // この食事の主材料（固定）
+      const mainHint = mainHints[i] || ""; // この食事の主材料（プランナーが決定）
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
         for (let attempt = 0; attempt < 3 && dishes.length === 0; attempt++) {
