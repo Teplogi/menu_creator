@@ -476,7 +476,9 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], style
 }
 
 // まとめ生成の既定モデル（品質重視）。単発操作・順次表示は速い Haiku を使う。
-const BULK_MODEL = process.env.GEN_MODEL || "claude-opus-4-8";
+// 既定は全面 Haiku（品質は検証済みで実運用の stream 生成も元々 Haiku、コスト最安・高速）。
+// 品質重視に戻したいときは環境変数 GEN_MODEL / GEN_MODEL_SINGLE で Sonnet/Opus に切替可能。
+const BULK_MODEL = process.env.GEN_MODEL || "claude-haiku-4-5";
 const SINGLE_MODEL = process.env.GEN_MODEL_SINGLE || "claude-haiku-4-5";
 // 並列数を制限しながら map（順次表示で1食ずつ生成する際、同時実行制限に当たりにくくする）
 async function mapLimit(items, limit, fn) {
