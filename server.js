@@ -419,7 +419,7 @@ const STAPLE_DIRECTIVE = {
 };
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "", mainHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -453,6 +453,9 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], style
       : "",
     recentDishes && recentDishes.length
       ? `この世帯で最近（ここ2〜3週間）作った主菜です。同じ・似た主菜が続くとマンネリになるので、これらとは違う主菜（別の主材料・調理法）にすること（特に重要）。※副菜は繰り返してもよい: ${recentDishes.join("、")}`
+      : "",
+    mainHint
+      ? `★主菜の主材料は必ず「${mainHint}」にすること（今回の主菜はこの主材料で作る。これは最優先の指定。副菜・汁物はこの限りではない）。`
       : "",
     styleHint
       ? `参考の方向性: 今回は「${styleHint}」寄りで、他と被らない一皿を歓迎します（絶対条件ではありません）。`
@@ -505,6 +508,22 @@ async function mapLimit(items, limit, fn) {
 }
 const SLOT_ORDER = { 朝食: 0, 昼食: 1, 夕食: 2 };
 const STYLE_ROTATION = ["和食", "洋食", "中華・エスニック", "麺類・丼もの", "魚介中心", "卵・豆腐など"];
+// 主材料（タンパク質）のローテーション。並列生成でも主材料が連続しないよう、各食事に1つ割り当てて
+// から生成する（同じ献立内で「豚肉→豚肉」等が続くのを防ぐ最重要ロジック）。bad=その主材料が
+// 避けたい食材に含まれるときは候補から外す用のキーワード。
+const MAIN_ROTATION = [
+  { label: "鶏肉", bad: ["鶏", "とり", "チキン"] },
+  { label: "豚肉", bad: ["豚", "ポーク"] },
+  { label: "魚介（魚・えび・いか等）", bad: ["魚", "さかな", "えび", "エビ", "いか", "イカ", "魚介", "シーフード", "貝"] },
+  { label: "牛肉またはひき肉", bad: ["牛", "ビーフ"] },
+  { label: "卵・豆腐・厚揚げ・大豆製品", bad: ["卵", "たまご", "豆腐", "大豆", "納豆"] },
+  { label: "野菜中心（肉・魚を主役にしない）", bad: [] },
+];
+function effectiveMainRotation(avoidText) {
+  const a = avoidText || "";
+  const eff = MAIN_ROTATION.filter((m) => !m.bad.some((k) => a.includes(k)));
+  return eff.length >= 2 ? eff : MAIN_ROTATION; // 絞りすぎたら通常に戻す（避けたい食材はプロンプトで担保）
+}
 
 async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
   const stream = client.messages.stream({
@@ -1288,16 +1307,22 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
     for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
     send({ type: "start", total: units.length, units: units.map((u) => ({ date: u.date, slot: u.slot })) });
 
+    // 主材料を食事ごとに割り当てる（並列でも主材料が連続しないよう保証）。避けたい食材は候補から除外。
+    const avoidText = [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、");
+    const mainRot = effectiveMainRotation(avoidText);
+    const mainOff = Number((targets[0]?.date || "").slice(8, 10)) || 0;
+
     const collected = new Map();
     await mapLimit(units, 4, async (u, i) => {
       let dishes = [];
+      const mainHint = mainRot[(i + mainOff) % mainRot.length].label; // この食事の主材料（固定）
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
         for (let attempt = 0; attempt < 3 && dishes.length === 0; attempt++) {
           const r = await generate(
             [{ date: u.date, slots: [u.slot] }],
             opts,
-            { recentDishes, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
+            { recentDishes, mainHint, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
             SINGLE_MODEL
           );
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
