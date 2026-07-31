@@ -419,7 +419,7 @@ const STAPLE_DIRECTIVE = {
 };
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], styleHint = "", mainHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -452,10 +452,17 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], style
       ? `次の料理名とは重複させないこと: ${avoidDishes.join("、")}`
       : "",
     recentDishes && recentDishes.length
-      ? `この世帯で最近（ここ2〜3週間）作った主菜です。同じ・似た主菜が続くとマンネリになるので、これらとは違う主菜（別の主材料・調理法）にすること（特に重要）。※副菜は繰り返してもよい: ${recentDishes.join("、")}`
+      ? `この世帯で最近（ここ2〜3週間）作った主菜です。同じ・似た主菜が続くとマンネリになるので、これらとは違う主菜（別の主材料・調理法）にすること（特に重要）: ${recentDishes.join("、")}`
       : "",
     mainHint
       ? `★主菜の主材料は必ず「${mainHint}」にすること（今回の主菜はこの主材料で作る。これは最優先の指定。副菜・汁物はこの限りではない）。`
+      : "",
+    sideHint
+      ? `★副菜を作る場合は「${sideHint}」系にすること（主菜と食材・味付けが被らないように）。`
+      : "",
+    recentSlotDishes && recentSlotDishes.length
+      ? `最近この食事枠で出した料理です（直近30日）。マンネリ防止のため、主菜・副菜ともこれらと同じ・ほぼ同じ料理は出さないこと: ${recentSlotDishes.join("、")}` +
+        "（例外: ユーザーの要望に「同じ料理をくり返してよい」「この料理を毎週入れたい」等の指定があれば、要望を優先してよい）"
       : "",
     styleHint
       ? `参考の方向性: 今回は「${styleHint}」寄りで、他と被らない一皿を歓迎します（絶対条件ではありません）。`
@@ -525,11 +532,56 @@ function effectiveMainRotation(avoidText) {
   return eff.length >= 2 ? eff : MAIN_ROTATION; // 絞りすぎたら通常に戻す（避けたい食材はプロンプトで担保）
 }
 const MAIN_LABELS = MAIN_ROTATION.map((m) => m.label);
+// 副菜のカテゴリ（同じ献立内でサラダばかり…等の被りを防ぐためにローテーションする）
+const SIDE_LABELS = [
+  "葉物のおひたし・和え物",
+  "生野菜のサラダ",
+  "根菜・かぼちゃの煮物",
+  "野菜炒め・ソテー",
+  "ナムル・中華和え",
+  "酢の物・マリネ",
+  "豆腐・卵の小鉢",
+  "きのこの副菜",
+];
 // 固定ローテーションのフォールバック（プランナー失敗時）。初日の日付で開始位置をずらす。
 function fallbackMainHints(units, avoidText) {
   const rot = effectiveMainRotation(avoidText);
   const off = Number((units[0]?.date || "").slice(8, 10)) || 0;
   return units.map((_, i) => rot[(i + off) % rot.length].label);
+}
+function fallbackSideHints(units) {
+  const off = Number((units[0]?.date || "").slice(8, 10)) || 0;
+  return units.map((_, i) => SIDE_LABELS[(i + off) % SIDE_LABELS.length]);
+}
+// 隣り合う同じ値を解消する（プランナー出力の保険）。まず局所的な入れ替えを試し、
+// それで直らなければ「各値の回数を保ったまま」全体を並べ直す（＝配分は必ず維持）。
+function breakConsecutive(arr) {
+  const hasAdj = (x) => x.some((v, i) => i > 0 && v === x[i - 1]);
+  if (!hasAdj(arr)) return arr;
+  const a = arr.slice();
+  for (let i = 1; i < a.length; i++) {
+    if (a[i] !== a[i - 1]) continue;
+    for (let k = 0; k < a.length; k++) {
+      if (a[k] === a[i]) continue;
+      const okAtI = a[k] !== a[i - 1] && (i + 1 >= a.length || a[k] !== a[i + 1]);
+      const okAtK = (k - 1 < 0 || a[i] !== a[k - 1]) && (k + 1 >= a.length || a[i] !== a[k + 1]);
+      if (okAtI && okAtK) { [a[i], a[k]] = [a[k], a[i]]; break; }
+    }
+  }
+  if (!hasAdj(a)) return a;
+  // 入れ替えで直らない場合: 回数の多い順に1つ飛ばしで配置（偶数位置→奇数位置）
+  const count = new Map();
+  for (const v of arr) count.set(v, (count.get(v) || 0) + 1);
+  const out = new Array(arr.length);
+  let idx = 0;
+  for (const [v, c] of [...count.entries()].sort((x, y) => y[1] - x[1])) {
+    for (let j = 0; j < c; j++) {
+      out[idx] = v;
+      idx += 2;
+      if (idx >= arr.length) idx = 1;
+    }
+  }
+  return out;
 }
 
 async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
@@ -554,54 +606,78 @@ async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
   return toolBlock.input; // { days: [...] }
 }
 
-// 主材料の割り当て表を先に作る（プランナー）。ユーザーの要望の配分（例:「肉5日魚2日」）を
-// 反映しつつ、同じ主材料が連続しないよう散らす。並列生成の前に1回だけ呼ぶ。失敗時は固定ローテ。
-const MAIN_PLAN_SCHEMA = {
+// 割り当て表を先に作る（プランナー）。各食事に「主菜の主材料」と「副菜のカテゴリ」を割り当て、
+// 要望の配分（例:「肉5日魚2日」）を反映しつつ、主菜・副菜とも被り/連続を防ぐ。
+// 並列生成の前に1回だけ呼ぶ。失敗時は固定ローテ。
+const MEAL_ASSIGN_SCHEMA = {
   type: "object",
   properties: {
     assignments: {
       type: "array",
-      items: { type: "string", enum: MAIN_LABELS },
-      description: "各食事の主菜の主材料。meals と同じ順・同じ個数で返す。",
+      items: {
+        type: "object",
+        properties: {
+          main: { type: "string", enum: MAIN_LABELS, description: "主菜の主材料" },
+          side: { type: "string", enum: SIDE_LABELS, description: "副菜のカテゴリ" },
+        },
+        required: ["main", "side"],
+        additionalProperties: false,
+      },
+      description: "各食事の割り当て。meals と同じ順・同じ個数で返す。",
     },
   },
   required: ["assignments"],
   additionalProperties: false,
 };
-async function planMainIngredients(units, opts, avoidText) {
+async function planMealAssignments(units, opts, avoidText) {
   const allowed = effectiveMainRotation(avoidText).map((m) => m.label);
   const list = units.map((u, i) => `${i + 1}. ${u.date} ${u.slot}`).join("\n");
   const prompt = [
-    `次の${units.length}食に、各食事の「主菜の主材料」を1つずつ割り当ててください。`,
+    `次の${units.length}食に、各食事の「主菜の主材料(main)」と「副菜のカテゴリ(side)」を割り当ててください。`,
     "食事一覧（この順・この数ちょうどで assignments を返す）:",
     list,
     "",
     `ユーザーの要望: ${opts.preferences ? `「${opts.preferences}」` : "特になし"}`,
     avoidText ? `避けたい食材（この主材料は使わない）: ${avoidText}` : "",
     "",
-    "ルール（重要）:",
-    "- 要望に主材料の配分・希望（例:「肉を5日・魚を2日」「魚多め」「野菜中心の日を作る」「鶏を多めに」など）があれば、それを最優先で正確に反映する（日数・比率を必ず守る）。",
+    "主菜(main)のルール（重要）:",
+    "- 要望に主材料の配分・希望（例:「肉を5日・魚を2日」「魚多め」「野菜中心の日を作る」など）があれば、それを最優先で正確に反映する（日数・比率を必ず守る）。",
     "- 要望に配分の指定が無ければ、栄養バランスよく散らす。",
     "- いずれの場合も、同じ主材料が2日以上連続しないようにする（要望と両立できる範囲で）。",
-    `- 各要素は必ず次のいずれか: ${allowed.join(" / ")}`,
+    `- main は必ず次のいずれか: ${allowed.join(" / ")}`,
+    "",
+    "副菜(side)のルール（重要）:",
+    "- カテゴリに変化をつけ、同じカテゴリを連続させない・全体でも偏らせない（サラダばかり等にしない）。",
+    "- 主菜と食材が被るカテゴリは避ける（例: 主菜が卵・豆腐系の日は「豆腐・卵の小鉢」を選ばない）。",
+    "- 要望に副菜の指定（例:「サラダ多め」）があれば反映する。",
+    `- side は必ず次のいずれか: ${SIDE_LABELS.join(" / ")}`,
+    "",
     "- assignments は食事とちょうど同じ数・同じ順で返す。",
   ].filter(Boolean).join("\n");
   try {
     const stream = client.messages.stream({
       model: SINGLE_MODEL,
-      max_tokens: 1000,
-      tools: [{ name: "assign_mains", description: "各食事の主菜の主材料を割り当てる。", input_schema: MAIN_PLAN_SCHEMA }],
-      tool_choice: { type: "tool", name: "assign_mains" },
+      max_tokens: 1500,
+      tools: [{ name: "assign_meals", description: "各食事の主菜の主材料と副菜のカテゴリを割り当てる。", input_schema: MEAL_ASSIGN_SCHEMA }],
+      tool_choice: { type: "tool", name: "assign_meals" },
       messages: [{ role: "user", content: prompt }],
     });
     const msg = await stream.finalMessage();
-    const tb = msg.content.find((b) => b.type === "tool_use" && b.name === "assign_mains");
+    const tb = msg.content.find((b) => b.type === "tool_use" && b.name === "assign_meals");
     const arr = tb?.input?.assignments;
-    if (Array.isArray(arr) && arr.length === units.length && arr.every((x) => MAIN_LABELS.includes(x))) return arr;
+    if (
+      Array.isArray(arr) && arr.length === units.length &&
+      arr.every((x) => x && MAIN_LABELS.includes(x.main) && SIDE_LABELS.includes(x.side))
+    ) {
+      return {
+        mains: breakConsecutive(arr.map((x) => x.main)), // AIがルールを守り損ねても連続はコードで排除
+        sides: breakConsecutive(arr.map((x) => x.side)),
+      };
+    }
   } catch (e) {
-    console.error("主材料プランナー失敗:", (e && e.message) || e);
+    console.error("献立プランナー失敗:", (e && e.message) || e);
   }
-  return fallbackMainHints(units, avoidText); // 失敗時は固定ローテーション
+  return { mains: fallbackMainHints(units, avoidText), sides: fallbackSideHints(units) }; // 失敗時は固定ローテーション
 }
 
 // 「作り方は生成しない」モード用。生成後にサーバー側で作り方(steps)を確実に削除する。
@@ -716,6 +792,34 @@ async function getRecentDishNames(householdId, { days = 21, planLimit = 12, cap 
     } catch {}
   }
   return [...new Set(names)].slice(0, cap);
+}
+
+// 同じ食事枠（朝食/昼食/夕食）ごとに、直近（既定30日）に出した料理名を集める。
+// 主菜・副菜の繰り返し防止に使う（例: 夕食の副菜「キャベツとコーンのサラダ」が何度も出るのを防ぐ）。
+// 汁物は毎日の味噌汁など自然な繰り返しが普通のため対象にしない。日付の新しい順。
+async function getRecentDishesBySlot(householdId, { days = 30, planLimit = 15, capPerSlot = 36 } = {}) {
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  const rows = await all(
+    "SELECT data_json FROM meal_plans WHERE household_id = $1 AND created_at >= $2 ORDER BY created_at DESC LIMIT $3",
+    [householdId, cutoff, planLimit]
+  );
+  const entries = []; // { slot, name, date }
+  for (const r of rows) {
+    try {
+      for (const day of JSON.parse(r.data_json).days || [])
+        for (const meal of day.meals || [])
+          for (const dish of meal.dishes || [])
+            if (dish.name && dish.role !== "汁物")
+              entries.push({ slot: meal.slot, name: dish.name, date: day.date || "" });
+    } catch {}
+  }
+  entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // 新しい日付順
+  const bySlot = {};
+  for (const e of entries) {
+    const arr = (bySlot[e.slot] ||= []);
+    if (arr.length < capPerSlot && !arr.includes(e.name)) arr.push(e.name);
+  }
+  return bySlot;
 }
 
 // 世帯の食材設定を { avoid:[絶対NG], soft:[控えめ], easy:[買いやすい] } で返す
@@ -1407,6 +1511,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       includeSteps: includeSteps !== false,
     };
     const recentDishes = await getRecentDishNames(household.id);
+    const recentBySlot = await getRecentDishesBySlot(household.id); // 食事枠ごとの履歴（副菜含む・30日）
     const store = await getStoreItems(household.id);
 
     res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
@@ -1417,21 +1522,26 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
     for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
     send({ type: "start", total: units.length, units: units.map((u) => ({ date: u.date, slot: u.slot })) });
 
-    // 主材料の割り当てを先に決める（要望の配分を反映＋連続回避）。2食以上のときだけプランナーを使う。
+    // 主材料＋副菜カテゴリの割り当てを先に決める（要望の配分を反映＋被り/連続回避）。
+    // 2食以上のときだけプランナーを使う。
     const avoidText = [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、");
-    const mainHints = units.length >= 2 ? await planMainIngredients(units, opts, avoidText) : units.map(() => "");
+    const needSides = opts.dishCount !== "main";
+    const assign = units.length >= 2
+      ? await planMealAssignments(units, opts, avoidText)
+      : { mains: units.map(() => ""), sides: units.map(() => "") };
 
     const collected = new Map();
     await mapLimit(units, 4, async (u, i) => {
       let dishes = [];
-      const mainHint = mainHints[i] || ""; // この食事の主材料（プランナーが決定）
+      const mainHint = assign.mains[i] || ""; // この食事の主材料（プランナーが決定）
+      const sideHint = needSides ? assign.sides[i] || "" : ""; // 副菜のカテゴリ（同上）
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
         for (let attempt = 0; attempt < 3 && dishes.length === 0; attempt++) {
           const r = await generate(
             [{ date: u.date, slots: [u.slot] }],
             opts,
-            { recentDishes, mainHint, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
+            { recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
             SINGLE_MODEL
           );
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
@@ -1585,6 +1695,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
       ...new Set(data.days.flatMap((d) => d.meals.flatMap((m) => m.dishes.map((x) => x.name)))),
     ];
     const recentDishes = await getRecentDishNames(row.household_id);
+    const recentBySlot = await getRecentDishesBySlot(row.household_id); // 同じ食事枠の履歴（副菜含む）
     const store = await getStoreItems(row.household_id);
 
     // Haiku がまれに空を返すため、非空になるまで最大3回リトライ（AI修正の失敗を減らす）
@@ -1593,6 +1704,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
       const regenerated = await generate([{ date, slots: [slot] }], opts, {
         avoidDishes,
         recentDishes,
+        recentSlotDishes: recentBySlot[slot] || [],
         storeAvoid: store.avoid,
         storeSoft: store.soft,
         storeEasy: store.easy,
