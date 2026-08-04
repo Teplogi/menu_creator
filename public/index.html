@@ -3074,6 +3074,14 @@
         for (const d of dates) byDate.get(d).sort((a, b) => catIdx(a) - catIdx(b));
         const mainCount = [...byDate.values()].reduce((s, a) => s + a.length, 0) + addedItems.length;
 
+        // 同じ食材を使う日の一覧（「他の日にも使う」表示用。チェック済みも含めて数える）
+        const nameDates = new Map();
+        for (const it of list) {
+          if (!it.date || it.date === "__season__") continue;
+          if (!nameDates.has(it.name)) nameDates.set(it.name, new Set());
+          nameDates.get(it.name).add(it.date);
+        }
+
         const dateRow = (it, o = {}) => {
           if (it.id === editingId) {
             return `<div class="shopitem editing">
@@ -3086,10 +3094,15 @@
           }
           const done = !!it.checked;
           const moved = it.movedFrom ? `<span class="moved-tag">${esc(mdLabel(it.movedFrom))}から移動</span>` : "";
+          // 同じ食材を他の日にも使うなら「8/2も」のようなチップを出す（買う量の判断に）
+          const others = [...(nameDates.get(it.name) || [])].filter((d) => d !== it.date).sort();
+          const alsoTags = others.length
+            ? `<span class="dtags">${others.map((d) => `<span class="dtag">${esc(mdLabel(d))}も</span>`).join("")}</span>`
+            : "";
           const buy = o.pantry ? `<button class="buyback" data-name="${esc(it.name)}" aria-label="買う物に戻す">🛒 買う</button>` : "";
           return `<div class="shopitem ${done ? "done" : ""}">
             <label class="shoptap"><input type="checkbox" data-id="${esc(it.id)}" ${done ? "checked" : ""}><span class="cb">${CHECK_SVG}</span>
-              <span class="txt"><span class="nm">${esc(it.name)}</span>${it.amount ? `<span class="am">${esc(it.amount)}</span>` : ""}${moved}</span></label>
+              <span class="txt"><span class="nm">${esc(it.name)}</span>${it.amount ? `<span class="am">${esc(it.amount)}</span>` : ""}${alsoTags}${moved}</span></label>
             ${buy}<button class="edit" data-id="${esc(it.id)}" aria-label="編集">${EDIT_SVG}</button>
             <button class="del" data-id="${esc(it.id)}" aria-label="削除">${TRASH_SVG}</button></div>`;
         };
