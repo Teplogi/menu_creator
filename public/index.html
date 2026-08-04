@@ -2636,7 +2636,17 @@
       dish.cook_minutes = Number($("edMin").value) || 0;
       dish.ingredients = parseIngLines($("edIngs").value);
       dish.steps = $("edSteps").value.split("\n").map((s) => s.trim()).filter(Boolean);
-      if (dish.steps.length) dish.store_bought = false;
+      if (dish.steps.length && dish.store_bought) {
+        // 市販品→手作りに戻す：買うものが自動の「◯◯（市販）」のままなら退避した材料を復元
+        dish.store_bought = false;
+        const auto = dish.ingredients.length === 1 && /（市販）$/.test(dish.ingredients[0].name || "");
+        if (auto && Array.isArray(dish.ingredients_backup) && dish.ingredients_backup.length) {
+          dish.ingredients = dish.ingredients_backup;
+        }
+        delete dish.ingredients_backup;
+      } else if (dish.steps.length) {
+        dish.store_bought = false;
+      }
       editingDishIdx = null;
       await savePlan();
       renderRecipe();
@@ -2648,8 +2658,16 @@
       if (!dish) return;
       dish.name = $("edName").value.trim() || dish.name;
       dish.description = $("edDesc").value.trim();
-      dish.ingredients = parseIngLines($("edIngs").value);
-      if (!dish.ingredients.length) dish.ingredients = [{ name: dish.name, amount: "", category: "その他" }];
+      const wasStoreBought = !!dish.store_bought;
+      const parsed = parseIngLines($("edIngs").value);
+      if (wasStoreBought) {
+        // すでに市販品：買うものリストのユーザー編集を尊重
+        dish.ingredients = parsed.length ? parsed : [{ name: `${dish.name}（市販）`, amount: "", category: "その他" }];
+      } else {
+        // 手作り→市販品：作るための材料は退避し、買い物リストには「メニュー名（市販）」を載せる
+        dish.ingredients_backup = parsed; // 手作りに戻したとき用
+        dish.ingredients = [{ name: `${dish.name}（市販）`, amount: "", category: "その他" }];
+      }
       dish.cook_minutes = 0;
       dish.steps = [];
       dish.store_bought = true;
