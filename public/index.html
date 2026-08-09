@@ -335,13 +335,15 @@
     .dish-fav-btn { border: none; background: none; font-size: 1.15rem; line-height: 1; cursor: pointer;
       padding: 4px 6px; color: #cfc4b6; flex: none; }
     .dish-fav-btn.on { color: #f5a623; }
-    .fav-row { display: flex; align-items: center; gap: 10px; padding: 11px 4px; border-bottom: 1px dashed var(--line); }
+    .fav-row { display: flex; align-items: flex-start; gap: 8px; padding: 11px 4px; border-bottom: 1px dashed var(--line); }
     .fav-row:last-child { border-bottom: 0; }
-    .fav-row .fnm { font-weight: 700; flex: 1; min-width: 0; cursor: pointer; }
-    .fav-row .frole { font-size: .7rem; font-weight: 800; color: var(--orange-dark); background: var(--orange-soft);
-      border-radius: 6px; padding: 2px 8px; flex: none; }
-    .fav-row .ftag { font-size: .7rem; font-weight: 700; color: var(--muted); background: var(--cream);
-      border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; flex: none; }
+    /* 名前＋タグをひとまとまりにして、狭いときはタグが下の行に回る（名前が細切れに折り返さない） */
+    .fav-row .fmain { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .fav-row .fnm { font-weight: 700; cursor: pointer; line-height: 1.5; overflow-wrap: anywhere; }
+    .fav-row .frole { font-size: .66rem; font-weight: 800; color: var(--orange-dark); background: var(--orange-soft);
+      border-radius: 6px; padding: 1px 7px; flex: none; white-space: nowrap; }
+    .fav-row .ftag { font-size: .66rem; font-weight: 700; color: var(--muted); background: var(--cream);
+      border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; flex: none; white-space: nowrap; }
     .fav-row .fdel { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; flex: none; }
     .fav-row .fdel svg { width: 17px; height: 17px; }
     .fav-detail { background: var(--cream); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px; font-size: .86rem; }
@@ -369,10 +371,14 @@
     .fr-row .fdel { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; flex: none; }
     .fr-row .fdel svg { width: 16px; height: 16px; }
     /* こだわり（誘導式チップ） */
-    .grow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
-    .grow .glab { font-size: .76rem; font-weight: 800; color: var(--muted); width: 64px; flex: none; }
+    /* 1行に収める（狭い画面でははみ出す分を横スクロール。折り返して2段にしない） */
+    .grow { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap; margin-bottom: 6px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .grow::-webkit-scrollbar { display: none; }
+    .grow .glab { font-size: .7rem; font-weight: 800; color: var(--muted); width: 44px; flex: none; }
     .grow .gchip { border: 1px solid var(--line); background: var(--cream); color: var(--ink, #444);
-      border-radius: 999px; padding: 4px 12px; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+      border-radius: 999px; padding: 4px 8px; font: inherit; font-size: .72rem; font-weight: 700;
+      cursor: pointer; flex: none; white-space: nowrap; }
     .grow .gchip.on { background: var(--orange); border-color: var(--orange); color: #fff; }
     /* 主材料タグ（肉/魚/卵・豆腐/野菜） */
     .mtag { font-size: .64rem; font-weight: 800; border-radius: 5px; padding: 2px 6px; flex: none; letter-spacing: .02em; }
@@ -1673,9 +1679,9 @@
       }
       wrap.innerHTML = favorites.map((f) => {
         const row = `<div class="fav-row" data-id="${esc(f.id)}">
-          <span class="fnm" title="タップでレシピを表示">${esc(f.name)}</span>
-          ${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
-          <span class="ftag">${f.dish ? "レシピあり" : "名前のみ"}</span>
+          <span class="fmain"><span class="fnm" title="タップでレシピを表示">${esc(f.name)}</span>
+            ${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
+            <span class="ftag">${f.dish ? "レシピあり" : "名前のみ"}</span></span>
           <button class="fdel" data-id="${esc(f.id)}" aria-label="削除">${TRASH_SVG}</button></div>`;
         const detail = (favExpandedId === f.id && f.dish)
           ? `<div class="fav-detail">
@@ -1686,7 +1692,7 @@
         return row + detail;
       }).join("");
       wrap.querySelectorAll(".fav-row .fnm").forEach((el) => el.addEventListener("click", () => {
-        const id = el.parentElement.dataset.id;
+        const id = el.closest(".fav-row").dataset.id;
         favExpandedId = favExpandedId === id ? null : id;
         renderFavorites();
       }));
@@ -1877,8 +1883,8 @@
         const el = $("favPickList");
         el.innerHTML = favorites.length
           ? favorites.map((f) => `<div class="fav-row" data-id="${esc(f.id)}" style="cursor:pointer">
-              <span class="fnm">${esc(f.name)}</span>${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
-              <span class="ftag">${f.dish ? "レシピあり" : "名前のみ"}</span></div>`).join("")
+              <span class="fmain"><span class="fnm">${esc(f.name)}</span>${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
+              <span class="ftag">${f.dish ? "レシピあり" : "名前のみ"}</span></span></div>`).join("")
           : '<p class="empty" style="padding:10px 0">まだお気に入りがありません。料理の ⭐ で保存できます。</p>';
         el.querySelectorAll(".fav-row").forEach((r) => r.addEventListener("click", () => applyFavorite(r.dataset.id)));
       };
