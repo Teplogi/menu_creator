@@ -354,6 +354,20 @@
       margin-top: 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .undo-btn:hover { color: var(--orange-dark); border-color: var(--orange); }
     .undo-meal { margin: 0 0 12px; display: block; }
+    /* 冷蔵庫・作り置き */
+    .amt-row { display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; font-size: .78rem; color: var(--muted); font-weight: 700; }
+    .amt-row button { border: 1px solid var(--line); background: var(--cream); color: var(--muted);
+      border-radius: 999px; padding: 3px 12px; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+    .amt-row button.on { background: var(--orange); border-color: var(--orange); color: #fff; }
+    .preset-chip.sel { background: var(--orange); border-color: var(--orange); }
+    .preset-chip.sel .pt { color: #fff; }
+    .fr-row { display: flex; align-items: center; gap: 8px; padding: 9px 4px; border-bottom: 1px dashed var(--line); }
+    .fr-row:last-child { border-bottom: 0; }
+    .fr-row .fnm { font-weight: 700; flex: 1; min-width: 0; }
+    .fr-row .famt { font-size: .74rem; font-weight: 700; color: var(--orange-dark); background: var(--orange-soft); border-radius: 6px; padding: 2px 8px; flex: none; }
+    .fr-row .fage { font-size: .72rem; color: var(--muted); flex: none; }
+    .fr-row .fdel { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; flex: none; }
+    .fr-row .fdel svg { width: 16px; height: 16px; }
     /* ---- Dish AI replace ---- */
     .dish-replace { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--orange-soft); }
     .dish-replace .ef { display: block; margin-bottom: 10px; }
@@ -766,6 +780,12 @@
           <button type="button" class="preset-save" id="presetSaveBtn" onclick="savePresetFromField()">＋ いまの要望をテンプレ保存</button>
         </div>
 
+        <div id="fridgeUseWrap" style="display:none;margin:6px 0 10px">
+          <span class="t" style="display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:6px">🧊 冷蔵庫のものを使い切る（タップで選択）</span>
+          <div class="preset-chips" id="fridgeUseChips"></div>
+          <p class="hint" style="margin:4px 0 0">選んだ食材を優先して使い切る献立になります。<a href="#" onclick="showFridgeView();return false;">冷蔵庫を編集</a></p>
+        </div>
+
         <label class="toggle-field">
           <input type="checkbox" id="noSteps" />
           <span><b>作り方は作らない（献立と材料だけ）</b><small>料理名と材料だけの一覧に。作り方は表示されません（後から鉛筆や「AIで変更」で追加できます）</small></span>
@@ -931,6 +951,35 @@
       </div>
     </section>
 
+    <!-- 冷蔵庫・作り置き -->
+    <section class="view" id="view-fridge">
+      <div class="card">
+        <div class="sec-head"><span class="label">🥬 冷蔵庫の食材</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 10px">いま冷蔵庫に残っている食材。<b>献立を作るときに選ぶと、AIが使い切る献立</b>にします。量はざっくりでOK・空欄でもOK。グループで共有されます。</p>
+        <div class="urlbox">
+          <input type="text" id="frIngName" placeholder="食材名（例: 白菜）" maxlength="30" />
+          <button class="copybtn" onclick="addFridgeManual('ingredient')">追加</button>
+        </div>
+        <div class="amt-row" id="amtRow-ingredient"><span>量:</span></div>
+        <div id="frIngList"></div>
+        <p style="font-size:.8rem;color:var(--muted);margin:12px 0 4px">よくあるもの（タップで追加）</p>
+        <div class="preset-chips" id="frIngSuggest"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head"><span class="label">🍱 作り置き</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 10px">作り置きのメモ（いつ作ったか表示されます）。同じ名前でもう一度追加すると日付が今日に更新されます。</p>
+        <div class="urlbox">
+          <input type="text" id="frPrepName" placeholder="料理名（例: ひじきの煮物）" maxlength="30" />
+          <button class="copybtn" onclick="addFridgeManual('prepped')">追加</button>
+        </div>
+        <div class="amt-row" id="amtRow-prepped"><span>量:</span></div>
+        <div id="frPrepList"></div>
+        <p style="font-size:.8rem;color:var(--muted);margin:12px 0 4px">定番の作り置き（タップで追加）</p>
+        <div class="preset-chips" id="frPrepSuggest"></div>
+      </div>
+      <p class="hint" id="fridgeHint" style="margin:0 4px"></p>
+    </section>
+
     <p id="status"></p>
   </main>
 
@@ -1062,6 +1111,8 @@
       loadBillingStatus().then(updateAiQuotaHint); // 無料枠の残数を先出し
       loadPresets(); // 要望テンプレを読み込み
       loadCreateAvoidReminder(); // 設定の「使わない食材」を除外リマインダーに表示
+      fridgeUseSel = new Set(); // 冷蔵庫の使い切り選択は毎回リセット（明示的に選ぶ）
+      loadFridge().then(renderFridgeUseChips);
       // 既定の期間（今日〜3日後）でカレンダーを初期化
       const today = new Date();
       rangeStart = fmt(today);
@@ -1505,7 +1556,6 @@
     // ---------- べんり機能（近日公開） ----------
     const SOON_FEATURES = [
       { icon: "🔥", name: "カロリー・栄養計算", desc: "献立ごとのカロリーやPFCバランスを自動で表示" },
-      { icon: "🧊", name: "作り置き・在庫管理", desc: "余った食材や作り置きを記録して使い切り" },
       { icon: "🛒", name: "ネットスーパー連携", desc: "買い物リストをそのまま注文につなげる" },
     ];
     function showSoonView() {
@@ -1514,12 +1564,16 @@
         `<div class="soon-card live" id="favOpenCard"><span class="soon-ic">⭐</span>
           <div class="soon-tx"><div class="soon-nm">お気に入りレシピ</div><div class="soon-ds">気に入った料理を保存して、次の献立にすぐ追加</div></div>
           <span class="soon-go">›</span></div>` +
+        `<div class="soon-card live" id="frOpenCard"><span class="soon-ic">🧊</span>
+          <div class="soon-tx"><div class="soon-nm">冷蔵庫・作り置き</div><div class="soon-ds">残っている食材を登録して、使い切る献立に</div></div>
+          <span class="soon-go">›</span></div>` +
         SOON_FEATURES.map((f) =>
         `<div class="soon-card"><span class="soon-ic">${f.icon}</span>
           <div class="soon-tx"><div class="soon-nm">${esc(f.name)}</div><div class="soon-ds">${esc(f.desc)}</div></div>
           <span class="soon-lock">🔒</span></div>`
       ).join("");
       $("favOpenCard").addEventListener("click", showFavoritesView);
+      $("frOpenCard").addEventListener("click", showFridgeView);
       showView("soon", "べんり機能", { back: true, tab: "soon" });
     }
 
@@ -1611,6 +1665,116 @@
         await apiOK(`/api/households/${household.id}/favorites/${id}`, { method: "DELETE" });
         await loadFavorites(); renderFavorites();
       } catch (e) { $("favHint").textContent = e.message; }
+    }
+
+    // ---------- 冷蔵庫・作り置き ----------
+    let fridgeItems = [];
+    const FRIDGE_SUGGEST = ["キャベツ", "白菜", "レタス", "もやし", "にんじん", "玉ねぎ", "じゃがいも", "大根", "ピーマン", "なす", "トマト", "きゅうり", "ブロッコリー", "ほうれん草", "小松菜", "長ねぎ", "きのこ", "豆腐", "厚揚げ", "納豆", "卵", "牛乳", "チーズ", "ひき肉", "鶏もも肉", "鶏むね肉", "豚こま肉", "ベーコン", "ウインナー", "ハム", "ちくわ", "かまぼこ"];
+    const PREPPED_SUGGEST = ["きんぴらごぼう", "ひじきの煮物", "ポテトサラダ", "味付け卵", "浅漬け", "切り干し大根の煮物", "ナムル", "きのこのマリネ", "そぼろ", "茹でブロッコリー", "カレー", "ミートソース"];
+    const AMT_OPTIONS = ["たっぷり", "半分", "少し"];
+    let frAmtSel = { ingredient: "", prepped: "" };
+
+    async function loadFridge() {
+      if (!household) { fridgeItems = []; return fridgeItems; }
+      try { fridgeItems = await apiOK(`/api/households/${household.id}/fridge`); }
+      catch { fridgeItems = []; }
+      return fridgeItems;
+    }
+    function fridgeAge(iso) {
+      const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+      return d <= 0 ? "今日" : d === 1 ? "昨日" : `${d}日前`;
+    }
+    function showFridgeView() {
+      backHandler = showSoonView;
+      $("fridgeHint").textContent = "";
+      showView("fridge", "冷蔵庫・作り置き", { back: true, tab: "soon" });
+      renderFridge();
+      loadFridge().then(renderFridge);
+    }
+    function renderFridge() {
+      const norm = (s) => (s || "").trim().toLowerCase();
+      const sections = [
+        { kind: "ingredient", list: "frIngList", sug: "frIngSuggest", cands: FRIDGE_SUGGEST },
+        { kind: "prepped", list: "frPrepList", sug: "frPrepSuggest", cands: PREPPED_SUGGEST },
+      ];
+      for (const s of sections) {
+        const items = fridgeItems.filter((x) => x.kind === s.kind);
+        const listEl = $(s.list);
+        if (listEl) {
+          listEl.innerHTML = items.length
+            ? items.map((it) => `<div class="fr-row">
+                <span class="fnm">${esc(it.name)}</span>
+                ${it.amount ? `<span class="famt">${esc(it.amount)}</span>` : ""}
+                <span class="fage">${esc(fridgeAge(it.created_at))}</span>
+                <button class="fdel" data-id="${esc(it.id)}" aria-label="削除（使い切った）">${TRASH_SVG}</button></div>`).join("")
+            : `<p class="empty" style="padding:8px 0">まだ登録がありません。</p>`;
+          listEl.querySelectorAll(".fdel").forEach((b) => b.addEventListener("click", () => deleteFridge(b.dataset.id)));
+        }
+        // 候補チップ（登録済みは出さない）
+        const sugEl = $(s.sug);
+        if (sugEl) {
+          const registered = new Set(items.map((x) => norm(x.name)));
+          const cands = s.cands.filter((c) => !registered.has(norm(c)));
+          sugEl.innerHTML = cands.map((c) => `<span class="preset-chip" data-name="${esc(c)}" style="cursor:pointer"><span class="pt">＋ ${esc(c)}</span></span>`).join("");
+          sugEl.querySelectorAll(".preset-chip").forEach((el) =>
+            el.addEventListener("click", () => addFridge(s.kind, el.dataset.name, frAmtSel[s.kind])));
+        }
+        // 量のざっくりチップ
+        const amtEl = $("amtRow-" + s.kind);
+        if (amtEl) {
+          amtEl.innerHTML = "<span>量:</span>" + AMT_OPTIONS.map((a) =>
+            `<button type="button" class="${frAmtSel[s.kind] === a ? "on" : ""}" data-amt="${esc(a)}">${esc(a)}</button>`).join("") +
+            `<span style="font-weight:400">（任意・タップで選択）</span>`;
+          amtEl.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+            frAmtSel[s.kind] = frAmtSel[s.kind] === b.dataset.amt ? "" : b.dataset.amt;
+            renderFridge();
+          }));
+        }
+      }
+    }
+    async function addFridge(kind, name, amount) {
+      if (!name) return;
+      frAmtSel[kind] = ""; // 量の選択は1回きり（次の追加に引き継がない）
+      try {
+        await apiOK(`/api/households/${household.id}/fridge`, { method: "POST", body: { kind, name, amount: amount || "" } });
+        await loadFridge();
+        renderFridge();
+      } catch (e) { $("fridgeHint").textContent = e.message; }
+    }
+    function addFridgeManual(kind) {
+      const input = $(kind === "ingredient" ? "frIngName" : "frPrepName");
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      input.value = "";
+      const amt = frAmtSel[kind];
+      frAmtSel[kind] = "";
+      addFridge(kind, name, amt);
+    }
+    async function deleteFridge(id) {
+      try {
+        await apiOK(`/api/households/${household.id}/fridge/${id}`, { method: "DELETE" });
+        await loadFridge();
+        renderFridge();
+      } catch (e) { $("fridgeHint").textContent = e.message; }
+    }
+
+    // 作成画面：冷蔵庫の食材をタップで選んで「使い切り生成」
+    let fridgeUseSel = new Set();
+    function renderFridgeUseChips() {
+      const wrap = $("fridgeUseWrap");
+      if (!wrap) return;
+      const ings = fridgeItems.filter((x) => x.kind === "ingredient");
+      if (!ings.length) { wrap.style.display = "none"; fridgeUseSel.clear(); return; }
+      wrap.style.display = "";
+      $("fridgeUseChips").innerHTML = ings.map((it) =>
+        `<span class="preset-chip ${fridgeUseSel.has(it.id) ? "sel" : ""}" data-id="${esc(it.id)}" style="cursor:pointer">
+          <span class="pt">${esc(it.name)}${it.amount ? `・${esc(it.amount)}` : ""}</span></span>`).join("");
+      $("fridgeUseChips").querySelectorAll(".preset-chip").forEach((el) =>
+        el.addEventListener("click", () => {
+          const id = el.dataset.id;
+          if (fridgeUseSel.has(id)) fridgeUseSel.delete(id); else fridgeUseSel.add(id);
+          renderFridgeUseChips();
+        }));
     }
 
     // お気に入りから選ぶピッカー（idx=null なら食事に「追加」、数値ならその料理と「差し替え」）
@@ -2307,6 +2471,9 @@
         preferences: $("preferences").value.trim(),
         includeSteps: !$("noSteps").checked,
         overwrite,
+        fridgeUse: fridgeItems
+          .filter((x) => x.kind === "ingredient" && fridgeUseSel.has(x.id))
+          .map((x) => ({ name: x.name, amount: x.amount || "" })),
       };
 
       $("submitBtn").disabled = true;

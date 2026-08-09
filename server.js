@@ -245,6 +245,12 @@ const SCHEMA_STATEMENTS = [
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
     role TEXT, dish_json TEXT, created_at TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_fav_hh_norm ON favorite_dishes (household_id, name_norm)`,
+  // 冷蔵庫・作り置き（グループ共有・短命の在庫）。kind: 'ingredient'=食材 / 'prepped'=作り置き。
+  // amount はざっくり任意（「半分」「少し」等）。常備品(pantry)＝定常在庫とは役割が別。
+  `CREATE TABLE IF NOT EXISTS fridge_items (
+    id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
+    kind TEXT NOT NULL, amount TEXT, created_at TEXT NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_fridge_hh_kind_norm ON fridge_items (household_id, kind, name_norm)`,
   // 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
   `CREATE TABLE IF NOT EXISTS store_items (
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
@@ -486,6 +492,15 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     "- 料理名は短くシンプルな一般名にする。カッコ書きの外国語名・地名・凝った風味説明（『〜風』『〜ソース』『〜添え』『〜仕立て』など）は付けない。",
     "  例) ○「鶏のトマト煮込み」「キャベツとコーンのサラダ」　×「ポッレッロ・アル・ポモドーロ風」「キャベツとコーンのサラダ（粒マスタード風味）」",
     "",
+    opts.fridgeUse && opts.fridgeUse.length
+      ? [
+          "【冷蔵庫の使い切り（重要）】",
+          `- いま冷蔵庫に残っている食材: ${opts.fridgeUse.map((f) => f.name + (f.amount ? `(${f.amount})` : "")).join("、")}`,
+          "- これらを積極的に使う（量の表記はざっくりの目安）。ただし★主菜の主材料の指定がある場合はそちらが優先。",
+          "- 主材料の指定と合わない食材は、副菜・汁物・付け合わせで活用するか、この食事では使わなくてよい（毎食すべてに詰め込まず、バリエーションを保つ）。",
+        ].join("\n")
+      : "",
+    "",
     "【食材を使い切るルール（重要）】",
     "- 余りやすい食材（白菜・大根・キャベツ・長ねぎ・にんじん・きのこ・豆腐・ひき肉など、1回で使い切りにくいもの）は、期間内の複数の献立で使い回して使い切るように計画する。",
     "- 生鮮食品（葉物野菜・魚など傷みやすいもの）は期間の前半に、日持ちする食材（根菜・乾物・冷凍可のもの）は後半に寄せる。",
@@ -651,6 +666,9 @@ async function planMealAssignments(units, opts, avoidText) {
     "",
     `ユーザーの要望: ${opts.preferences ? `「${opts.preferences}」` : "特になし"}`,
     avoidText ? `避けたい食材（この主材料は使わない）: ${avoidText}` : "",
+    opts.fridgeUse && opts.fridgeUse.length
+      ? `冷蔵庫に残っている食材（使い切りたい）: ${opts.fridgeUse.map((f) => f.name + (f.amount ? `(${f.amount})` : "")).join("、")}\n→ 主材料の割り当てで、これらが活きるようにする（例: ひき肉が残っていれば「ひき肉」の日を作る）。要望の配分との両立を優先。`
+      : "",
     "",
     "主菜(main)のルール（重要）:",
     "- 要望に主材料の配分・希望（例:「肉を5日・魚を2日」「魚多め」「野菜中心の日を作る」など）があれば、それを最優先で正確に反映する（日数・比率を必ず守る）。",
@@ -776,6 +794,18 @@ async function generateDish(instruction, ctx) {
   );
   if (!toolBlock || !toolBlock.input?.dish) throw new Error("EMPTY_RESPONSE");
   return toolBlock.input.dish;
+}
+
+// 冷蔵庫の使い切り指定を安全な形に整える（最大20件・名前30字・量20字）
+function sanitizeFridgeUse(v) {
+  if (!Array.isArray(v)) return [];
+  return v
+    .slice(0, 20)
+    .map((x) => ({
+      name: (x?.name || "").toString().trim().slice(0, 30),
+      amount: (x?.amount || "").toString().trim().slice(0, 20),
+    }))
+    .filter((x) => x.name);
 }
 
 // ---------- 入力バリデーション ----------
@@ -1269,6 +1299,66 @@ app.delete("/api/households/:id/favorites/:favId", auth, async (req, res) => {
   }
 });
 
+// ---------- 冷蔵庫・作り置き（世帯ごと・共有） ----------
+app.get("/api/households/:id/fridge", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const rows = await all(
+      "SELECT id, name, kind, amount, created_at FROM fridge_items WHERE household_id = $1 ORDER BY created_at DESC",
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 追加（同名×同種は上書き＝量と登録日を更新。作り置きの「作り直した」にも対応）
+app.post("/api/households/:id/fridge", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const name = (req.body?.name || "").toString().trim().slice(0, 30);
+    if (!name) return res.status(400).json({ error: "名前を入力してください。" });
+    const kind = ["ingredient", "prepped"].includes(req.body?.kind) ? req.body.kind : "ingredient";
+    const amount = (req.body?.amount || "").toString().trim().slice(0, 20) || null;
+    const norm = normName(name);
+    const now = new Date().toISOString();
+    const existing = await one(
+      "SELECT * FROM fridge_items WHERE household_id = $1 AND kind = $2 AND name_norm = $3",
+      [req.params.id, kind, norm]
+    );
+    if (existing) {
+      const updated = await one(
+        "UPDATE fridge_items SET name = $1, amount = $2, created_at = $3 WHERE id = $4 RETURNING id, name, kind, amount, created_at",
+        [name, amount, now, existing.id]
+      );
+      return res.json(updated);
+    }
+    const count = await one("SELECT count(*)::int AS n FROM fridge_items WHERE household_id = $1", [req.params.id]);
+    if (count && count.n >= 60) return res.status(400).json({ error: "登録は60件までです。使い切ったものを削除してください。" });
+    const row = await one(
+      `INSERT INTO fridge_items (id, household_id, name, name_norm, kind, amount, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, kind, amount, created_at`,
+      [randomUUID(), req.params.id, name, norm, kind, amount, now]
+    );
+    res.json(row);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.delete("/api/households/:id/fridge/:itemId", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    await q("DELETE FROM fridge_items WHERE id = $1 AND household_id = $2", [
+      req.params.itemId, req.params.id,
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
 app.get("/api/households/:id/store-items", auth, async (req, res) => {
   try {
@@ -1543,6 +1633,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
       maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
       dishCount: dishCount || "main_side",
       staple: staple || "any",
+      fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false, // false で「作り方は生成しない（献立だけ）」
@@ -1594,6 +1685,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
       dishCount: dishCount || "main_side",
       staple: staple || "any",
+      fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false,
