@@ -431,7 +431,7 @@ const STAPLE_DIRECTIVE = {
 };
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -466,6 +466,9 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     recentDishes && recentDishes.length
       ? `この世帯で最近（ここ2〜3週間）作った主菜です。同じ・似た主菜が続くとマンネリになるので、これらとは違う主菜（別の主材料・調理法）にすること（特に重要）: ${recentDishes.join("、")}`
       : "",
+    fridgeDishHint
+      ? `★この食事の主菜は、冷蔵庫の残り食材をまとめて使い切る「${fridgeDishHint}」にすること（最優先の指定。一般家庭の定番の作り方で）。`
+      : "",
     mainHint
       ? `★主菜の主材料は必ず「${mainHint}」にすること（今回の主菜はこの主材料で作る。これは最優先の指定。副菜・汁物はこの限りではない）。`
       : "",
@@ -496,8 +499,9 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
       ? [
           "【冷蔵庫の使い切り（重要）】",
           `- いま冷蔵庫に残っている食材: ${opts.fridgeUse.map((f) => f.name + (f.amount ? `(${f.amount})` : "")).join("、")}`,
-          "- これらを積極的に使う（量の表記はざっくりの目安）。ただし★主菜の主材料の指定がある場合はそちらが優先。",
+          "- これらを積極的に使う（量の表記はざっくりの目安）。ただし★主菜の指定（料理・主材料）がある場合はそちらが優先。",
           "- 主材料の指定と合わない食材は、副菜・汁物・付け合わせで活用するか、この食事では使わなくてよい（毎食すべてに詰め込まず、バリエーションを保つ）。",
+          "- 食材を無理に組み合わせた不自然な創作料理（例: 豆腐のオムレツ）は作らない。使うなら定番の使い方で。",
         ].join("\n")
       : "",
     "",
@@ -646,6 +650,7 @@ const MEAL_ASSIGN_SCHEMA = {
         properties: {
           main: { type: "string", enum: MAIN_LABELS, description: "主菜の主材料" },
           side: { type: "string", enum: SIDE_LABELS, description: "副菜のカテゴリ" },
+          fridgeDish: { type: "string", description: "冷蔵庫の残り食材を複数まとめて使い切る定番料理名（該当する食事のみ。無ければ空文字）" },
         },
         required: ["main", "side"],
         additionalProperties: false,
@@ -667,7 +672,14 @@ async function planMealAssignments(units, opts, avoidText) {
     `ユーザーの要望: ${opts.preferences ? `「${opts.preferences}」` : "特になし"}`,
     avoidText ? `避けたい食材（この主材料は使わない）: ${avoidText}` : "",
     opts.fridgeUse && opts.fridgeUse.length
-      ? `冷蔵庫に残っている食材（使い切りたい）: ${opts.fridgeUse.map((f) => f.name + (f.amount ? `(${f.amount})` : "")).join("、")}\n→ 主材料の割り当てで、これらが活きるようにする（例: ひき肉が残っていれば「ひき肉」の日を作る）。要望の配分との両立を優先。`
+      ? [
+          `冷蔵庫に残っている食材（使い切りたい）: ${opts.fridgeUse.map((f) => f.name + (f.amount ? `(${f.amount})` : "")).join("、")}`,
+          "→ まず食材の「組み合わせ」を見て、一般家庭の定番料理が自然に見えるなら、どこか1食の fridgeDish にその料理名を入れて複数の食材を一皿でまとめて使い切る。",
+          "  例) 鶏肉+豆腐+白菜+ねぎ →「鶏と豆腐の水炊き」/ 豚肉+キャベツ →「回鍋肉」/ 牛肉+じゃがいも+玉ねぎ →「肉じゃが」/ ひき肉+なす →「麻婆なす」。",
+          "→ fridgeDish を入れた食事の main はその料理と整合させる（鍋なら鶏肉、麻婆なすならひき肉）。",
+          "→ 自然な組み合わせが無ければ fridgeDish は空にして、主材料の割り当てで食材が活きるようにするだけでよい（例: ひき肉があれば「ひき肉」の日を作る）。不自然な融合料理（例: 豆腐のオムレツ）は絶対に作らない。",
+          "→ いずれも要望の配分との両立を優先。",
+        ].join("\n")
       : "",
     "",
     "主菜(main)のルール（重要）:",
@@ -702,12 +714,13 @@ async function planMealAssignments(units, opts, avoidText) {
       return {
         mains: breakConsecutive(arr.map((x) => x.main)), // AIがルールを守り損ねても連続はコードで排除
         sides: breakConsecutive(arr.map((x) => x.side)),
+        fridgeDishes: arr.map((x) => (x.fridgeDish || "").toString().trim().slice(0, 30)), // 使い切りの一皿（該当食のみ）
       };
     }
   } catch (e) {
     console.error("献立プランナー失敗:", (e && e.message) || e);
   }
-  return { mains: fallbackMainHints(units, avoidText), sides: fallbackSideHints(units) }; // 失敗時は固定ローテーション
+  return { mains: fallbackMainHints(units, avoidText), sides: fallbackSideHints(units), fridgeDishes: units.map(() => "") }; // 失敗時は固定ローテーション
 }
 
 // 「作り方は生成しない」モード用。生成後にサーバー側で作り方(steps)を確実に削除する。
@@ -1708,12 +1721,13 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
     const needSides = opts.dishCount !== "main";
     const assign = units.length >= 2
       ? await planMealAssignments(units, opts, avoidText)
-      : { mains: units.map(() => ""), sides: units.map(() => "") };
+      : { mains: units.map(() => ""), sides: units.map(() => ""), fridgeDishes: units.map(() => "") };
 
     const collected = new Map();
     await mapLimit(units, 4, async (u, i) => {
       let dishes = [];
-      const mainHint = assign.mains[i] || ""; // この食事の主材料（プランナーが決定）
+      const fridgeDishHint = (assign.fridgeDishes || [])[i] || ""; // 使い切りの一皿（例: 鶏と豆腐の水炊き）
+      const mainHint = fridgeDishHint ? "" : (assign.mains[i] || ""); // 料理指定がある食事は主材料指定より優先
       const sideHint = needSides ? assign.sides[i] || "" : ""; // 副菜のカテゴリ（同上）
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
@@ -1721,7 +1735,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
           const r = await generate(
             [{ date: u.date, slots: [u.slot] }],
             opts,
-            { recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
+            { recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, fridgeDishHint, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
             SINGLE_MODEL
           );
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
