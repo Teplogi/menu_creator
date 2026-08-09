@@ -457,8 +457,8 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     preferences ? `好み・要望: ${preferences}` : "好み・要望: 特になし（栄養バランスよく、和洋中を織り交ぜる）",
     opts.guided?.mains ? `主菜のバランス指定: ${opts.guided.mains}（期間全体でこの配分を守る）` : "",
     opts.guided?.genre ? `ジャンルの指定: ${opts.guided.genre}（大半をこのジャンルにする。単調にならない範囲で他ジャンルを少し混ぜるのは可）` : "",
-    opts.guided?.cooking === "揚げ物なし" ? "調理法の指定: 揚げ物は作らない（唐揚げ・フライ・天ぷら・揚げ焼きも避ける）。" : "",
-    opts.guided?.cooking === "レンジ・時短中心" ? "調理法の指定: 電子レンジ活用や炒め・和えものなどの時短調理を中心にし、洗い物が少なく済むようにする。" : "",
+    (opts.guided?.cooking || []).includes("揚げ物なし") ? "調理法の指定: 揚げ物は作らない（唐揚げ・フライ・天ぷら・揚げ焼きも避ける）。" : "",
+    (opts.guided?.cooking || []).includes("レンジ・時短中心") ? "調理法の指定: 電子レンジ活用や炒め・和えものなどの時短調理を中心にし、洗い物が少なく済むようにする。" : "",
     avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
     storeAvoid && storeAvoid.length
       ? `次の食材はアレルギー・苦手のため、料理・材料に一切使わないこと（絶対）: ${storeAvoid.join("、")}`
@@ -866,11 +866,18 @@ const GUIDED_ALLOW = {
   genre: ["和食中心", "洋食中心", "中華中心"],
   cooking: ["揚げ物なし", "レンジ・時短中心"],
 };
+const GUIDED_MULTI = ["cooking"]; // 複数選択できる項目（揚げ物なし＋時短 の併用など）
 function sanitizeGuided(v) {
   const out = {};
   if (v && typeof v === "object") {
     for (const k of Object.keys(GUIDED_ALLOW)) {
-      if (GUIDED_ALLOW[k].includes(v[k])) out[k] = v[k];
+      if (GUIDED_MULTI.includes(k)) {
+        const arr = Array.isArray(v[k]) ? v[k] : v[k] ? [v[k]] : []; // 旧形式(単一文字列)も受ける
+        const picked = [...new Set(arr.filter((x) => GUIDED_ALLOW[k].includes(x)))];
+        if (picked.length) out[k] = picked;
+      } else if (GUIDED_ALLOW[k].includes(v[k])) {
+        out[k] = v[k];
+      }
     }
   }
   return out;

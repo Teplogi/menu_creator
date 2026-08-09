@@ -1133,7 +1133,7 @@
       loadCreateAvoidReminder(); // 設定の「使わない食材」を除外リマインダーに表示
       fridgeUseSel = new Set(); // 冷蔵庫の使い切り選択は毎回リセット（明示的に選ぶ）
       loadFridge().then(renderFridgeUseChips);
-      guidedSel = { mains: "", genre: "", cooking: "" }; // こだわりも毎回おまかせに戻す
+      guidedSel = emptyGuided(); // こだわりも毎回おまかせに戻す
       renderGuided();
       // 既定の期間（今日〜3日後）でカレンダーを初期化
       const today = new Date();
@@ -1784,22 +1784,34 @@
     const GUIDED_QUESTIONS = [
       { key: "mains", label: "主菜", opts: ["肉多め", "魚多め", "肉と魚を半々"] },
       { key: "genre", label: "ジャンル", opts: ["和食中心", "洋食中心", "中華中心"] },
-      { key: "cooking", label: "調理", opts: ["揚げ物なし", "レンジ・時短中心"] },
+      { key: "cooking", label: "調理", opts: ["揚げ物なし", "レンジ・時短中心"], multi: true },
     ];
-    let guidedSel = { mains: "", genre: "", cooking: "" };
+    const emptyGuided = () => ({ mains: "", genre: "", cooking: [] });
+    let guidedSel = emptyGuided();
+    const guidedOn = (q, v) => (q.multi ? (guidedSel[q.key] || []).includes(v) : guidedSel[q.key] === v);
+    const guidedIsAuto = (q) => (q.multi ? !(guidedSel[q.key] || []).length : guidedSel[q.key] === "");
     function renderGuided() {
       const wrap = $("guidedRows");
       if (!wrap) return;
       wrap.innerHTML = GUIDED_QUESTIONS.map((q) =>
         `<div class="grow" data-k="${q.key}"><span class="glab">${esc(q.label)}</span>` +
-        `<button type="button" class="gchip ${guidedSel[q.key] === "" ? "on" : ""}" data-v="">おまかせ</button>` +
-        q.opts.map((o) => `<button type="button" class="gchip ${guidedSel[q.key] === o ? "on" : ""}" data-v="${esc(o)}">${esc(o)}</button>`).join("") +
+        `<button type="button" class="gchip ${guidedIsAuto(q) ? "on" : ""}" data-v="">おまかせ</button>` +
+        q.opts.map((o) => `<button type="button" class="gchip ${guidedOn(q, o) ? "on" : ""}" data-v="${esc(o)}">${esc(o)}</button>`).join("") +
         `</div>`
       ).join("");
       wrap.querySelectorAll(".grow").forEach((row) => {
-        const k = row.dataset.k;
+        const q = GUIDED_QUESTIONS.find((x) => x.key === row.dataset.k);
         row.querySelectorAll(".gchip").forEach((b) =>
-          b.addEventListener("click", () => { guidedSel[k] = b.dataset.v; renderGuided(); }));
+          b.addEventListener("click", () => {
+            const v = b.dataset.v;
+            if (!q.multi) { guidedSel[q.key] = v; }
+            else if (v === "") { guidedSel[q.key] = []; } // 「おまかせ」で全解除
+            else {
+              const cur = guidedSel[q.key] || [];
+              guidedSel[q.key] = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]; // 複数選択可
+            }
+            renderGuided();
+          }));
       });
     }
 
@@ -3371,7 +3383,20 @@
     const readJSON = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
     const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "id" + Date.now() + Math.round(Math.random() * 1e6));
     let editingId = null;
-    let shopOpen = { season: false, pantry: false, bought: false }; // 折りたたみ枠の開閉状態
+    let shopOpen = { season: false, pantry: false, fridge: false, bought: false }; // 折りたたみ枠の開閉状態
+
+    // 買い物リストの食材が冷蔵庫にあるか（使い切りで出した食材が「買うもの」に並ぶ矛盾を防ぐ）
+    function isFridge(it) {
+      const n = normName(it.name);
+      if (!n) return false;
+      return (fridgeItems || []).some((f) => {
+        if (f.kind !== "ingredient") return false;
+        const fn = normName(f.name);
+        if (!fn) return false;
+        if (n === fn) return true;
+        return fn.length >= 2 && (n.includes(fn) || fn.includes(n)); // ひき肉⇔豚ひき肉 等を吸収
+      });
+    }
     let shopWeek = null; // 買い物リストの表示中の週（日曜の YYYY-MM-DD）
 
     // 週（日曜〜土曜）ユーティリティ
@@ -3503,6 +3528,7 @@
         const [plans, pantry] = await Promise.all([
           apiOK("/api/plans?householdId=" + encodeURIComponent(household.id)),
           apiOK(`/api/households/${household.id}/pantry`),
+          loadFridge(), // 冷蔵庫にあるものは「買うもの」から外すため
         ]);
         plansCache = plans; pantryItems = pantry;
         renderShopping();
@@ -3582,6 +3608,7 @@
 
       const seasonHeader = (n) => `<div class="shopcat toggle ${shopOpen.season ? "open" : ""}" id="seasonToggle"><span>調味料（常備の可能性）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
       const pantryHeader = (n) => `<div class="shopcat toggle ${shopOpen.pantry ? "open" : ""}" id="pantryToggle"><span>常備品（家にあるか確認）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
+      const fridgeHeader = (n) => `<div class="shopcat toggle ${shopOpen.fridge ? "open" : ""}" id="fridgeToggle"><span>🧊 冷蔵庫にある（買わなくてOK）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
       const boughtHeader = (n) => `<div class="shopcat toggle bought ${shopOpen.bought ? "open" : ""}" id="boughtToggle"><span>✓ 買ったもの</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
       const boxStyle = (open) => `style="display:${open ? "block" : "none"}"`;
       let hasAny = false;
@@ -3592,9 +3619,11 @@
         const active = rows.filter((r) => !r.checked);
         const bought = rows.filter((r) => r.checked);
         const seasons = active.filter((r) => r.isSeason);
-        const pantry = active.filter((r) => !r.isSeason && isPantry(r));
-        const nons = active.filter((r) => !r.isSeason && !isPantry(r));
-        const extra = [seasons.length ? `調味料${seasons.length}` : "", pantry.length ? `常備品${pantry.length}` : ""].filter(Boolean).join(" ＋");
+        const rest = active.filter((r) => !r.isSeason);
+        const fridge = rest.filter((r) => isFridge(r));            // 冷蔵庫にある＝買わなくてよい
+        const pantry = rest.filter((r) => !isFridge(r) && isPantry(r));
+        const nons = rest.filter((r) => !isFridge(r) && !isPantry(r));
+        const extra = [seasons.length ? `調味料${seasons.length}` : "", pantry.length ? `常備品${pantry.length}` : "", fridge.length ? `冷蔵庫${fridge.length}` : ""].filter(Boolean).join(" ＋");
         html += `<div class="shop-head"><span class="t">買うもの（${nons.length}品${extra ? ` ＋${extra}` : ""}）</span></div>`;
 
         const aggRow = (r, o = {}) => {
@@ -3615,6 +3644,11 @@
           html += `<div class="shopcat"><span>${esc(cat)}</span><span class="lead"></span></div>`;
           html += g.map(aggRow).join("");
         }
+        if (fridge.length) {
+          hasAny = true;
+          html += fridgeHeader(fridge.length);
+          html += `<div id="fridgeBox" ${boxStyle(shopOpen.fridge)}>${fridge.map((r) => aggRow(r, { pantry: true })).join("")}</div>`;
+        }
         if (pantry.length) {
           hasAny = true;
           html += pantryHeader(pantry.length);
@@ -3633,10 +3667,12 @@
         const addedItems = [];
         const seasonings = [];
         const pantry = [];
+        const fridge = [];
         const bought = [];
         for (const it of list) {
           if (it.checked) { bought.push(it); continue; } // チェック済みは「買ったもの」へ
           if (it.date === "__season__" || (!it.date && isSeasoning(it))) seasonings.push(it);
+          else if (isFridge(it)) fridge.push(it);
           else if (isPantry(it)) pantry.push(it);
           else if (!it.date) addedItems.push(it);
           else { if (!byDate.has(it.date)) byDate.set(it.date, []); byDate.get(it.date).push(it); }
@@ -3679,7 +3715,7 @@
             <button class="del" data-id="${esc(it.id)}" aria-label="削除">${TRASH_SVG}</button></div>`;
         };
 
-        const dExtra = [seasonings.length ? `調味料${seasonings.length}` : "", pantry.length ? `常備品${pantry.length}` : ""].filter(Boolean).join(" ＋");
+        const dExtra = [seasonings.length ? `調味料${seasonings.length}` : "", pantry.length ? `常備品${pantry.length}` : "", fridge.length ? `冷蔵庫${fridge.length}` : ""].filter(Boolean).join(" ＋");
         html += `<div class="shop-head"><span class="t">買うもの（${mainCount}品${dExtra ? ` ＋${dExtra}` : ""}）</span></div>`;
         html += `<div class="toggle-row">同じ材料をまとめてチェック
           <label class="switch"><input type="checkbox" id="sameCheckToggle" ${getSameCheck() ? "checked" : ""}><span class="track"></span><span class="knob"></span></label></div>`;
@@ -3693,6 +3729,11 @@
           hasAny = true;
           html += `<div class="shopcat"><span>追加した材料</span><span class="lead"></span></div>`;
           html += addedItems.map(dateRow).join("");
+        }
+        if (fridge.length) {
+          hasAny = true;
+          html += fridgeHeader(fridge.length);
+          html += `<div id="fridgeBox" ${boxStyle(shopOpen.fridge)}>${fridge.map((it) => dateRow(it, { pantry: true })).join("")}</div>`;
         }
         if (pantry.length) {
           hasAny = true;
@@ -3779,6 +3820,7 @@
       };
       bindToggle("seasonToggle", "seasonList", "season");
       bindToggle("pantryToggle", "pantryBox", "pantry");
+      bindToggle("fridgeToggle", "fridgeBox", "fridge");
       bindToggle("boughtToggle", "boughtBox", "bought");
       body.querySelectorAll(".buyback").forEach((b) =>
         b.addEventListener("click", () => markPantryBuy(b.dataset.name)));
