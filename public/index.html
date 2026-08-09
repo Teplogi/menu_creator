@@ -2928,8 +2928,14 @@
     const isShopStale = () => { const s = localStorage.getItem("shopSig:w:" + (shopWeek || "")); return s != null && s !== weekPlanSig(shopWeek); };
 
     async function regenerateCurrent() {
-      const btn = $("redoBtn");
       const { date, slot } = currentRecipe;
+      // 誤タップですぐ作り直されないよう確認（戻すことも可能だが、AI修正枠も消費するため）
+      const ok = await confirmDialog(
+        `${mdLabel(date)}（${dow(date)}）の${slot}の献立を、AIですべて作り直しますか？\n（作り直した後も「↩ 作り直す前の内容に戻す」で戻せます）`,
+        "作り直す", "キャンセル"
+      );
+      if (!ok) return;
+      const btn = $("redoBtn");
       const original = btn.innerHTML;
       btn.disabled = true;
       btn.textContent = "作成中…";
