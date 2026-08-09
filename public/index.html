@@ -348,6 +348,12 @@
     .fav-detail ul, .fav-detail ol { margin: 4px 0; padding-left: 20px; }
     .soon-card.live { cursor: pointer; border: 1.5px solid var(--orange); }
     .soon-card.live .soon-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.2rem; }
+    /* 差し替えの「1つ前に戻す」 */
+    .undo-btn { border: 1px dashed var(--dot); background: var(--cream); color: var(--muted);
+      font-size: .78rem; font-weight: 700; border-radius: 999px; padding: 5px 12px; cursor: pointer;
+      margin-top: 8px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .undo-btn:hover { color: var(--orange-dark); border-color: var(--orange); }
+    .undo-meal { margin: 0 0 12px; display: block; }
     /* ---- Dish AI replace ---- */
     .dish-replace { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--orange-soft); }
     .dish-replace .ef { display: block; margin-bottom: 10px; }
@@ -1645,8 +1651,15 @@
       const dish = f.dish
         ? JSON.parse(JSON.stringify(f.dish))
         : { role: f.role || "主菜", name: f.name, description: "", cook_minutes: 0, ingredients: [], steps: [] };
-      if (favPickCtx?.idx == null) meal.dishes.push(dish);
-      else meal.dishes[favPickCtx.idx] = dish;
+      if (favPickCtx?.idx == null) {
+        meal.dishes.push(dish);
+      } else {
+        // 「1つ前に戻す」用に直前の料理を保持（1世代のみ）
+        const old = { ...meal.dishes[favPickCtx.idx] };
+        delete old._prev;
+        dish._prev = old;
+        meal.dishes[favPickCtx.idx] = dish;
+      }
       const ov = $("favPickerModal"); if (ov) ov.style.display = "none";
       await savePlan();
       renderRecipe();
@@ -2521,6 +2534,15 @@
         <button class="redo" id="redoBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>作り直す</button>`;
       body.appendChild(head);
 
+      // 「作り直す」の直前の内容に戻すボタン（1世代・トグルでやり直しも可）
+      if (meal._prevDishes && editingDishIdx === null) {
+        const u = document.createElement("button");
+        u.className = "undo-btn undo-meal";
+        u.textContent = "↩ 作り直す前の内容に戻す";
+        u.addEventListener("click", undoMealRegenerate);
+        body.appendChild(u);
+      }
+
       (meal.dishes || []).forEach((dish, idx) => {
         const el = document.createElement("div");
         el.className = "dish";
@@ -2565,6 +2587,7 @@
           <h3>${esc(dish.name)}</h3>
           ${dish.description ? `<p class="desc">${esc(dish.description)}</p>` : ""}
           ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
+          ${dish._prev ? `<button class="undo-btn" data-undo="${idx}">↩ 「${esc(dish._prev.name || "前の料理")}」に戻す</button>` : ""}
           <div class="subsec"><div class="sec-head"><span class="label">${dish.store_bought ? "買うもの" : "材料"}</span><span class="lead"></span></div>
             <ul class="ings">${(dish.ingredients || []).map((i) => `<li>${esc(i.name)}${i.amount ? ` ${esc(i.amount)}` : ""}</li>`).join("")}</ul></div>`;
         if (!dish.store_bought) {
@@ -2619,6 +2642,31 @@
         b.addEventListener("click", () => openReplaceModal(Number(b.dataset.ai))));
       body.querySelectorAll(".dish-fav-btn").forEach((b) =>
         b.addEventListener("click", () => toggleFavDish(Number(b.dataset.fav))));
+      body.querySelectorAll(".undo-btn[data-undo]").forEach((b) =>
+        b.addEventListener("click", () => undoDishReplace(Number(b.dataset.undo))));
+    }
+
+    // 差し替え（AI変更/お気に入り）を1つ前に戻す。もう一度押すと入れ替え直す（やり直し）
+    async function undoDishReplace(idx) {
+      const meal = getMeal(currentRecipe.date, currentRecipe.slot);
+      const cur = meal?.dishes[idx];
+      if (!cur || !cur._prev) return;
+      const prev = cur._prev;
+      const curCopy = { ...cur };
+      delete curCopy._prev;
+      meal.dishes[idx] = { ...prev, _prev: curCopy }; // 交換方式＝もう一度押すと元に戻せる
+      await savePlan();
+      renderRecipe();
+    }
+    // 「作り直す」前の食事内容に戻す（トグル）
+    async function undoMealRegenerate() {
+      const meal = getMeal(currentRecipe.date, currentRecipe.slot);
+      if (!meal || !meal._prevDishes) return;
+      const cur = meal.dishes;
+      meal.dishes = meal._prevDishes;
+      meal._prevDishes = (cur || []).map((d) => { const c = { ...d }; delete c._prev; return c; });
+      await savePlan();
+      renderRecipe();
     }
 
     // 料理カードの削除（1品だけ）

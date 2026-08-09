@@ -1802,6 +1802,8 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
     if (!newDishes || !newDishes.length) throw new Error("EMPTY_RESPONSE");
     if (opts?.includeSteps === false) newDishes.forEach((d) => delete d.steps); // 献立だけモードは作り方を除去
 
+    // 「作り直す前に戻す」用に直前の内容を保持（1世代のみ）
+    meal._prevDishes = (meal.dishes || []).map((d) => { const c = { ...d }; delete c._prev; return c; });
     meal.dishes = newDishes;
     const updated = await one(
       "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
@@ -1849,6 +1851,10 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1, "edi
     }
     if (!newDish || !newDish.name) throw new Error("EMPTY_RESPONSE");
 
+    // 「1つ前に戻す」用に直前の料理を保持（1世代のみ・無限に積まない）
+    const prevCopy = { ...current };
+    delete prevCopy._prev;
+    newDish._prev = prevCopy;
     meal.dishes[idx] = newDish;
     const updated = await one(
       "UPDATE meal_plans SET data_json = $1 WHERE id = $2 RETURNING *",
