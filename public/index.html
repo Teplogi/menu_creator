@@ -331,6 +331,23 @@
     .dish-ai-btn { border: 1.5px solid var(--orange); background: #fff; color: var(--orange-dark);
       font-size: .78rem; font-weight: 700; border-radius: 999px; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
     .dish-ai-btn:hover { background: var(--orange-soft); }
+    /* お気に入り（⭐） */
+    .dish-fav-btn { border: none; background: none; font-size: 1.15rem; line-height: 1; cursor: pointer;
+      padding: 4px 6px; color: #cfc4b6; flex: none; }
+    .dish-fav-btn.on { color: #f5a623; }
+    .fav-row { display: flex; align-items: center; gap: 10px; padding: 11px 4px; border-bottom: 1px dashed var(--line); }
+    .fav-row:last-child { border-bottom: 0; }
+    .fav-row .fnm { font-weight: 700; flex: 1; min-width: 0; cursor: pointer; }
+    .fav-row .frole { font-size: .7rem; font-weight: 800; color: var(--orange-dark); background: var(--orange-soft);
+      border-radius: 6px; padding: 2px 8px; flex: none; }
+    .fav-row .ftag { font-size: .7rem; font-weight: 700; color: var(--muted); background: var(--cream);
+      border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; flex: none; }
+    .fav-row .fdel { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; flex: none; }
+    .fav-row .fdel svg { width: 17px; height: 17px; }
+    .fav-detail { background: var(--cream); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px; font-size: .86rem; }
+    .fav-detail ul, .fav-detail ol { margin: 4px 0; padding-left: 20px; }
+    .soon-card.live { cursor: pointer; border: 1.5px solid var(--orange); }
+    .soon-card.live .soon-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.2rem; }
     /* ---- Dish AI replace ---- */
     .dish-replace { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--orange-soft); }
     .dish-replace .ef { display: block; margin-bottom: 10px; }
@@ -892,6 +909,20 @@
         <p>毎日の献立をもっとラクにする機能を準備中です。</p>
       </div>
       <div id="soonList"></div>
+    </section>
+
+    <!-- お気に入りレシピ -->
+    <section class="view" id="view-favorites">
+      <div class="card">
+        <div class="sec-head"><span class="label">お気に入りレシピ</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 10px">献立の料理の<b>⭐</b>で保存できます。自分の十八番は<b>名前だけ</b>でもOK（レシピなしでそのまま献立に置けます）。グループで共有されます。</p>
+        <div class="urlbox">
+          <input type="text" id="favNameInput" placeholder="料理名（例: 実家の肉じゃが）" maxlength="60" />
+          <button class="copybtn" onclick="addFavoriteManual()">追加</button>
+        </div>
+        <p class="hint" id="favHint"></p>
+        <div id="favList"></div>
+      </div>
     </section>
 
     <p id="status"></p>
@@ -1468,18 +1499,157 @@
     // ---------- べんり機能（近日公開） ----------
     const SOON_FEATURES = [
       { icon: "🔥", name: "カロリー・栄養計算", desc: "献立ごとのカロリーやPFCバランスを自動で表示" },
-      { icon: "⭐", name: "お気に入りレシピ", desc: "気に入った料理を保存して、次の献立にすぐ追加" },
       { icon: "🧊", name: "作り置き・在庫管理", desc: "余った食材や作り置きを記録して使い切り" },
       { icon: "🛒", name: "ネットスーパー連携", desc: "買い物リストをそのまま注文につなげる" },
     ];
     function showSoonView() {
       backHandler = goHome;
-      $("soonList").innerHTML = SOON_FEATURES.map((f) =>
+      $("soonList").innerHTML =
+        `<div class="soon-card live" id="favOpenCard"><span class="soon-ic">⭐</span>
+          <div class="soon-tx"><div class="soon-nm">お気に入りレシピ</div><div class="soon-ds">気に入った料理を保存して、次の献立にすぐ追加</div></div>
+          <span class="soon-go">›</span></div>` +
+        SOON_FEATURES.map((f) =>
         `<div class="soon-card"><span class="soon-ic">${f.icon}</span>
           <div class="soon-tx"><div class="soon-nm">${esc(f.name)}</div><div class="soon-ds">${esc(f.desc)}</div></div>
           <span class="soon-lock">🔒</span></div>`
       ).join("");
+      $("favOpenCard").addEventListener("click", showFavoritesView);
       showView("soon", "べんり機能", { back: true, tab: "soon" });
+    }
+
+    // ---------- お気に入りレシピ ----------
+    let favorites = [];
+    let favExpandedId = null;
+    async function loadFavorites() {
+      if (!household) { favorites = []; return favorites; }
+      try { favorites = await apiOK(`/api/households/${household.id}/favorites`); }
+      catch { favorites = []; }
+      return favorites;
+    }
+    const favNorm = (s) => (s || "").trim().toLowerCase();
+    const findFavByName = (name) => favorites.find((f) => favNorm(f.name) === favNorm(name));
+
+    // 献立の料理カードの⭐（保存/解除）。保存時は材料・作り方ごとスナップショット
+    async function toggleFavDish(idx) {
+      const meal = getMeal(currentRecipe.date, currentRecipe.slot);
+      const dish = meal?.dishes[idx];
+      if (!dish || !dish.name) return;
+      const existing = findFavByName(dish.name);
+      try {
+        if (existing) {
+          await apiOK(`/api/households/${household.id}/favorites/${existing.id}`, { method: "DELETE" });
+        } else {
+          const snap = {
+            role: dish.role, name: dish.name, description: dish.description || "",
+            cook_minutes: dish.cook_minutes || 0, ingredients: dish.ingredients || [],
+            steps: dish.steps || [], store_bought: !!dish.store_bought,
+          };
+          await apiOK(`/api/households/${household.id}/favorites`, { method: "POST", body: { name: dish.name, role: dish.role, dish: snap } });
+        }
+        await loadFavorites();
+        renderRecipe();
+      } catch (e) { alert(e.message); }
+    }
+
+    function showFavoritesView() {
+      backHandler = showSoonView;
+      favExpandedId = null;
+      $("favHint").textContent = "";
+      $("favList").innerHTML = '<p class="empty">読み込み中…</p>';
+      showView("favorites", "お気に入り", { back: true, tab: "soon" });
+      loadFavorites().then(renderFavorites);
+    }
+    function renderFavorites() {
+      const wrap = $("favList");
+      if (!wrap) return;
+      if (!favorites.length) {
+        wrap.innerHTML = '<p class="empty" style="padding:10px 0">まだ登録がありません。献立の料理の ⭐ からも保存できます。</p>';
+        return;
+      }
+      wrap.innerHTML = favorites.map((f) => {
+        const row = `<div class="fav-row" data-id="${esc(f.id)}">
+          <span class="fnm" title="タップでレシピを表示">${esc(f.name)}</span>
+          ${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
+          <span class="ftag">${f.dish ? "レシピあり" : "名前のみ"}</span>
+          <button class="fdel" data-id="${esc(f.id)}" aria-label="削除">${TRASH_SVG}</button></div>`;
+        const detail = (favExpandedId === f.id && f.dish)
+          ? `<div class="fav-detail">
+              ${f.dish.description ? `<p style="margin:2px 0">${esc(f.dish.description)}</p>` : ""}
+              <b>材料</b><ul>${(f.dish.ingredients || []).map((i) => `<li>${esc(i.name)}${i.amount ? ` ${esc(i.amount)}` : ""}</li>`).join("")}</ul>
+              ${(f.dish.steps || []).length ? `<b>作り方</b><ol>${f.dish.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
+            </div>` : "";
+        return row + detail;
+      }).join("");
+      wrap.querySelectorAll(".fav-row .fnm").forEach((el) => el.addEventListener("click", () => {
+        const id = el.parentElement.dataset.id;
+        favExpandedId = favExpandedId === id ? null : id;
+        renderFavorites();
+      }));
+      wrap.querySelectorAll(".fdel").forEach((b) => b.addEventListener("click", () => deleteFavorite(b.dataset.id)));
+    }
+    async function addFavoriteManual() {
+      const name = $("favNameInput").value.trim();
+      if (!name) { $("favNameInput").focus(); return; }
+      $("favHint").textContent = "";
+      try {
+        await apiOK(`/api/households/${household.id}/favorites`, { method: "POST", body: { name } });
+        $("favNameInput").value = "";
+        await loadFavorites(); renderFavorites();
+        $("favHint").textContent = "追加しました ✓";
+      } catch (e) { $("favHint").textContent = e.message; }
+    }
+    async function deleteFavorite(id) {
+      const f = favorites.find((x) => x.id === id);
+      if (!(await confirmDialog(`「${f ? f.name : ""}」をお気に入りから削除しますか？`, "削除する", "やめる"))) return;
+      try {
+        await apiOK(`/api/households/${household.id}/favorites/${id}`, { method: "DELETE" });
+        await loadFavorites(); renderFavorites();
+      } catch (e) { $("favHint").textContent = e.message; }
+    }
+
+    // お気に入りから選ぶピッカー（idx=null なら食事に「追加」、数値ならその料理と「差し替え」）
+    let favPickCtx = null;
+    function openFavPicker(replaceIdx) {
+      favPickCtx = { idx: replaceIdx };
+      let ov = $("favPickerModal");
+      if (!ov) {
+        ov = document.createElement("div");
+        ov.id = "favPickerModal"; ov.className = "modal-overlay"; ov.style.display = "none";
+        ov.innerHTML = `<div class="modal-card"><div class="mp-title" id="favPickTitle">⭐ お気に入りから選ぶ</div>
+          <div id="favPickList" style="max-height:50vh;overflow-y:auto"></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn-ghost" id="favPickCancel">とじる</button></div></div>`;
+        document.body.appendChild(ov);
+        ov.addEventListener("click", (e) => { if (e.target === ov) ov.style.display = "none"; });
+        $("favPickCancel").addEventListener("click", () => { ov.style.display = "none"; });
+      }
+      $("favPickTitle").textContent = replaceIdx == null ? "⭐ お気に入りから追加" : "⭐ お気に入りと差し替え";
+      const render = () => {
+        const el = $("favPickList");
+        el.innerHTML = favorites.length
+          ? favorites.map((f) => `<div class="fav-row" data-id="${esc(f.id)}" style="cursor:pointer">
+              <span class="fnm">${esc(f.name)}</span>${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
+              <span class="ftag">${f.dish ? "レシピあり" : "名前のみ"}</span></div>`).join("")
+          : '<p class="empty" style="padding:10px 0">まだお気に入りがありません。料理の ⭐ で保存できます。</p>';
+        el.querySelectorAll(".fav-row").forEach((r) => r.addEventListener("click", () => applyFavorite(r.dataset.id)));
+      };
+      render();
+      loadFavorites().then(render); // 最新化（グループの他メンバーの追加も反映）
+      ov.style.display = "flex";
+    }
+    async function applyFavorite(favId) {
+      const f = favorites.find((x) => x.id === favId);
+      if (!f) return;
+      const meal = getMeal(currentRecipe.date, currentRecipe.slot);
+      if (!meal) return;
+      // スナップショットがあればそのまま配置（AI消費ゼロ）。名前だけなら名前だけの料理として配置
+      const dish = f.dish
+        ? JSON.parse(JSON.stringify(f.dish))
+        : { role: f.role || "主菜", name: f.name, description: "", cook_minutes: 0, ingredients: [], steps: [] };
+      if (favPickCtx?.idx == null) meal.dishes.push(dish);
+      else meal.dishes[favPickCtx.idx] = dish;
+      const ov = $("favPickerModal"); if (ov) ov.style.display = "none";
+      await savePlan();
+      renderRecipe();
     }
 
     // ---------- 常備品リスト ----------
@@ -2325,6 +2495,8 @@
       renderRecipe();
       backHandler = backToOverview;
       showView("recipe", `${mdLabel(date)}(${dow(date)}) の${slot}`, { back: true });
+      // お気に入りの最新状態を取り込み、⭐の点灯を更新（開いた画面のままなら再描画）
+      loadFavorites().then(() => { if (currentRecipe && currentRecipe.date === date && currentRecipe.slot === slot) renderRecipe(); });
     }
     function backToOverview() {
       renderOverview();
@@ -2383,8 +2555,10 @@
         const roleChip = dish.store_bought
           ? `<span class="role-chip">🛒 市販でOK</span>`
           : `<span class="role-chip">${esc(dish.role || "料理")}</span>`;
+        const isFav = !!findFavByName(dish.name);
         let inner = `
           <div class="dish-top">${roleChip}<div class="dish-actions">
+            <button class="dish-fav-btn ${isFav ? "on" : ""}" data-fav="${idx}" aria-label="${isFav ? "お気に入りから外す" : "お気に入りに保存"}" title="${isFav ? "お気に入りから外す" : "お気に入りに保存"}">${isFav ? "★" : "☆"}</button>
             <button class="dish-ai-btn" data-ai="${idx}" aria-label="AIで変更">✨ AIで変更</button>
             <button class="dish-edit-btn" data-idx="${idx}" aria-label="編集">${EDIT_SVG}</button>
             <button class="dish-edit-btn dish-del-btn" data-del="${idx}" aria-label="この料理を削除">${TRASH_SVG}</button></div></div>
@@ -2418,6 +2592,12 @@
         addBtn.addEventListener("click", addDish);
         body.appendChild(addBtn);
 
+        const favBtn = document.createElement("button");
+        favBtn.className = "btn-ghost add-dish-btn";
+        favBtn.textContent = "⭐ お気に入りから追加";
+        favBtn.addEventListener("click", () => openFavPicker(null));
+        body.appendChild(favBtn);
+
         const del = document.createElement("button");
         del.className = "btn-danger";
         del.innerHTML = `${TRASH_SVG}<span>この食事（${esc(mdLabel(date))} の${esc(slot)}）を削除</span>`;
@@ -2437,6 +2617,8 @@
         b.addEventListener("click", () => deleteDish(Number(b.dataset.del))));
       body.querySelectorAll(".dish-ai-btn").forEach((b) =>
         b.addEventListener("click", () => openReplaceModal(Number(b.dataset.ai))));
+      body.querySelectorAll(".dish-fav-btn").forEach((b) =>
+        b.addEventListener("click", () => toggleFavDish(Number(b.dataset.fav))));
     }
 
     // 料理カードの削除（1品だけ）
@@ -2463,11 +2645,13 @@
           <input id="replaceInput" placeholder="例: ただのサラダに／鶏を使った別の主菜／具材だけ変えて"></label>
         <p class="mp-hint" id="replaceHint"></p>
         <div class="ef-savecancel"><button class="btn-primary" id="replaceGo">AIで作り直す</button><button class="btn-ghost" id="replaceCancel">取消</button></div>
+        <button class="btn-ghost" id="replaceFromFav" style="width:100%;margin-top:8px">⭐ お気に入りと差し替える（AIを使わない）</button>
       </div>`;
       document.body.appendChild(ov);
       ov.addEventListener("click", (e) => { if (e.target === ov) closeReplaceModal(); });
       $("replaceGo").addEventListener("click", () => replaceDishAI(replaceCtx?.idx));
       $("replaceCancel").addEventListener("click", closeReplaceModal);
+      $("replaceFromFav").addEventListener("click", () => { const i = replaceCtx?.idx; closeReplaceModal(); openFavPicker(i); });
       $("replaceInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); replaceDishAI(replaceCtx?.idx); } });
     }
     function openReplaceModal(idx) {

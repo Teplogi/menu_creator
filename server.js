@@ -239,6 +239,12 @@ const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS preference_presets (
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS idx_presets_hh ON preference_presets (household_id, created_at)`,
+  // お気に入りレシピ（グループ共有）。dish_json=料理のスナップショット（材料・作り方）。
+  // NULL なら「名前だけ」のお気に入り（レシピ不要の十八番）。
+  `CREATE TABLE IF NOT EXISTS favorite_dishes (
+    id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
+    role TEXT, dish_json TEXT, created_at TEXT NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_fav_hh_norm ON favorite_dishes (household_id, name_norm)`,
   // 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
   `CREATE TABLE IF NOT EXISTS store_items (
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
@@ -1186,6 +1192,76 @@ app.delete("/api/households/:id/presets/:presetId", auth, async (req, res) => {
     if (!(await requireMember(req, res, req.params.id))) return;
     await q("DELETE FROM preference_presets WHERE id = $1 AND household_id = $2", [
       req.params.presetId, req.params.id,
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------- お気に入りレシピ（世帯ごと・共有） ----------
+const favToClient = (r) => {
+  let dish = null;
+  if (r.dish_json) { try { dish = JSON.parse(r.dish_json); } catch {} }
+  return { id: r.id, name: r.name, role: r.role || dish?.role || "", dish };
+};
+
+app.get("/api/households/:id/favorites", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const rows = await all(
+      "SELECT * FROM favorite_dishes WHERE household_id = $1 ORDER BY created_at DESC",
+      [req.params.id]
+    );
+    res.json(rows.map(favToClient));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 追加（同名は上書き＝スナップショットの更新。名前だけの登録は dish なしでOK）
+app.post("/api/households/:id/favorites", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const name = (req.body?.name || "").toString().trim().slice(0, 60);
+    if (!name) return res.status(400).json({ error: "料理名を入力してください。" });
+    const role = (req.body?.role || "").toString().trim().slice(0, 10) || null;
+    let dishJson = null;
+    if (req.body?.dish && typeof req.body.dish === "object") {
+      dishJson = JSON.stringify(req.body.dish);
+      if (dishJson.length > 20000) return res.status(413).json({ error: "レシピが大きすぎます。" });
+    }
+    const norm = normName(name);
+    const existing = await one(
+      "SELECT * FROM favorite_dishes WHERE household_id = $1 AND name_norm = $2",
+      [req.params.id, norm]
+    );
+    if (existing) {
+      const updated = await one(
+        "UPDATE favorite_dishes SET name = $1, role = COALESCE($2, role), dish_json = COALESCE($3, dish_json) WHERE id = $4 RETURNING *",
+        [name, role, dishJson, existing.id]
+      );
+      return res.json(favToClient(updated));
+    }
+    const count = await one("SELECT count(*)::int AS n FROM favorite_dishes WHERE household_id = $1", [req.params.id]);
+    if (count && count.n >= 100) return res.status(400).json({ error: "お気に入りは100件までです。不要なものを削除してください。" });
+    const id = randomUUID();
+    const row = await one(
+      `INSERT INTO favorite_dishes (id, household_id, name, name_norm, role, dish_json, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [id, req.params.id, name, norm, role, dishJson, new Date().toISOString()]
+    );
+    res.json(favToClient(row));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.delete("/api/households/:id/favorites/:favId", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    await q("DELETE FROM favorite_dishes WHERE id = $1 AND household_id = $2", [
+      req.params.favId, req.params.id,
     ]);
     res.json({ ok: true });
   } catch (err) {
