@@ -568,6 +568,14 @@
     .seg.on { background: #fff; color: var(--orange); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     .dtags { display: inline-flex; gap: 4px; flex-wrap: wrap; }
     .dtag { font-size: .66rem; font-weight: 700; color: var(--orange); background: var(--orange-soft); border-radius: 6px; padding: 1px 6px; }
+    /* 曜日ごとの色（日=太陽・月=月・火=炎・水=水・木=葉・金=金色・土=土） */
+    .dtag.d0 { color: #c0334a; background: #fdeaee; }
+    .dtag.d1 { color: #6a58ad; background: #efecfb; }
+    .dtag.d2 { color: #cf5520; background: #fdece3; }
+    .dtag.d3 { color: #2570b0; background: #e7f1fb; }
+    .dtag.d4 { color: #2f8a55; background: #e6f6ec; }
+    .dtag.d5 { color: #a8801a; background: #fcf3d9; }
+    .dtag.d6 { color: #77593f; background: #f3ece4; }
     .moved-tag { display: inline-block; margin-left: 6px; font-size: .64rem; font-weight: 800; color: #fff; background: #4fc3f7; border-radius: 6px; padding: 1px 7px; }
     .shopitem .cb { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--dot); flex: none;
       display: grid; place-items: center; transition: all .12s; }
@@ -1072,6 +1080,7 @@
     const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const parseDate = (s) => new Date(s + "T00:00:00");
     const dow = (s) => { const d = parseDate(s); return isNaN(d) ? "" : DOW[d.getDay()]; };
+    const dowIdx = (s) => { const d = parseDate(s); return isNaN(d) ? "" : d.getDay(); }; // 曜日カラー用
     const mdLabel = (s) => { const d = parseDate(s); return `${d.getMonth() + 1}/${d.getDate()}`; };
     const ICON_PERSON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.6"/><path d="M5 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1"/></svg>';
     const ICON_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
@@ -3720,7 +3729,7 @@
         }
         const uses = r.dishes && r.dishes.length ? `<span class="uses">${esc(r.dishes.join("・"))}</span>` : "";
         const dates = r.dates.length > 1 || (r.dates.length === 1 && range !== "today")
-          ? `<span class="dtags">${r.dates.map((d) => `<span class="dtag">${esc(mdLabel(d))}</span>`).join("")}</span>` : "";
+          ? `<span class="dtags">${r.dates.map((d) => `<span class="dtag d${dowIdx(d)}">${esc(mdLabel(d))}(${esc(dow(d))})</span>`).join("")}</span>` : "";
         const meta = uses || dates ? `<span class="shopmeta">${uses}${dates}</span>` : "";
         const moved = r.moved ? `<span class="moved-tag">移動</span>` : "";
         const buy = o.pantry ? `<button class="buyback" data-name="${esc(r.name)}" aria-label="買う物に戻す">🛒 買う</button>` : "";
