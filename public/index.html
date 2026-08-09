@@ -368,6 +368,12 @@
     .fr-row .fage { font-size: .72rem; color: var(--muted); flex: none; }
     .fr-row .fdel { border: none; background: none; color: var(--muted); cursor: pointer; padding: 4px; flex: none; }
     .fr-row .fdel svg { width: 16px; height: 16px; }
+    /* こだわり（誘導式チップ） */
+    .grow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+    .grow .glab { font-size: .76rem; font-weight: 800; color: var(--muted); width: 64px; flex: none; }
+    .grow .gchip { border: 1px solid var(--line); background: var(--cream); color: var(--ink, #444);
+      border-radius: 999px; padding: 4px 12px; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+    .grow .gchip.on { background: var(--orange); border-color: var(--orange); color: #fff; }
     /* ---- Dish AI replace ---- */
     .dish-replace { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--orange-soft); }
     .dish-replace .ef { display: block; margin-bottom: 10px; }
@@ -769,6 +775,11 @@
         </div>
         <p class="hint" style="margin:-4px 0 10px">「おまかせ」はご飯を中心に、麺・パンの日も時々混ぜます。「麺類」＋「主菜のみ」でラーメン一杯だけ、なども作れます。</p>
 
+        <div id="guidedWrap" style="margin:0 0 12px">
+          <span class="t" style="display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:6px">こだわり（任意・タップで選択）</span>
+          <div id="guidedRows"></div>
+        </div>
+
         <label class="field"><span class="t">避けたい食材・アレルギー</span>
           <p id="avoidReminder" style="margin:2px 0 0;font-size:.85rem;color:var(--muted);line-height:1.7">読み込み中…</p>
         </label>
@@ -1113,6 +1124,8 @@
       loadCreateAvoidReminder(); // 設定の「使わない食材」を除外リマインダーに表示
       fridgeUseSel = new Set(); // 冷蔵庫の使い切り選択は毎回リセット（明示的に選ぶ）
       loadFridge().then(renderFridgeUseChips);
+      guidedSel = { mains: "", genre: "", cooking: "" }; // こだわりも毎回おまかせに戻す
+      renderGuided();
       // 既定の期間（今日〜3日後）でカレンダーを初期化
       const today = new Date();
       rangeStart = fmt(today);
@@ -1756,6 +1769,29 @@
         await loadFridge();
         renderFridge();
       } catch (e) { $("fridgeHint").textContent = e.message; }
+    }
+
+    // 作成画面：こだわり（誘導式チップ）。各行タップ選択・既定は「おまかせ」＝指定なし
+    const GUIDED_QUESTIONS = [
+      { key: "mains", label: "主菜", opts: ["肉多め", "魚多め", "肉と魚を半々"] },
+      { key: "genre", label: "ジャンル", opts: ["和食中心", "洋食中心", "中華中心"] },
+      { key: "cooking", label: "調理", opts: ["揚げ物なし", "レンジ・時短中心"] },
+    ];
+    let guidedSel = { mains: "", genre: "", cooking: "" };
+    function renderGuided() {
+      const wrap = $("guidedRows");
+      if (!wrap) return;
+      wrap.innerHTML = GUIDED_QUESTIONS.map((q) =>
+        `<div class="grow" data-k="${q.key}"><span class="glab">${esc(q.label)}</span>` +
+        `<button type="button" class="gchip ${guidedSel[q.key] === "" ? "on" : ""}" data-v="">おまかせ</button>` +
+        q.opts.map((o) => `<button type="button" class="gchip ${guidedSel[q.key] === o ? "on" : ""}" data-v="${esc(o)}">${esc(o)}</button>`).join("") +
+        `</div>`
+      ).join("");
+      wrap.querySelectorAll(".grow").forEach((row) => {
+        const k = row.dataset.k;
+        row.querySelectorAll(".gchip").forEach((b) =>
+          b.addEventListener("click", () => { guidedSel[k] = b.dataset.v; renderGuided(); }));
+      });
     }
 
     // 作成画面：冷蔵庫の食材をタップで選んで「使い切り生成」
@@ -2474,6 +2510,7 @@
         fridgeUse: fridgeItems
           .filter((x) => x.kind === "ingredient" && fridgeUseSel.has(x.id))
           .map((x) => ({ name: x.name, amount: x.amount || "" })),
+        guided: { ...guidedSel },
       };
 
       $("submitBtn").disabled = true;

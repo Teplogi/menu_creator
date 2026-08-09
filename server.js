@@ -451,6 +451,10 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
       ? `各料理は調理時間の目安が ${maxCookMinutes} 分以内になるようにし、cook_minutes に目安（分）の数値を入れる。`
       : "各料理の cook_minutes に調理時間の目安（分）の数値を入れる。",
     preferences ? `好み・要望: ${preferences}` : "好み・要望: 特になし（栄養バランスよく、和洋中を織り交ぜる）",
+    opts.guided?.mains ? `主菜のバランス指定: ${opts.guided.mains}（期間全体でこの配分を守る）` : "",
+    opts.guided?.genre ? `ジャンルの指定: ${opts.guided.genre}（大半をこのジャンルにする。単調にならない範囲で他ジャンルを少し混ぜるのは可）` : "",
+    opts.guided?.cooking === "揚げ物なし" ? "調理法の指定: 揚げ物は作らない（唐揚げ・フライ・天ぷら・揚げ焼きも避ける）。" : "",
+    opts.guided?.cooking === "レンジ・時短中心" ? "調理法の指定: 電子レンジ活用や炒め・和えものなどの時短調理を中心にし、洗い物が少なく済むようにする。" : "",
     avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
     storeAvoid && storeAvoid.length
       ? `次の食材はアレルギー・苦手のため、料理・材料に一切使わないこと（絶対）: ${storeAvoid.join("、")}`
@@ -546,6 +550,9 @@ async function mapLimit(items, limit, fn) {
 }
 const SLOT_ORDER = { 朝食: 0, 昼食: 1, 夕食: 2 };
 const STYLE_ROTATION = ["和食", "洋食", "中華・エスニック", "麺類・丼もの", "魚介中心", "卵・豆腐など"];
+// ジャンル指定（和食中心等）のときの変化の種。ジャンルの代わりに調理法を回して
+// 同じ主材料の日が同じ料理に収束するのを防ぐ（例: 魚の日×2 → 塩焼きと煮付けに分かれる）。
+const COOK_STYLE_ROTATION = ["焼き物", "煮物", "炒め物", "蒸し物・和え物", "汁物・鍋もの"];
 // 主材料（タンパク質）のローテーション。並列生成でも主材料が連続しないよう、各食事に1つ割り当てて
 // から生成する（同じ献立内で「豚肉→豚肉」等が続くのを防ぐ最重要ロジック）。bad=その主材料が
 // 避けたい食材に含まれるときは候補から外す用のキーワード。
@@ -661,6 +668,15 @@ const MEAL_ASSIGN_SCHEMA = {
   required: ["assignments"],
   additionalProperties: false,
 };
+// 「肉多め/魚多め/半々」を具体的な食数に変換する（曖昧な「多め」だと反映が弱いため）
+function guidedMainsLine(mains, n) {
+  const more = Math.max(Math.ceil(n * 0.6), Math.min(n, 2));
+  if (mains === "肉多め") return `主菜のバランス指定: 肉多め → ${n}食中${more}食以上を肉系（鶏肉/豚肉/牛肉/ひき肉）にする。残りは魚介や卵・豆腐も混ぜる。`;
+  if (mains === "魚多め") return `主菜のバランス指定: 魚多め → ${n}食中${more}食以上を「魚介（魚・えび・いか等）」にする。`;
+  if (mains === "肉と魚を半々") { const half = Math.floor(n / 2); return `主菜のバランス指定: 肉と魚を半々 → ${n}食中、肉系${half}食・魚介${n - half}食程度にする。`; }
+  return "";
+}
+
 async function planMealAssignments(units, opts, avoidText) {
   const allowed = effectiveMainRotation(avoidText).map((m) => m.label);
   const list = units.map((u, i) => `${i + 1}. ${u.date} ${u.slot}`).join("\n");
@@ -670,6 +686,7 @@ async function planMealAssignments(units, opts, avoidText) {
     list,
     "",
     `ユーザーの要望: ${opts.preferences ? `「${opts.preferences}」` : "特になし"}`,
+    opts.guided?.mains ? guidedMainsLine(opts.guided.mains, units.length) : "",
     avoidText ? `避けたい食材（この主材料は使わない）: ${avoidText}` : "",
     opts.fridgeUse && opts.fridgeUse.length
       ? [
@@ -807,6 +824,22 @@ async function generateDish(instruction, ctx) {
   );
   if (!toolBlock || !toolBlock.input?.dish) throw new Error("EMPTY_RESPONSE");
   return toolBlock.input.dish;
+}
+
+// こだわり（誘導式チップ）の値を許可リストで検証する
+const GUIDED_ALLOW = {
+  mains: ["肉多め", "魚多め", "肉と魚を半々"],
+  genre: ["和食中心", "洋食中心", "中華中心"],
+  cooking: ["揚げ物なし", "レンジ・時短中心"],
+};
+function sanitizeGuided(v) {
+  const out = {};
+  if (v && typeof v === "object") {
+    for (const k of Object.keys(GUIDED_ALLOW)) {
+      if (GUIDED_ALLOW[k].includes(v[k])) out[k] = v[k];
+    }
+  }
+  return out;
 }
 
 // 冷蔵庫の使い切り指定を安全な形に整える（最大20件・名前30字・量20字）
@@ -1647,6 +1680,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
       dishCount: dishCount || "main_side",
       staple: staple || "any",
       fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
+      guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/ジャンル/調理法）
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false, // false で「作り方は生成しない（献立だけ）」
@@ -1699,6 +1733,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       dishCount: dishCount || "main_side",
       staple: staple || "any",
       fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
+      guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/ジャンル/調理法）
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false,
@@ -1724,25 +1759,36 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       : { mains: units.map(() => ""), sides: units.map(() => ""), fridgeDishes: units.map(() => "") };
 
     const collected = new Map();
+    const batchMains = new Set(); // このバッチで確定した主菜名（並列でも同名に収束しないよう照合する）
+    const mainNameOf = (ds) => ((ds || []).find((d) => d.role === "主菜") || (ds || [])[0] || {}).name || "";
     await mapLimit(units, 4, async (u, i) => {
       let dishes = [];
       const fridgeDishHint = (assign.fridgeDishes || [])[i] || ""; // 使い切りの一皿（例: 鶏と豆腐の水炊き）
       const mainHint = fridgeDishHint ? "" : (assign.mains[i] || ""); // 料理指定がある食事は主材料指定より優先
       const sideHint = needSides ? assign.sides[i] || "" : ""; // 副菜のカテゴリ（同上）
+      const div = (attempt, avoid) => ({
+        recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, fridgeDishHint,
+        avoidDishes: avoid || [],
+        styleHint: opts.guided?.genre ? COOK_STYLE_ROTATION[(i + attempt) % COOK_STYLE_ROTATION.length] : STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length],
+        storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy,
+      });
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
         for (let attempt = 0; attempt < 3 && dishes.length === 0; attempt++) {
-          const r = await generate(
-            [{ date: u.date, slots: [u.slot] }],
-            opts,
-            { recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, fridgeDishHint, styleHint: STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length], storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy },
-            SINGLE_MODEL
-          );
+          const r = await generate([{ date: u.date, slots: [u.slot] }], opts, div(attempt), SINGLE_MODEL);
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
         }
+        // 主菜名がバッチ内で重複したら、その名前を避けて作り直す（最大2回。並列生成の盲点をコードで補正）
+        for (let retry = 0; retry < 2 && mainNameOf(dishes) && batchMains.has(mainNameOf(dishes)); retry++) {
+          const r2 = await generate([{ date: u.date, slots: [u.slot] }], opts, div(retry + 1, [...batchMains]), SINGLE_MODEL);
+          const nd = r2.days?.[0]?.meals?.[0]?.dishes || [];
+          if (nd.length) dishes = nd;
+        }
       } catch (e) {
-        dishes = [];
+        if (!dishes.length) dishes = [];
       }
+      const mn = mainNameOf(dishes);
+      if (mn) batchMains.add(mn);
       if (!opts.includeSteps) dishes.forEach((d) => delete d.steps);
       collected.set(`${u.date}|${u.slot}`, dishes);
       send(
