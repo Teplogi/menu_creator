@@ -374,6 +374,15 @@
     .grow .gchip { border: 1px solid var(--line); background: var(--cream); color: var(--ink, #444);
       border-radius: 999px; padding: 4px 12px; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
     .grow .gchip.on { background: var(--orange); border-color: var(--orange); color: #fff; }
+    /* 主材料タグ（肉/魚/卵・豆腐/野菜） */
+    .mtag { font-size: .64rem; font-weight: 800; border-radius: 5px; padding: 2px 6px; flex: none; letter-spacing: .02em; }
+    .mtag.t-肉 { color: #b5504a; background: #fbe9e7; }
+    .mtag.t-魚 { color: #2f6fa8; background: #e6f0fa; }
+    .mtag.t-卵豆腐 { color: #a37516; background: #fdf1d6; }
+    .mtag.t-野菜 { color: #2e8b63; background: #e4f5ec; }
+    .fish-btn { border: 1.5px solid #2f6fa8; background: #fff; color: #2f6fa8; font-size: .78rem; font-weight: 700;
+      border-radius: 999px; padding: 5px 12px; cursor: pointer; margin-top: 8px; }
+    .fish-btn:hover { background: #e6f0fa; }
     /* ---- Dish AI replace ---- */
     .dish-replace { margin-top: 12px; padding: 14px; border-radius: 12px; background: var(--orange-soft); }
     .dish-replace .ef { display: block; margin-bottom: 10px; }
@@ -1613,7 +1622,7 @@
           await apiOK(`/api/households/${household.id}/favorites/${existing.id}`, { method: "DELETE" });
         } else {
           const snap = {
-            role: dish.role, name: dish.name, description: dish.description || "",
+            role: dish.role, main_type: dish.main_type || "", name: dish.name, description: dish.description || "",
             cook_minutes: dish.cook_minutes || 0, ingredients: dish.ingredients || [],
             steps: dish.steps || [], store_bought: !!dish.store_bought,
           };
@@ -2409,7 +2418,7 @@
           `<div class="mealcard" data-plan="${esc(mm.planId)}" data-slot="${esc(mm.slot)}">
             <div class="mealcard-head"><span class="slot-chip">${esc(mm.slot)}</span>
               <span class="seehint">作り方<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></div>
-            <ul class="dishlist">${mm.dishes.length ? mm.dishes.map((d) => `<li><span class="rl">${esc(d.role || "料理")}</span><span class="nm">${esc(d.name || "（無題）")}</span></li>`).join("") : `<li class="empty-dish">タップして料理を追加</li>`}</ul>
+            <ul class="dishlist">${mm.dishes.length ? mm.dishes.map((d) => `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${esc(d.name || "（無題）")}</span></li>`).join("") : `<li class="empty-dish">タップして料理を追加</li>`}</ul>
           </div>`
         ).join("");
       el.querySelectorAll(".mealcard").forEach((c) =>
@@ -2682,7 +2691,7 @@
           else if (meal._error) rows = `<li class="empty-dish">生成に失敗しました（後で作り直せます）</li>`;
           else if (meal.dishes && meal.dishes.length)
             rows = meal.dishes.map((d) =>
-              `<li><span class="rl">${esc(d.role || "料理")}</span><span class="nm">${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
+              `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
             ).join("");
           else rows = `<li class="empty-dish">タップして料理を追加</li>`;
           card.innerHTML = `
@@ -2722,6 +2731,106 @@
     }
 
     const getMeal = (date, slot) => (currentPlan.days || []).find((d) => d.date === date)?.meals.find((m) => m.slot === slot);
+
+    // ---------- 主材料タグ / 魚の種類指定 ----------
+    const MAIN_TYPES = ["肉", "魚", "卵・豆腐", "野菜"];
+    const FISH_OPTIONS = ["鮭", "さば", "ぶり", "たら", "あじ", "さんま", "いわし", "かじき", "たい", "まぐろ"];
+    const FISH_WORDS = /鮭|サーモン|さば|鯖|ぶり|ブリ|たら|タラ|あじ|アジ|いわし|さんま|かれい|かじき|たい|鯛|まぐろ|マグロ|かつお|えび|エビ|いか|イカ|たこ|タコ|貝|ホタテ|あさり|しらす|ツナ|刺身|魚/;
+    // 主菜の主材料タグ。AIの main_type を優先し、無ければ料理名・材料から推定（旧プラン用）
+    function mainTypeOf(dish) {
+      if (!dish || dish.role !== "主菜") return "";
+      if (MAIN_TYPES.includes(dish.main_type)) return dish.main_type;
+      const txt = [dish.name || "", ...(dish.ingredients || []).map((i) => i.name || "")].join(" ");
+      if (FISH_WORDS.test(txt)) return "魚";
+      if (/肉|ハム|ベーコン|ウインナー|ソーセージ|チキン|ポーク|ビーフ|ひき/.test(txt)) return "肉";
+      if (/卵|たまご|豆腐|厚揚げ|油揚げ|納豆|大豆/.test(txt)) return "卵・豆腐";
+      return "野菜";
+    }
+    const mtagHtml = (t) => (t ? `<span class="mtag t-${esc(t.replace("・", ""))}">${esc(t)}</span>` : "");
+    // 「魚の切り身」など種類を特定していない材料の位置（-1 なら無し）
+    function genericFishIngIndex(dish) {
+      return (dish.ingredients || []).findIndex((i) => {
+        const n = i.name || "";
+        if (!/魚|切り身|刺身/.test(n)) return false;
+        return !FISH_OPTIONS.some((f) => n.includes(f)); // 具体的な魚名が入っていれば対象外
+      });
+    }
+    const canChooseFish = (dish) => !!dish.fish_choice || genericFishIngIndex(dish) >= 0;
+
+    function openFishPicker(idx) {
+      const meal = getMeal(currentRecipe.date, currentRecipe.slot);
+      const dish = meal?.dishes[idx];
+      if (!dish) return;
+      let ov = $("fishModal");
+      if (!ov) {
+        ov = document.createElement("div");
+        ov.id = "fishModal"; ov.className = "modal-overlay"; ov.style.display = "none";
+        ov.innerHTML = `<div class="modal-card">
+          <div class="mp-title">🐟 魚の種類を選ぶ<span class="mm-sub">買い物リストにも反映されます</span></div>
+          <div class="preset-chips" id="fishChips" style="margin-bottom:10px"></div>
+          <div class="urlbox"><input type="text" id="fishFree" placeholder="自由入力（例: めかじき）" maxlength="20">
+            <button class="copybtn" id="fishFreeGo">決定</button></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn-ghost" id="fishCancel">とじる</button></div>
+        </div>`;
+        document.body.appendChild(ov);
+        ov.addEventListener("click", (e) => { if (e.target === ov) ov.style.display = "none"; });
+        $("fishCancel").addEventListener("click", () => { ov.style.display = "none"; });
+      }
+      $("fishChips").innerHTML = FISH_OPTIONS.map((f) =>
+        `<span class="preset-chip" data-f="${esc(f)}" style="cursor:pointer"><span class="pt">${esc(f)}</span></span>`).join("");
+      $("fishChips").querySelectorAll(".preset-chip").forEach((el) =>
+        el.addEventListener("click", () => applyFishChoice(idx, el.dataset.f)));
+      $("fishFree").value = "";
+      $("fishFreeGo").onclick = () => { const v = $("fishFree").value.trim(); if (v) applyFishChoice(idx, v); };
+      ov.style.display = "flex";
+    }
+
+    async function applyFishChoice(idx, fish) {
+      const { date, slot } = currentRecipe;
+      const meal = getMeal(date, slot);
+      const dish = meal?.dishes[idx];
+      if (!dish || !fish) return;
+      const ings = dish.ingredients || [];
+      // 対象の材料を決める（初回=種類未特定のもの / 2回目以降=前回選んだ魚）
+      let i = dish.fish_choice ? ings.findIndex((x) => (x.name || "").includes(dish.fish_choice)) : genericFishIngIndex(dish);
+      if (i < 0) i = genericFishIngIndex(dish);
+      if (i < 0) return;
+      const oldName = ings[i].name;
+      if (!dish.fish_generic) dish.fish_generic = oldName; // 元の一般名を覚えておく
+      ings[i].name = fish;
+      ings[i].category = "肉・魚";
+      dish.fish_choice = fish;
+      const ov = $("fishModal"); if (ov) ov.style.display = "none";
+      await savePlan();
+      syncPlanCache();
+      renameShopItemForDate(date, oldName, fish); // 買い物リストにも反映（チェック状態は維持）
+      renderRecipe();
+    }
+    // currentPlan の変更を plansCache にも反映（買い物リストの署名計算がこれを見るため）
+    function syncPlanCache() {
+      const i = (plansCache || []).findIndex((p) => p.id === currentPlan.id);
+      if (i >= 0) plansCache[i] = currentPlan;
+    }
+    // 買い物リストの該当日の同名アイテムを改名（チェック状態は維持）＋署名を最新化して
+    // 「献立が更新されました」の誤表示を防ぐ
+    function renameShopItemForDate(date, oldName, newName) {
+      try {
+        const wk = weekStart(date);
+        const key = "shoplist:w:" + wk;
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            let changed = false;
+            for (const it of list) if (it.date === date && it.name === oldName) { it.name = newName; changed = true; }
+            if (changed) localStorage.setItem(key, JSON.stringify(list));
+          }
+        }
+        if (localStorage.getItem("shopSig:w:" + wk) != null) {
+          localStorage.setItem("shopSig:w:" + wk, weekPlanSig(wk));
+        }
+      } catch {}
+    }
 
     function renderRecipe() {
       const { date, slot } = currentRecipe;
@@ -2783,7 +2892,7 @@
           : `<span class="role-chip">${esc(dish.role || "料理")}</span>`;
         const isFav = !!findFavByName(dish.name);
         let inner = `
-          <div class="dish-top">${roleChip}<div class="dish-actions">
+          <div class="dish-top">${roleChip}${mtagHtml(mainTypeOf(dish))}<div class="dish-actions">
             <button class="dish-fav-btn ${isFav ? "on" : ""}" data-fav="${idx}" aria-label="${isFav ? "お気に入りから外す" : "お気に入りに保存"}" title="${isFav ? "お気に入りから外す" : "お気に入りに保存"}">${isFav ? "★" : "☆"}</button>
             <button class="dish-ai-btn" data-ai="${idx}" aria-label="AIで変更">✨ AIで変更</button>
             <button class="dish-edit-btn" data-idx="${idx}" aria-label="編集">${EDIT_SVG}</button>
@@ -2792,6 +2901,7 @@
           ${dish.description ? `<p class="desc">${esc(dish.description)}</p>` : ""}
           ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
           ${dish._prev ? `<button class="undo-btn" data-undo="${idx}">↩ 「${esc(dish._prev.name || "前の料理")}」に戻す</button>` : ""}
+          ${!dish.store_bought && canChooseFish(dish) ? `<button class="fish-btn" data-fish="${idx}">🐟 ${dish.fish_choice ? esc(dish.fish_choice) + "（変更する）" : "魚の種類を選ぶ"}</button>` : ""}
           <div class="subsec"><div class="sec-head"><span class="label">${dish.store_bought ? "買うもの" : "材料"}</span><span class="lead"></span></div>
             <ul class="ings">${(dish.ingredients || []).map((i) => `<li>${esc(i.name)}${i.amount ? ` ${esc(i.amount)}` : ""}</li>`).join("")}</ul></div>`;
         if (!dish.store_bought) {
@@ -2848,6 +2958,8 @@
         b.addEventListener("click", () => toggleFavDish(Number(b.dataset.fav))));
       body.querySelectorAll(".undo-btn[data-undo]").forEach((b) =>
         b.addEventListener("click", () => undoDishReplace(Number(b.dataset.undo))));
+      body.querySelectorAll(".fish-btn[data-fish]").forEach((b) =>
+        b.addEventListener("click", () => openFishPicker(Number(b.dataset.fish))));
     }
 
     // 差し替え（AI変更/お気に入り）を1つ前に戻す。もう一度押すと入れ替え直す（やり直し）

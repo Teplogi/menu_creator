@@ -377,6 +377,10 @@ const DISH = {
   type: "object",
   properties: {
     role: { type: "string", description: "主菜 / 副菜 / 汁物 のいずれか" },
+    main_type: {
+      type: "string",
+      description: "主菜のときだけ入れる、その料理の主材料の種類。必ず次のいずれか: 肉 / 魚 / 卵・豆腐 / 野菜。副菜・汁物では省略してよい。",
+    },
     name: { type: "string", description: "料理名" },
     description: { type: "string", description: "ひとこと説明" },
     cook_minutes: { type: "integer", description: "調理時間の目安（分）" },
@@ -520,8 +524,16 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     "- 肉・魚は「200g」「2切れ(160g)」のように重量を基本にする。調味料は 大さじ・小さじ・少々。",
     "- 同じ食材はどの料理でも同じ単位で書く（玉ねぎを「個」と「g」で混在させない）。",
     "",
+    "【魚・サラダの書き方（入手しやすさ優先）】",
+    "- 魚の種類を変えても成立する料理（塩焼き・照り焼き・ムニエル・フライ・煮付け・南蛮漬け・刺身など）は、料理名にも材料にも魚の種類を書かない。近所のスーパーに特定の魚が無いことがあるため、ユーザーが後で種類を選べるようにする。",
+    "  例) ○「焼き魚」 ×「鮭の塩焼き」／ ○「魚の照り焼き」 ×「ブリの照り焼き」／ ○「白身魚のムニエル」 ×「たらのムニエル」／ ○「お刺身」 ×「まぐろの刺身」。",
+    "  材料も同様に「魚の切り身 2切れ(160g)」「刺身用の魚 1パック」と書く（×「鮭の切り身」「ブリの切り身」）。",
+    "- 例外は魚種と料理名が一体化した次の定番のみ: さばの味噌煮 / ぶり大根 / 鮭のちゃんちゃん焼き / あじフライ。これらはその魚種のままでよい。",
+    "- サラダは手に入りやすい定番野菜（レタス・キャベツ・トマト・きゅうり・玉ねぎ・にんじん等）で作る。珍しい野菜や特殊な葉物は指定しない。",
+    "",
     "その他のルール:",
     "- 各 dish の role は「主菜」「副菜」「汁物」のいずれかにする。",
+    "- 主菜には main_type（肉 / 魚 / 卵・豆腐 / 野菜 のいずれか）を必ず入れる。その料理の主材料に当たるものを選ぶ。",
     "- 材料は name（食材名）・amount（分量）・category（分類）に分ける。category は指定の6分類から正しく選び、常備調味料は必ず「調味料」にする。",
     includeSteps
       ? "- 手順は簡潔な箇条書きにする。"
@@ -641,7 +653,7 @@ async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
     (b) => b.type === "tool_use" && b.name === "save_meal_plan"
   );
   if (!toolBlock) throw new Error("EMPTY_RESPONSE");
-  return toolBlock.input; // { days: [...] }
+  return normalizePlanMainTypes(toolBlock.input); // { days: [...] }（main_type を4種に正規化）
 }
 
 // 割り当て表を先に作る（プランナー）。各食事に「主菜の主材料」と「副菜のカテゴリ」を割り当て、
@@ -740,6 +752,27 @@ async function planMealAssignments(units, opts, avoidText) {
   return { mains: fallbackMainHints(units, avoidText), sides: fallbackSideHints(units), fridgeDishes: units.map(() => "") }; // 失敗時は固定ローテーション
 }
 
+// main_type の表記ゆれ（「鶏肉」「魚介」等）を 肉/魚/卵・豆腐/野菜 の4種に正規化する。
+// モデルは enum を強制されないため、保存前にサーバー側で必ず整える。
+const MAIN_TYPE_SET = ["肉", "魚", "卵・豆腐", "野菜"];
+function normalizeDishMainType(dish) {
+  if (!dish) return dish;
+  if (dish.role !== "主菜") { delete dish.main_type; return dish; }
+  if (MAIN_TYPE_SET.includes(dish.main_type)) return dish;
+  const txt = [dish.main_type || "", dish.name || "", ...(dish.ingredients || []).map((i) => i.name || "")].join(" ");
+  if (/魚|鮭|さば|鯖|ぶり|ブリ|たら|タラ|あじ|アジ|いわし|さんま|かれい|かじき|まぐろ|かつお|えび|海老|エビ|いか|イカ|たこ|貝|ホタテ|あさり|しらす|ツナ|刺身/.test(txt)) dish.main_type = "魚";
+  else if (/肉|ハム|ベーコン|ウインナー|ソーセージ|チキン|ポーク|ビーフ|ひき/.test(txt)) dish.main_type = "肉";
+  else if (/卵|たまご|豆腐|厚揚げ|油揚げ|納豆|大豆/.test(txt)) dish.main_type = "卵・豆腐";
+  else dish.main_type = "野菜";
+  return dish;
+}
+function normalizePlanMainTypes(plan) {
+  for (const d of plan?.days || [])
+    for (const m of d.meals || [])
+      for (const dish of m.dishes || []) normalizeDishMainType(dish);
+  return plan;
+}
+
 // 「作り方は生成しない」モード用。生成後にサーバー側で作り方(steps)を確実に削除する。
 // （モデルはプロンプト無視で steps を返すことがあるため、ここで削るのが唯一確実な方法）
 function stripSteps(plan) {
@@ -794,7 +827,8 @@ function buildDishPrompt(instruction, ctx) {
     "     例) 「豚とナスの味噌炒め」に「グラタンにして」→ ○ 定番のマカロニグラタンやえびグラタン ／ × 豚とナスのグラタン（元の食材の使い回し）。",
     "     ※指示の中で食材の指定があるとき（例:「ナスを使ってグラタンに」）だけ、その食材に従う。",
     "- 一般家庭でよく作る定番の料理にする（奇をてらわない）。料理名は短くシンプルな一般名にし、カッコ書きの外国語名や『〜風』『〜ソース』等の装飾は付けない。",
-    "- role は「主菜」「副菜」「汁物」のいずれか。",
+    "- role は「主菜」「副菜」「汁物」のいずれか。主菜なら main_type（肉 / 魚 / 卵・豆腐 / 野菜）も入れる。",
+    "- 魚は種類を変えても成立する料理（塩焼き・ムニエル・フライ・煮付け・刺身等）なら魚種を特定しない一般名にし、材料も「魚の切り身」等にする（さばの味噌煮・ぶり大根のように魚種と一体の定番はそのままでよい）。サラダは定番野菜で作る。",
     "- 材料は name（食材名）・amount（分量）・category（分類）に分ける。category は 野菜・果物 / 肉・魚 / 卵・乳・豆腐 / 主食・乾物 / 調味料 / その他 から選び、常備調味料と水・お湯は必ず「調味料」にする。",
     "- 分量表記: 野菜・果物・豆腐など数えられる食材は「1/2個(100g)」のように個数(目安の重量g)で書く（単位は個・本・枚・袋・束・株・丁・かけ等、数は整数かきれいな分数。gだけの表記は野菜に使わない）。肉・魚は「200g」「2切れ(160g)」など重量基本、調味料は大さじ・小さじ・少々。",
     "- 手順は簡潔な箇条書き。すべて日本語。",
@@ -823,7 +857,7 @@ async function generateDish(instruction, ctx) {
     (b) => b.type === "tool_use" && b.name === "save_dish"
   );
   if (!toolBlock || !toolBlock.input?.dish) throw new Error("EMPTY_RESPONSE");
-  return toolBlock.input.dish;
+  return normalizeDishMainType(toolBlock.input.dish);
 }
 
 // こだわり（誘導式チップ）の値を許可リストで検証する
