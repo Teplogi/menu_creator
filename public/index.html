@@ -588,6 +588,11 @@
     .shopmeta .uses { font-size: .73rem; color: var(--muted); line-height: 1.4; }
     .shop-head .rangelab { margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--orange-dark);
       background: var(--orange-soft); border-radius: 999px; padding: 2px 10px; }
+    .anchor-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+      background: var(--orange-soft); color: var(--orange-dark); border-radius: 12px;
+      padding: 8px 12px; margin: 0 4px 12px; font-size: .82rem; font-weight: 700; }
+    .anchor-note button { border: 1px solid var(--orange); background: var(--card); color: var(--orange-dark);
+      border-radius: 999px; padding: 3px 12px; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
     .rangehint { text-align: center; color: var(--muted); font-size: .84rem; margin: 18px 4px 0; }
     .rangehint b { color: var(--orange-dark); }
     .rangehint button { display: block; margin: 6px auto 0; border: 1px solid var(--line); background: var(--card);
@@ -3271,7 +3276,10 @@
     }
 
     // 献立が変わったか（署名比較）。作り直し済みなら false
-    const isShopStale = () => { const s = localStorage.getItem("shopSig:w:" + (shopWeek || "")); return s != null && s !== weekPlanSig(shopWeek); };
+    const isShopStale = () => touchedWeeks().some((wk) => {
+      const s = localStorage.getItem("shopSig:w:" + wk);
+      return s != null && s !== weekPlanSig(wk);
+    });
 
     async function regenerateCurrent() {
       const { date, slot } = currentRecipe;
@@ -3436,9 +3444,11 @@
       return items;
     }
 
-    const memoKey = () => "memo:w:" + (shopWeek || "");
-    const listKey = () => "shoplist:w:" + (shopWeek || "");
-    const sigKey = () => "shopSig:w:" + (shopWeek || "");
+    // 買い物リストは内部的には週ごとに保存するが、表示は「今日から◯日分」で週をまたいで扱う。
+    const listKeyFor = (wk) => "shoplist:w:" + wk;
+    const sigKeyFor = (wk) => "shopSig:w:" + wk;
+    // メモは週をまたいで1つ（週が変わると消えたように見えるのを防ぐ）
+    const memoKey = () => "memo:hh:" + (household ? household.id : "");
     const readJSON = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
     const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "id" + Date.now() + Math.round(Math.random() * 1e6));
     let editingId = null;
@@ -3456,26 +3466,12 @@
         return fn.length >= 2 && (n.includes(fn) || fn.includes(n)); // ひき肉⇔豚ひき肉 等を吸収
       });
     }
-    let shopWeek = null; // 買い物リストの表示中の週（日曜の YYYY-MM-DD）
+    let shopWeek = null;   // 保存先の基準になる週（日曜の YYYY-MM-DD）＝ weekStart(shopAnchor)
+    let shopAnchor = null; // 買う範囲の起点（既定=今日。先の献立から開いたときはその開始日）
 
     // 週（日曜〜土曜）ユーティリティ
     function weekStart(ds) { const d = parseDate(ds); d.setDate(d.getDate() - d.getDay()); return fmt(d); }
     function weekDates(sun) { const out = []; const d = parseDate(sun); for (let i = 0; i < 7; i++) { out.push(fmt(d)); d.setDate(d.getDate() + 1); } return out; }
-    function weekLabel(sun) { const ds = weekDates(sun); return `${mdLabel(ds[0])}(日)〜${mdLabel(ds[6])}(土)`; }
-    function allMealDates() {
-      const s = new Set();
-      for (const p of (plansCache || [])) for (const d of (p.days || [])) if ((d.meals || []).length) s.add(d.date);
-      return [...s];
-    }
-    function defaultShopWeek() {
-      const dates = allMealDates();
-      const today = fmt(new Date());
-      if (!dates.length) return weekStart(today);
-      const t = parseDate(today).getTime();
-      let best = dates[0], bd = Infinity;
-      for (const ds of dates) { const diff = Math.abs(parseDate(ds).getTime() - t); if (diff < bd) { bd = diff; best = ds; } }
-      return weekStart(best);
-    }
     // その週に含まれる全プランの食事を日付ごとにまとめる
     function weekMealDays(sun) {
       const set = new Set(weekDates(sun));
@@ -3495,8 +3491,8 @@
     }
 
     // その週（全プラン）の材料からリストを生成（日付ごと。調味料は週で1つにまとめる）
-    function materializeList() {
-      const days = weekMealDays(shopWeek);
+    function materializeList(wk) {
+      const days = weekMealDays(wk);
       const items = [];
       const seasoningExtra = [];
       for (const day of days) {
@@ -3511,15 +3507,36 @@
       for (const it of aggregateIngredients({ days: [] }, seasoningExtra)) {
         items.push({ id: newId(), name: it.name, amount: it.amountText, checked: false, category: it.category || "調味料", date: "__season__" });
       }
-      localStorage.setItem(sigKey(), weekPlanSig(shopWeek)); // 献立の署名を保存
+      localStorage.setItem(sigKeyFor(wk), weekPlanSig(wk)); // 献立の署名を保存
       return items;
     }
-    function getList() {
-      let l = readJSON(listKey(), null);
-      if (!Array.isArray(l)) { l = materializeList(); saveList(l); }
-      return l;
+    // 表示範囲が触れている週（1〜2週）をまとめて1つのリストとして扱う。
+    // 各アイテムに _wk を付けておき、保存時にその週へ書き戻す。
+    function touchedWeeks() {
+      const wks = new Set(shopRangeDates().map((d) => weekStart(d)));
+      wks.add(shopWeek); // 日付なしアイテム（自分で足したもの・調味料）の置き場
+      return [...wks].sort();
     }
-    function saveList(l) { localStorage.setItem(listKey(), JSON.stringify(l)); }
+    function getList() {
+      const out = [];
+      for (const wk of touchedWeeks()) {
+        let l = readJSON(listKeyFor(wk), null);
+        if (!Array.isArray(l)) { l = materializeList(wk); localStorage.setItem(listKeyFor(wk), JSON.stringify(l)); }
+        for (const it of l) out.push({ ...it, _wk: wk });
+      }
+      return out;
+    }
+    function saveList(l) {
+      const byWeek = new Map();
+      for (const wk of touchedWeeks()) byWeek.set(wk, []); // 削除で空になった週も書き戻せるように
+      for (const it of l) {
+        const wk = it._wk || (it.date && it.date !== "__season__" ? weekStart(it.date) : shopWeek);
+        if (!byWeek.has(wk)) byWeek.set(wk, []);
+        const { _wk, ...rest } = it;
+        byWeek.get(wk).push(rest);
+      }
+      for (const [wk, items] of byWeek) localStorage.setItem(listKeyFor(wk), JSON.stringify(items));
+    }
 
     function addItem(name, amount, date) {
       name = (name || "").trim();
@@ -3570,19 +3587,20 @@
     function uncheckAll() { const l = getList(); l.forEach((it) => (it.checked = false)); saveList(l); renderShopping(); }
     function resyncList() {
       if (!confirm("編集内容を破棄して、献立の材料からリストを作り直しますか？")) return;
-      saveList(materializeList());
+      for (const wk of touchedWeeks()) localStorage.setItem(listKeyFor(wk), JSON.stringify(materializeList(wk)));
       editingId = null;
       renderShopping();
     }
 
     // 週（日曜〜土曜）単位で買い物リストを開く
-    async function openShoppingWeek(sun, fromTab) {
-      shopWeek = sun;
+    async function openShoppingWeek(anchor, fromTab) {
+      shopAnchor = anchor;
+      shopWeek = weekStart(anchor); // 保存先の基準週
       editingId = null;
       backHandler = fromTab ? goHome : backToOverview;
       // 保存済みリストがあれば即描画。無いときは献立の読み込みを待つ
       // （待たずに作ると、まだ読み込めていない献立から空のリストを作って保存してしまう）
-      if (readJSON(listKey(), null)) renderShopping();
+      if (touchedWeeks().every((wk) => readJSON(listKeyFor(wk), null))) renderShopping();
       else $("shopBody").innerHTML = `<p class="empty">読み込み中…</p>`;
       showView("shopping", "買い物リスト", { back: true, tab: fromTab ? "shop" : null });
       // 最新のプラン・常備品を取得して再描画（週の集約・常備品振り分けに使用）
@@ -3596,13 +3614,18 @@
         renderShopping();
       } catch {}
     }
-    // プラン詳細の「買い物リスト」→ そのプランの週を開く
-    function openShopping() { openShoppingWeek(weekStart(currentPlan.startDate), false); }
+    // プラン詳細の「買い物リスト」→ その献立の分が見える起点で開く
+    // （先の献立ならその開始日から。今日を含む献立なら今日から）
+    function openShopping() {
+      const today = fmt(new Date());
+      const s = currentPlan?.startDate || today;
+      openShoppingWeek(s > today ? s : today, false);
+    }
     // 下タブ「買い物」→ 今日に近い週を開く
     async function openShoppingTab() {
       if (!household) return showSetup();
       try { plansCache = await apiOK("/api/plans?householdId=" + encodeURIComponent(household.id)); } catch { plansCache = plansCache || []; }
-      await openShoppingWeek(defaultShopWeek(), true);
+      await openShoppingWeek(fmt(new Date()), true); // 下タブからは常に「今日」起点
     }
 
     const getViewMode = () => localStorage.getItem("shopViewMode") || "aggregate";
@@ -3642,18 +3665,20 @@
       renderShopping();
     }
 
-    // 買う範囲（today=今日 / d3=3日分 / week=今週）。既定は3日分。
-    const getShopRange = () => localStorage.getItem("shopRange") || "d3";
+    // 買う範囲。週の区切りとは無関係に「起点から◯日分」で数える
+    // （金・土に3日分/7日分を見たいとき、翌週に移動しなくても続きが見えるようにするため）。
+    const RANGE_DAYS = { today: 1, d3: 3, d7: 7 };
+    const getShopRange = () => {
+      const v = localStorage.getItem("shopRange");
+      return RANGE_DAYS[v] ? v : "d3"; // 旧値("week"等)は既定に寄せる
+    };
     const setShopRange = (v) => localStorage.setItem("shopRange", v);
-    // 範囲の日付。起点は「今日」。表示中の週に今日が無ければ（先の週など）その週の初日。
     function shopRangeDates() {
-      const all = weekDates(shopWeek);
-      const today = fmt(new Date());
-      const si = Math.max(0, all.indexOf(today));
-      const r = getShopRange();
-      if (r === "today") return all.slice(si, si + 1);
-      if (r === "d3") return all.slice(si, si + 3);
-      return all;
+      const start = shopAnchor || fmt(new Date());
+      const n = RANGE_DAYS[getShopRange()] || 3;
+      const out = [];
+      for (let i = 0; i < n; i++) out.push(addDays(start, i));
+      return out;
     }
 
     function renderShopping(focusAdd) {
@@ -3661,11 +3686,12 @@
       loadPantryBuySet();
 
       let html = "";
-      // 週の切替（日曜〜土曜）
-      html += `<div class="shop-week">
-        <button class="wk-nav" id="wkPrev" aria-label="前の週">‹</button>
-        <span class="wk-label">${esc(weekLabel(shopWeek))}</span>
-        <button class="wk-nav" id="wkNext" aria-label="次の週">›</button></div>`;
+      // 起点が今日でないとき（先の献立から開いたとき）だけ知らせる
+      const todayStr = fmt(new Date());
+      if (shopAnchor && shopAnchor !== todayStr) {
+        html += `<div class="anchor-note">${esc(mdLabel(shopAnchor))}(${esc(dow(shopAnchor))}) からの分を表示中
+          <button id="anchorToday">今日から見る</button></div>`;
+      }
 
       // メモ（最上部）
       html += `<div class="memo-top"><div class="sec-head"><span class="label">メモ（大事なこと・共有）</span><span class="lead"></span></div>
@@ -3683,7 +3709,7 @@
       html += `<div class="segmented">
         <button class="seg ${range === "today" ? "on" : ""}" data-range="today">今日</button>
         <button class="seg ${range === "d3" ? "on" : ""}" data-range="d3">3日分</button>
-        <button class="seg ${range === "week" ? "on" : ""}" data-range="week">今週</button></div>`;
+        <button class="seg ${range === "d7" ? "on" : ""}" data-range="d7">7日分</button></div>`;
 
       // 範囲で仕分け（日付なし＝自分で足したもの、調味料枠は常に表示）
       const inRange = (it) => !it.date || it.date === "__season__" || rangeSet.has(it.date);
@@ -3773,8 +3799,8 @@
           : `<p class="empty">この期間に買うものはありません。</p>`;
       }
       // 範囲外に残っている分の件数（隠れているだけと分かるように）
-      if (outCount && range !== "week") {
-        html += `<p class="rangehint">このあとの日に、あと <b>${outCount}品</b> あります<button id="showWeek">今週ぜんぶ見る</button></p>`;
+      if (outCount && range !== "d7") {
+        html += `<p class="rangehint">このあとの日に、あと <b>${outCount}品</b> あります<button id="showWeek">7日分をまとめて見る</button></p>`;
       }
       // チェック済みは折りたたみで下部にまとめる
       if (bought.length) {
@@ -3789,7 +3815,7 @@
           <button class="addbtn" id="addBtn" aria-label="追加">＋</button>
         </div>
         <div class="additem-date"><span>いつ買う？</span>
-          <select id="addDate"><option value="">指定なし</option>${weekDates(shopWeek).map((d) => `<option value="${d}">${esc(mdLabel(d))}(${esc(dow(d))})</option>`).join("")}</select>
+          <select id="addDate"><option value="">指定なし</option>${Array.from({ length: 14 }, (_, i) => addDays(shopAnchor || fmt(new Date()), i)).map((d) => `<option value="${d}">${esc(mdLabel(d))}(${esc(dow(d))})</option>`).join("")}</select>
         </div></div>`;
 
       html += `<button class="btn-ghost" id="resyncBtn" style="margin-top:18px">献立の材料からリストを作り直す</button>`;
@@ -3805,7 +3831,9 @@
       body.querySelectorAll(".seg[data-range]").forEach((b) =>
         b.addEventListener("click", () => { setShopRange(b.dataset.range); editingId = null; renderShopping(); }));
       const showWeek = $("showWeek");
-      if (showWeek) showWeek.addEventListener("click", () => { setShopRange("week"); editingId = null; renderShopping(); });
+      if (showWeek) showWeek.addEventListener("click", () => { setShopRange("d7"); editingId = null; renderShopping(); });
+      const anchorToday = $("anchorToday");
+      if (anchorToday) anchorToday.addEventListener("click", () => { openShoppingWeek(fmt(new Date()), false); });
       body.querySelectorAll(".shopitem input[type=checkbox]").forEach((cb) =>
         cb.addEventListener("change", () => {
           if (cb.dataset.name != null) setCheckedByName(cb.dataset.name, cb.checked);
@@ -3852,9 +3880,6 @@
       $("addBtn").addEventListener("click", doAdd);
       [$("addName"), $("addAmount")].forEach((el) =>
         el.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } }));
-      const wp = $("wkPrev"), wn = $("wkNext");
-      if (wp) wp.addEventListener("click", () => { shopWeek = addDays(shopWeek, -7); editingId = null; renderShopping(); });
-      if (wn) wn.addEventListener("click", () => { shopWeek = addDays(shopWeek, 7); editingId = null; renderShopping(); });
       const memo = $("shopMemo");
       memo.value = localStorage.getItem(memoKey()) || "";
       memo.addEventListener("input", () => localStorage.setItem(memoKey(), memo.value));
