@@ -575,6 +575,15 @@
     .shopitem:has(input:checked) .cb { background: var(--orange); border-color: var(--orange); }
     .shopitem:has(input:checked) .cb svg { opacity: 1; }
     .shopitem .txt { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    /* 2行目: 何に使うか＋使う日 */
+    .shopmeta { flex-basis: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 1px; }
+    .shopmeta .uses { font-size: .73rem; color: var(--muted); line-height: 1.4; }
+    .shop-head .rangelab { margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--orange-dark);
+      background: var(--orange-soft); border-radius: 999px; padding: 2px 10px; }
+    .rangehint { text-align: center; color: var(--muted); font-size: .84rem; margin: 18px 4px 0; }
+    .rangehint b { color: var(--orange-dark); }
+    .rangehint button { display: block; margin: 6px auto 0; border: 1px solid var(--line); background: var(--card);
+      color: var(--orange-dark); border-radius: 999px; padding: 5px 14px; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
     .shopitem .nm { font-weight: 700; font-size: 1rem; }
     .shopitem .am { color: var(--muted); font-size: .85rem; }
     .shopitem.done .nm, .shopitem.done .am { text-decoration: line-through; color: var(--muted); }
@@ -3348,31 +3357,72 @@
       return SEASONING_SET.has((it.name || "").replace(/\s/g, ""));
     }
 
+    // ---------- 分量の合算 ----------
+    // 「1/2個(100g)」「200g」「大さじ2」等を解析し、同じ単位どうしを足し算する。
+    // 生成時に表記を統一しているので合算できる（解析できないものは元の文字列を並べる）。
+    const AMT_UNITS = "個|本|枚|袋|束|株|丁|かけ|片|パック|切れ|尾|房|玉|缶|杯";
+    const AMT_NUM = "\\d+(?:\\.\\d+)?と\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d+(?:\\.\\d+)?";
+    function parseNumJa(s) {
+      const t = String(s == null ? "" : s).trim();
+      let m = t.match(/^(\d+(?:\.\d+)?)と(\d+)\s*\/\s*(\d+)$/); // 「1と1/2」
+      if (m) return parseFloat(m[1]) + Number(m[2]) / Number(m[3]);
+      m = t.match(/^(\d+)\s*\/\s*(\d+)$/);                      // 「1/2」
+      if (m) return Number(m[1]) / Number(m[2]);
+      m = t.match(/^(\d+(?:\.\d+)?)$/);
+      return m ? parseFloat(m[1]) : NaN;
+    }
+    function parseAmount(s) {
+      const t = (s || "").trim();
+      if (!t) return null;
+      let m = t.match(new RegExp(`^(大さじ|小さじ|カップ)\\s*(${AMT_NUM})$`)); // 単位が前
+      if (m) { const n = parseNumJa(m[2]); return isNaN(n) ? null : { unit: m[1], count: n, grams: 0, pre: true }; }
+      m = t.match(new RegExp(`^(${AMT_NUM})\\s*(${AMT_UNITS})\\s*(?:[（(]\\s*(\\d+(?:\\.\\d+)?)\\s*g\\s*[）)])?$`));
+      if (m) { const n = parseNumJa(m[1]); return isNaN(n) ? null : { unit: m[2], count: n, grams: m[3] ? parseFloat(m[3]) : 0 }; }
+      m = t.match(new RegExp(`^(${AMT_NUM})\\s*(g|ml|cc|kg|L|l)$`));
+      if (m) { const n = parseNumJa(m[1]); return isNaN(n) ? null : { unit: m[2].toLowerCase(), count: n, grams: 0 }; }
+      return null;
+    }
+    function formatAmountPart(p) {
+      if (p.pre) return `${p.unit}${formatNum(p.count)}`;
+      if (/^(g|ml|cc|kg|l)$/.test(p.unit)) return `${Math.round(p.count * 10) / 10}${p.unit}`;
+      return `${formatNum(p.count)}${p.unit}${p.grams ? `(${Math.round(p.grams)}g)` : ""}`;
+    }
+    // 分量の配列を1つの表記に合算する（例: 1/2個(100g) + 1/4個(50g) → 3/4個(150g)）
+    function sumAmounts(list) {
+      const groups = new Map();
+      const rawCnt = new Map();
+      for (const s of list || []) {
+        const p = parseAmount(s);
+        if (!p) { const t = (s || "").trim(); if (t) rawCnt.set(t, (rawCnt.get(t) || 0) + 1); continue; }
+        const g = groups.get(p.unit);
+        if (g) { g.count += p.count; g.grams += p.grams; } else groups.set(p.unit, { ...p });
+      }
+      const parts = [...groups.values()].map(formatAmountPart);
+      for (const [r, c] of rawCnt) parts.push(c > 1 ? `${r} ×${c}` : r);
+      return parts.join(" ＋ ");
+    }
+
     function aggregateIngredients(plan, extra = []) {
-      const map = new Map(); // name -> { amounts: Map(amount->count), category }
-      const add = (name0, amount0, category0) => {
+      const map = new Map(); // name -> { amounts: [], category, dishes: Set }
+      const add = (name0, amount0, category0, dishName) => {
         const name = (name0 || "").trim();
         if (!name) return;
         const amount = (amount0 || "").trim();
         const category = (category0 || "").trim();
-        if (!map.has(name)) map.set(name, { amounts: new Map(), category });
+        if (!map.has(name)) map.set(name, { amounts: [], category, dishes: new Set() });
         const rec = map.get(name);
         if (!rec.category && category) rec.category = category;
-        rec.amounts.set(amount, (rec.amounts.get(amount) || 0) + 1);
+        if (amount) rec.amounts.push(amount);
+        if (dishName) rec.dishes.add(dishName);
       };
       for (const day of plan.days || [])
         for (const meal of day.meals || [])
           for (const dish of meal.dishes || [])
-            for (const ing of dish.ingredients || []) add(ing.name, ing.amount, ing.category);
-      for (const e of extra) add(e.name, e.amount, e.category);
+            for (const ing of dish.ingredients || []) add(ing.name, ing.amount, ing.category, dish.name);
+      for (const e of extra) add(e.name, e.amount, e.category, (e.dishes || [])[0]);
       const items = [];
       for (const [name, rec] of map) {
-        const parts = [];
-        for (const [amount, count] of rec.amounts) {
-          if (!amount) continue;
-          parts.push(count > 1 ? `${amount} ×${count}` : amount);
-        }
-        items.push({ name, amountText: parts.join("、"), category: rec.category || "" });
+        items.push({ name, amountText: sumAmounts(rec.amounts), category: rec.category || "", dishes: [...rec.dishes] });
       }
       return items;
     }
@@ -3443,9 +3493,9 @@
       for (const day of days) {
         for (const it of aggregateIngredients({ days: [day] })) {
           if (isSeasoning(it)) {
-            seasoningExtra.push({ name: it.name, amount: it.amountText, category: it.category });
+            seasoningExtra.push({ name: it.name, amount: it.amountText, category: it.category, dishes: it.dishes });
           } else {
-            items.push({ id: newId(), name: it.name, amount: it.amountText, checked: false, category: it.category, date: day.date });
+            items.push({ id: newId(), name: it.name, amount: it.amountText, checked: false, category: it.category, date: day.date, dishes: it.dishes });
           }
         }
       }
@@ -3521,7 +3571,10 @@
       shopWeek = sun;
       editingId = null;
       backHandler = fromTab ? goHome : backToOverview;
-      renderShopping();
+      // 保存済みリストがあれば即描画。無いときは献立の読み込みを待つ
+      // （待たずに作ると、まだ読み込めていない献立から空のリストを作って保存してしまう）
+      if (readJSON(listKey(), null)) renderShopping();
+      else $("shopBody").innerHTML = `<p class="empty">読み込み中…</p>`;
       showView("shopping", "買い物リスト", { back: true, tab: fromTab ? "shop" : null });
       // 最新のプラン・常備品を取得して再描画（週の集約・常備品振り分けに使用）
       try {
@@ -3550,20 +3603,20 @@
     function buildAgg(list) {
       const map = new Map();
       for (const it of list) {
-        if (!map.has(it.name)) map.set(it.name, { name: it.name, parts: [], dates: new Set(), category: it.category || "", items: [] });
+        if (!map.has(it.name)) map.set(it.name, { name: it.name, parts: [], dates: new Set(), dishes: new Set(), category: it.category || "", items: [] });
         const g = map.get(it.name);
         g.items.push(it);
         if (it.amount) g.parts.push(it.amount);
         if (it.date && it.date !== "__season__") g.dates.add(it.date);
+        for (const d of it.dishes || []) g.dishes.add(d);
         if (!g.category && it.category) g.category = it.category;
       }
       const rows = [];
       for (const g of map.values()) {
-        const cnt = new Map();
-        for (const a of g.parts) cnt.set(a, (cnt.get(a) || 0) + 1);
-        const amount = [...cnt.entries()].map(([a, c]) => (c > 1 ? `${a} ×${c}` : a)).join("、");
+        const amount = sumAmounts(g.parts); // 同じ食材の分量を合計（1/2個+1/4個 → 3/4個）
         rows.push({
-          name: g.name, amount, dates: [...g.dates].sort(), category: g.category,
+          name: g.name, amount, dates: [...g.dates].sort(), dishes: [...g.dishes], category: g.category,
+          ids: g.items.map((x) => x.id),
           checked: g.items.length > 0 && g.items.every((x) => x.checked),
           isSeason: g.items.some((x) => x.date === "__season__") || isSeasoning({ name: g.name, category: g.category }),
           moved: g.items.some((x) => x.movedFrom),
@@ -3580,9 +3633,22 @@
       renderShopping();
     }
 
+    // 買う範囲（today=今日 / d3=3日分 / week=今週）。既定は3日分。
+    const getShopRange = () => localStorage.getItem("shopRange") || "d3";
+    const setShopRange = (v) => localStorage.setItem("shopRange", v);
+    // 範囲の日付。起点は「今日」。表示中の週に今日が無ければ（先の週など）その週の初日。
+    function shopRangeDates() {
+      const all = weekDates(shopWeek);
+      const today = fmt(new Date());
+      const si = Math.max(0, all.indexOf(today));
+      const r = getShopRange();
+      if (r === "today") return all.slice(si, si + 1);
+      if (r === "d3") return all.slice(si, si + 3);
+      return all;
+    }
+
     function renderShopping(focusAdd) {
       const list = getList();
-      const mode = getViewMode();
       loadPantryBuySet();
 
       let html = "";
@@ -3601,163 +3667,110 @@
         html += `<div class="stale-banner">献立が更新されました<button id="applyStale">買い物リストに反映</button></div>`;
       }
 
-      // 表示切替
+      // 「いつまでの分を買う？」— 今日買って帰るものだけに絞れるようにする
+      const range = getShopRange();
+      const rangeDates = shopRangeDates();
+      const rangeSet = new Set(rangeDates);
       html += `<div class="segmented">
-        <button class="seg ${mode === "aggregate" ? "on" : ""}" data-mode="aggregate">まとめて</button>
-        <button class="seg ${mode === "date" ? "on" : ""}" data-mode="date">日付ごと</button></div>`;
+        <button class="seg ${range === "today" ? "on" : ""}" data-range="today">今日</button>
+        <button class="seg ${range === "d3" ? "on" : ""}" data-range="d3">3日分</button>
+        <button class="seg ${range === "week" ? "on" : ""}" data-range="week">今週</button></div>`;
+
+      // 範囲で仕分け（日付なし＝自分で足したもの、調味料枠は常に表示）
+      const inRange = (it) => !it.date || it.date === "__season__" || rangeSet.has(it.date);
+      const outCount = list.filter((it) => !it.checked && !inRange(it)).length;
+
+      const rows = buildAgg(list.filter(inRange));
+      const active = rows.filter((r) => !r.checked);
+      const bought = rows.filter((r) => r.checked);
+      const seasons = active.filter((r) => r.isSeason);
+      const rest = active.filter((r) => !r.isSeason);
+      const fridge = rest.filter((r) => isFridge(r));                    // 冷蔵庫にある＝買わなくてよい
+      const pantry = rest.filter((r) => !isFridge(r) && isPantry(r));
+      const nons = rest.filter((r) => !isFridge(r) && !isPantry(r));
 
       const seasonHeader = (n) => `<div class="shopcat toggle ${shopOpen.season ? "open" : ""}" id="seasonToggle"><span>調味料（常備の可能性）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
       const pantryHeader = (n) => `<div class="shopcat toggle ${shopOpen.pantry ? "open" : ""}" id="pantryToggle"><span>常備品（家にあるか確認）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
       const fridgeHeader = (n) => `<div class="shopcat toggle ${shopOpen.fridge ? "open" : ""}" id="fridgeToggle"><span>🧊 冷蔵庫にある（買わなくてOK）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
       const boughtHeader = (n) => `<div class="shopcat toggle bought ${shopOpen.bought ? "open" : ""}" id="boughtToggle"><span>✓ 買ったもの</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
       const boxStyle = (open) => `style="display:${open ? "block" : "none"}"`;
+
+      const rangeLabel = !rangeDates.length ? ""
+        : rangeDates.length === 1
+          ? `${mdLabel(rangeDates[0])}(${dow(rangeDates[0])}) の分`
+          : `${mdLabel(rangeDates[0])}〜${mdLabel(rangeDates[rangeDates.length - 1])} の分`;
+      const extra = [
+        seasons.length ? `調味料${seasons.length}` : "",
+        pantry.length ? `常備品${pantry.length}` : "",
+        fridge.length ? `冷蔵庫${fridge.length}` : "",
+      ].filter(Boolean).join(" ＋");
+      html += `<div class="shop-head"><span class="t">買うもの（${nons.length}品${extra ? ` ＋${extra}` : ""}）</span>${rangeLabel ? `<span class="rangelab">${esc(rangeLabel)}</span>` : ""}</div>`;
+
+      // 1行 = 食材名 ＋ 合計した分量 ＋（何に使うか・使う日）
+      const row = (r, o = {}) => {
+        const single = r.ids.length === 1 ? r.ids[0] : null;
+        if (single && single === editingId) {
+          return `<div class="shopitem editing">
+            <div class="ed-body">
+              <input class="ed-nm" data-id="${esc(single)}" value="${esc(r.name)}" placeholder="材料名">
+              <input class="ed-am" data-id="${esc(single)}" value="${esc(r.amount)}" placeholder="分量">
+            </div>
+            <div class="ed-actions"><button class="ed-save" data-id="${esc(single)}">保存</button><button class="ed-cancel">取消</button></div>
+          </div>`;
+        }
+        const uses = r.dishes && r.dishes.length ? `<span class="uses">${esc(r.dishes.join("・"))}</span>` : "";
+        const dates = r.dates.length > 1 || (r.dates.length === 1 && range !== "today")
+          ? `<span class="dtags">${r.dates.map((d) => `<span class="dtag">${esc(mdLabel(d))}</span>`).join("")}</span>` : "";
+        const meta = uses || dates ? `<span class="shopmeta">${uses}${dates}</span>` : "";
+        const moved = r.moved ? `<span class="moved-tag">移動</span>` : "";
+        const buy = o.pantry ? `<button class="buyback" data-name="${esc(r.name)}" aria-label="買う物に戻す">🛒 買う</button>` : "";
+        const edit = single ? `<button class="edit" data-id="${esc(single)}" aria-label="編集">${EDIT_SVG}</button>` : "";
+        return `<div class="shopitem ${r.checked ? "done" : ""}">
+          <label class="shoptap"><input type="checkbox" data-name="${esc(r.name)}" ${r.checked ? "checked" : ""}><span class="cb">${CHECK_SVG}</span>
+            <span class="txt"><span class="nm">${esc(r.name)}</span>${r.amount ? `<span class="am">${esc(r.amount)}</span>` : ""}${moved}${meta}</span></label>
+          ${buy}${edit}<button class="del" data-name="${esc(r.name)}" aria-label="削除">${TRASH_SVG}</button></div>`;
+      };
+
       let hasAny = false;
-      let boughtCount = 0, boughtHtml = "";
-
-      if (mode === "aggregate") {
-        const rows = buildAgg(list);
-        const active = rows.filter((r) => !r.checked);
-        const bought = rows.filter((r) => r.checked);
-        const seasons = active.filter((r) => r.isSeason);
-        const rest = active.filter((r) => !r.isSeason);
-        const fridge = rest.filter((r) => isFridge(r));            // 冷蔵庫にある＝買わなくてよい
-        const pantry = rest.filter((r) => !isFridge(r) && isPantry(r));
-        const nons = rest.filter((r) => !isFridge(r) && !isPantry(r));
-        const extra = [seasons.length ? `調味料${seasons.length}` : "", pantry.length ? `常備品${pantry.length}` : "", fridge.length ? `冷蔵庫${fridge.length}` : ""].filter(Boolean).join(" ＋");
-        html += `<div class="shop-head"><span class="t">買うもの（${nons.length}品${extra ? ` ＋${extra}` : ""}）</span></div>`;
-
-        const aggRow = (r, o = {}) => {
-          const tags = r.dates.length ? `<span class="dtags">${r.dates.map((d) => `<span class="dtag">${esc(mdLabel(d))}</span>`).join("")}</span>` : "";
-          const moved = r.moved ? `<span class="moved-tag">移動</span>` : "";
-          const buy = o.pantry ? `<button class="buyback" data-name="${esc(r.name)}" aria-label="買う物に戻す">🛒 買う</button>` : "";
-          return `<div class="shopitem ${r.checked ? "done" : ""}">
-            <label class="shoptap"><input type="checkbox" data-name="${esc(r.name)}" ${r.checked ? "checked" : ""}><span class="cb">${CHECK_SVG}</span>
-              <span class="txt"><span class="nm">${esc(r.name)}</span>${r.amount ? `<span class="am">${esc(r.amount)}</span>` : ""}${tags}${moved}</span></label>
-            ${buy}<button class="del" data-name="${esc(r.name)}" aria-label="削除">${TRASH_SVG}</button></div>`;
-        };
-
-        const groups = {};
-        for (const r of nons) (groups[CAT_ORDER.includes(r.category) ? r.category : "その他"] ||= []).push(r);
-        for (const cat of CAT_ORDER) {
-          const g = groups[cat]; if (!g || !g.length) continue;
-          hasAny = true;
-          html += `<div class="shopcat"><span>${esc(cat)}</span><span class="lead"></span></div>`;
-          html += g.map(aggRow).join("");
-        }
-        if (fridge.length) {
-          hasAny = true;
-          html += fridgeHeader(fridge.length);
-          html += `<div id="fridgeBox" ${boxStyle(shopOpen.fridge)}>${fridge.map((r) => aggRow(r, { pantry: true })).join("")}</div>`;
-        }
-        if (pantry.length) {
-          hasAny = true;
-          html += pantryHeader(pantry.length);
-          html += `<div id="pantryBox" ${boxStyle(shopOpen.pantry)}>${pantry.map((r) => aggRow(r, { pantry: true })).join("")}</div>`;
-        }
-        if (seasons.length) {
-          hasAny = true;
-          html += seasonHeader(seasons.length);
-          html += `<div id="seasonList" ${boxStyle(shopOpen.season)}>${seasons.map(aggRow).join("")}</div>`;
-        }
-        boughtCount = bought.length;
-        boughtHtml = bought.map((r) => aggRow(r)).join("");
-      } else {
-        // 日付ごと
-        const byDate = new Map();
-        const addedItems = [];
-        const seasonings = [];
-        const pantry = [];
-        const fridge = [];
-        const bought = [];
-        for (const it of list) {
-          if (it.checked) { bought.push(it); continue; } // チェック済みは「買ったもの」へ
-          if (it.date === "__season__" || (!it.date && isSeasoning(it))) seasonings.push(it);
-          else if (isFridge(it)) fridge.push(it);
-          else if (isPantry(it)) pantry.push(it);
-          else if (!it.date) addedItems.push(it);
-          else { if (!byDate.has(it.date)) byDate.set(it.date, []); byDate.get(it.date).push(it); }
-        }
-        const dates = [...byDate.keys()].sort();
-        const catIdx = (it) => { const i = CAT_ORDER.indexOf(it.category); return i < 0 ? 99 : i; };
-        for (const d of dates) byDate.get(d).sort((a, b) => catIdx(a) - catIdx(b));
-        const mainCount = [...byDate.values()].reduce((s, a) => s + a.length, 0) + addedItems.length;
-
-        // 同じ食材を使う日の一覧（「他の日にも使う」表示用。チェック済みも含めて数える）
-        const nameDates = new Map();
-        for (const it of list) {
-          if (!it.date || it.date === "__season__") continue;
-          if (!nameDates.has(it.name)) nameDates.set(it.name, new Set());
-          nameDates.get(it.name).add(it.date);
-        }
-
-        const dateRow = (it, o = {}) => {
-          if (it.id === editingId) {
-            return `<div class="shopitem editing">
-              <div class="ed-body">
-                <input class="ed-nm" data-id="${esc(it.id)}" value="${esc(it.name)}" placeholder="材料名">
-                <input class="ed-am" data-id="${esc(it.id)}" value="${esc(it.amount)}" placeholder="分量">
-              </div>
-              <div class="ed-actions"><button class="ed-save" data-id="${esc(it.id)}">保存</button><button class="ed-cancel">取消</button></div>
-            </div>`;
-          }
-          const done = !!it.checked;
-          const moved = it.movedFrom ? `<span class="moved-tag">${esc(mdLabel(it.movedFrom))}から移動</span>` : "";
-          // 同じ食材を他の日にも使うなら「8/2も」のようなチップを出す（買う量の判断に）
-          const others = [...(nameDates.get(it.name) || [])].filter((d) => d !== it.date).sort();
-          const alsoTags = others.length
-            ? `<span class="dtags">${others.map((d) => `<span class="dtag">${esc(mdLabel(d))}も</span>`).join("")}</span>`
-            : "";
-          const buy = o.pantry ? `<button class="buyback" data-name="${esc(it.name)}" aria-label="買う物に戻す">🛒 買う</button>` : "";
-          return `<div class="shopitem ${done ? "done" : ""}">
-            <label class="shoptap"><input type="checkbox" data-id="${esc(it.id)}" ${done ? "checked" : ""}><span class="cb">${CHECK_SVG}</span>
-              <span class="txt"><span class="nm">${esc(it.name)}</span>${it.amount ? `<span class="am">${esc(it.amount)}</span>` : ""}${alsoTags}${moved}</span></label>
-            ${buy}<button class="edit" data-id="${esc(it.id)}" aria-label="編集">${EDIT_SVG}</button>
-            <button class="del" data-id="${esc(it.id)}" aria-label="削除">${TRASH_SVG}</button></div>`;
-        };
-
-        const dExtra = [seasonings.length ? `調味料${seasonings.length}` : "", pantry.length ? `常備品${pantry.length}` : "", fridge.length ? `冷蔵庫${fridge.length}` : ""].filter(Boolean).join(" ＋");
-        html += `<div class="shop-head"><span class="t">買うもの（${mainCount}品${dExtra ? ` ＋${dExtra}` : ""}）</span></div>`;
-        html += `<div class="toggle-row">同じ材料をまとめてチェック
-          <label class="switch"><input type="checkbox" id="sameCheckToggle" ${getSameCheck() ? "checked" : ""}><span class="track"></span><span class="knob"></span></label></div>`;
-
-        for (const d of dates) {
-          hasAny = true;
-          html += `<div class="shopcat"><span>${esc(mdLabel(d))}（${esc(dow(d))}）</span><span class="lead"></span></div>`;
-          html += byDate.get(d).map(dateRow).join("");
-        }
-        if (addedItems.length) {
-          hasAny = true;
-          html += `<div class="shopcat"><span>追加した材料</span><span class="lead"></span></div>`;
-          html += addedItems.map(dateRow).join("");
-        }
-        if (fridge.length) {
-          hasAny = true;
-          html += fridgeHeader(fridge.length);
-          html += `<div id="fridgeBox" ${boxStyle(shopOpen.fridge)}>${fridge.map((it) => dateRow(it, { pantry: true })).join("")}</div>`;
-        }
-        if (pantry.length) {
-          hasAny = true;
-          html += pantryHeader(pantry.length);
-          html += `<div id="pantryBox" ${boxStyle(shopOpen.pantry)}>${pantry.map((it) => dateRow(it, { pantry: true })).join("")}</div>`;
-        }
-        if (seasonings.length) {
-          hasAny = true;
-          html += seasonHeader(seasonings.length);
-          html += `<div id="seasonList" ${boxStyle(shopOpen.season)}>${seasonings.map(dateRow).join("")}</div>`;
-        }
-        boughtCount = bought.length;
-        boughtHtml = bought.map((it) => dateRow(it)).join("");
+      // 売り場のカテゴリ順に並べる
+      const groups = {};
+      for (const r of nons) (groups[CAT_ORDER.includes(r.category) ? r.category : "その他"] ||= []).push(r);
+      for (const cat of CAT_ORDER) {
+        const g = groups[cat];
+        if (!g || !g.length) continue;
+        hasAny = true;
+        html += `<div class="shopcat"><span>${esc(cat)}</span><span class="lead"></span></div>`;
+        html += g.map((r) => row(r)).join("");
+      }
+      if (fridge.length) {
+        hasAny = true;
+        html += fridgeHeader(fridge.length);
+        html += `<div id="fridgeBox" ${boxStyle(shopOpen.fridge)}>${fridge.map((r) => row(r, { pantry: true })).join("")}</div>`;
+      }
+      if (pantry.length) {
+        hasAny = true;
+        html += pantryHeader(pantry.length);
+        html += `<div id="pantryBox" ${boxStyle(shopOpen.pantry)}>${pantry.map((r) => row(r, { pantry: true })).join("")}</div>`;
+      }
+      if (seasons.length) {
+        hasAny = true;
+        html += seasonHeader(seasons.length);
+        html += `<div id="seasonList" ${boxStyle(shopOpen.season)}>${seasons.map((r) => row(r)).join("")}</div>`;
       }
 
       if (!hasAny) {
-        html += boughtCount
+        html += bought.length
           ? `<p class="alldone">🎉 買うものはすべてチェックしました</p>`
-          : `<p class="empty">リストが空です。下から材料を追加できます。</p>`;
+          : `<p class="empty">この期間に買うものはありません。</p>`;
+      }
+      // 範囲外に残っている分の件数（隠れているだけと分かるように）
+      if (outCount && range !== "week") {
+        html += `<p class="rangehint">このあとの日に、あと <b>${outCount}品</b> あります<button id="showWeek">今週ぜんぶ見る</button></p>`;
       }
       // チェック済みは折りたたみで下部にまとめる
-      if (boughtCount) {
-        html += boughtHeader(boughtCount);
-        html += `<div id="boughtBox" ${boxStyle(shopOpen.bought)}>${boughtHtml}</div>`;
+      if (bought.length) {
+        html += boughtHeader(bought.length);
+        html += `<div id="boughtBox" ${boxStyle(shopOpen.bought)}>${bought.map((r) => row(r)).join("")}</div>`;
       }
 
       html += `<div class="memo-wrap"><div class="sec-head"><span class="label">材料を追加</span><span class="lead"></span></div>
@@ -3780,8 +3793,10 @@
       const body = $("shopBody");
       const saveEdit = (id) => editItem(id, body.querySelector(".ed-nm").value, body.querySelector(".ed-am").value);
 
-      body.querySelectorAll(".seg").forEach((b) =>
-        b.addEventListener("click", () => { setViewMode(b.dataset.mode); editingId = null; renderShopping(); }));
+      body.querySelectorAll(".seg[data-range]").forEach((b) =>
+        b.addEventListener("click", () => { setShopRange(b.dataset.range); editingId = null; renderShopping(); }));
+      const showWeek = $("showWeek");
+      if (showWeek) showWeek.addEventListener("click", () => { setShopRange("week"); editingId = null; renderShopping(); });
       body.querySelectorAll(".shopitem input[type=checkbox]").forEach((cb) =>
         cb.addEventListener("change", () => {
           if (cb.dataset.name != null) setCheckedByName(cb.dataset.name, cb.checked);
