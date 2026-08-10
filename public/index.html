@@ -500,13 +500,16 @@
 
     /* --- 実際の画面キャプチャ --- */
     /* iPhoneの枠(透過PNG)を上に重ね、その内側に画面写真を敷く。
-       枠の画面部分の実寸は 1080x1920 の中の x113..968 / y36..1890 なので、その比率で配置する。
-       画面写真は枠と同じ縦横比(856:1855)で書き出し済み。枠に描かれた時計・電池と重ならないよう、
-       上端にアプリの背景色の帯を焼き込んである。 */
+       枠の画面部分の実寸は 1080x1920 の中の x112..970 / y30..1890 なので、その比率で配置する。
+       画面写真は枠と同じ縦横比で書き出し済み。枠に描かれた時計・電池と重ならないよう、
+       上端にアプリの背景色の帯を焼き込んである。
+       画面の角丸(半径136px)ぶんは枠側が透明なので、写真にも同じ角丸を付けないと
+       四隅から写真の白い角がはみ出す。136/859=15.83%(横)・136/1861=7.31%(縦)。 */
     .lp-shot { position: relative; width: 208px; margin: 0 auto; flex: none;
       aspect-ratio: 1080 / 1920; filter: drop-shadow(0 14px 26px rgba(90, 64, 40, .22)); }
-    .lp-shot .scr { position: absolute; left: 10.46%; top: 1.88%; width: 79.26%; height: 96.61%;
-      display: block; object-fit: cover; object-position: top center; }
+    .lp-shot .scr { position: absolute; left: 10.37%; top: 1.56%; width: 79.54%; height: 96.93%;
+      display: block; object-fit: cover; object-position: top center;
+      border-radius: 15.83% / 7.31%; }
     .lp-shot .frm { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     .lp-hero .lp-shot { width: 250px; margin-top: 26px; }
     /* 一部だけを切り出したキャプチャ（枠に入れると余白だらけになるもの）はカード風に見せる */
