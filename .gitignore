@@ -27,3 +27,6 @@ scratchpad/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# 成分表の元Excel（抽出済みの data/nutrition.json をコミットするため元ファイルは除外）
+*.xlsx

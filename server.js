@@ -6,6 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
+import { analyzePlan } from "./nutrition.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -1914,6 +1915,18 @@ app.get("/api/plans/:id", auth, async (req, res) => {
     const row = await loadPlanForUser(req, res);
     if (!row) return;
     res.json(planToClient(row));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 献立の栄養（カロリー・PFC・食物繊維・食塩相当量）を計算して返す。
+// 日本食品標準成分表（文部科学省）の値を使い、材料名と分量から1人分を見積もる。
+app.get("/api/plans/:id/nutrition", auth, async (req, res) => {
+  try {
+    const row = await loadPlanForUser(req, res);
+    if (!row) return;
+    res.json(analyzePlan(JSON.parse(row.data_json), row.people));
   } catch (err) {
     handleError(res, err);
   }

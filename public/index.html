@@ -594,6 +594,35 @@
     .shopmeta .uses { font-size: .73rem; color: var(--muted); line-height: 1.4; }
     .shop-head .rangelab { margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--orange-dark);
       background: var(--orange-soft); border-radius: 999px; padding: 2px 10px; }
+    /* ---- 栄養（カロリー・PFC） ---- */
+    .nu-hero { text-align: center; padding: 6px 0 2px; }
+    .nu-kcal { font-size: 2.4rem; font-weight: 800; color: var(--orange); line-height: 1.1;
+      font-variant-numeric: tabular-nums; }
+    .nu-kcal small { font-size: .9rem; font-weight: 700; color: var(--muted); margin-left: 4px; }
+    .nu-sub { color: var(--muted); font-size: .82rem; margin: 4px 0 0; }
+    .nu-donutwrap { display: flex; align-items: center; gap: 18px; justify-content: center; flex-wrap: wrap; margin: 10px 0 2px; }
+    /* グローバルの svg{width:20px} を上書き（アイコン用の指定なのでグラフには効かせない） */
+    .nu-donutwrap svg { flex: none; width: 116px; height: 116px; }
+    .nu-legend { display: flex; flex-direction: column; gap: 7px; }
+    .nu-leg { display: flex; align-items: center; gap: 7px; font-size: .84rem; font-weight: 700; white-space: nowrap; }
+    .nu-leg i { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+    .nu-leg .g { color: var(--muted); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .nu-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+    .nu-stat { background: var(--cream); border-radius: 12px; padding: 9px 12px; }
+    .nu-stat .k { font-size: .74rem; color: var(--muted); font-weight: 700; }
+    .nu-stat .v { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .nu-stat .v small { font-size: .72rem; font-weight: 700; color: var(--muted); margin-left: 2px; }
+    .nu-bar { display: flex; align-items: center; gap: 8px; padding: 7px 2px; }
+    .nu-bar .d { width: 66px; flex: none; font-size: .76rem; font-weight: 700; color: var(--muted); }
+    .nu-bar .track { flex: 1; height: 16px; background: var(--cream); border-radius: 999px; overflow: hidden; display: flex; }
+    .nu-bar .track i { display: block; height: 100%; }
+    .nu-bar .n { width: 58px; flex: none; text-align: right; font-size: .8rem; font-weight: 800;
+      font-variant-numeric: tabular-nums; }
+    .nu-mealrow { display: flex; align-items: baseline; gap: 8px; padding: 8px 2px; border-bottom: 1px dashed var(--line); }
+    .nu-mealrow:last-child { border-bottom: 0; }
+    .nu-mealrow .nm { flex: 1; min-width: 0; font-weight: 700; font-size: .92rem; }
+    .nu-mealrow .sub { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .nu-note { font-size: .76rem; color: var(--muted); line-height: 1.7; margin: 10px 4px 0; }
     .anchor-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
       background: var(--orange-soft); color: var(--orange-dark); border-radius: 12px;
       padding: 8px 12px; margin: 0 4px 12px; font-size: .82rem; font-weight: 700; }
@@ -852,6 +881,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6h15l-1.5 9h-12z"/><path d="M6 6L5 3H2"/><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/></svg>
         買い物リスト
       </button>
+      <button class="btn-shop" style="background:#fff;color:var(--orange-dark);border:1.5px solid var(--orange);margin-top:8px" onclick="showNutritionView()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><rect x="5" y="10" width="4" height="10" rx="1"/><rect x="10" y="5" width="4" height="15" rx="1"/><rect x="15" y="13" width="4" height="7" rx="1"/></svg>
+        栄養・カロリーを見る
+      </button>
       <div id="detailBody"></div>
     </section>
 
@@ -997,6 +1030,11 @@
         <p class="hint" id="favHint"></p>
         <div id="favList"></div>
       </div>
+    </section>
+
+    <!-- 栄養（カロリー・PFCバランス） -->
+    <section class="view" id="view-nutrition">
+      <div id="nutriBody"></div>
     </section>
 
     <!-- 冷蔵庫・作り置き -->
@@ -1606,7 +1644,6 @@
 
     // ---------- べんり機能（近日公開） ----------
     const SOON_FEATURES = [
-      { icon: "🔥", name: "カロリー・栄養計算", desc: "献立ごとのカロリーやPFCバランスを自動で表示" },
       { icon: "🛒", name: "ネットスーパー連携", desc: "買い物リストをそのまま注文につなげる" },
     ];
     function showSoonView() {
@@ -1618,6 +1655,9 @@
         `<div class="soon-card live" id="frOpenCard"><span class="soon-ic">🧊</span>
           <div class="soon-tx"><div class="soon-nm">冷蔵庫・作り置き</div><div class="soon-ds">残っている食材を登録して、使い切る献立に</div></div>
           <span class="soon-go">›</span></div>` +
+        `<div class="soon-card live" id="nuOpenCard"><span class="soon-ic">🔥</span>
+          <div class="soon-tx"><div class="soon-nm">カロリー・栄養計算</div><div class="soon-ds">献立のカロリーとPFCバランスを自動で表示</div></div>
+          <span class="soon-go">›</span></div>` +
         SOON_FEATURES.map((f) =>
         `<div class="soon-card"><span class="soon-ic">${f.icon}</span>
           <div class="soon-tx"><div class="soon-nm">${esc(f.name)}</div><div class="soon-ds">${esc(f.desc)}</div></div>
@@ -1625,6 +1665,7 @@
       ).join("");
       $("favOpenCard").addEventListener("click", showFavoritesView);
       $("frOpenCard").addEventListener("click", showFridgeView);
+      $("nuOpenCard").addEventListener("click", openNutritionFromTab);
       showView("soon", "べんり機能", { back: true, tab: "soon" });
     }
 
@@ -1716,6 +1757,102 @@
         await apiOK(`/api/households/${household.id}/favorites/${id}`, { method: "DELETE" });
         await loadFavorites(); renderFavorites();
       } catch (e) { $("favHint").textContent = e.message; }
+    }
+
+    // ---------- 栄養（カロリー・PFCバランス） ----------
+    const PFC_COLORS = { p: "#e0705c", f: "#e8b04b", c: "#5aa2d8" };
+    const PFC_LABEL = { p: "たんぱく質", f: "脂質", c: "炭水化物" };
+    // PFCの円グラフ（SVG。外部ライブラリは使わない）
+    function pfcDonut(pfc, size = 116) {
+      const r = size / 2 - 11, cx = size / 2, cy = size / 2, C = 2 * Math.PI * r;
+      const total = (pfc.p || 0) + (pfc.f || 0) + (pfc.c || 0);
+      let off = 0;
+      const arcs = total
+        ? ["p", "f", "c"].map((k) => {
+            const len = (C * (pfc[k] || 0)) / total;
+            const el = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${PFC_COLORS[k]}" stroke-width="16"
+              stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-off}" transform="rotate(-90 ${cx} ${cy})"></circle>`;
+            off += len;
+            return el;
+          }).join("")
+        : `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--line)" stroke-width="16"></circle>`;
+      return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="PFCバランス">
+        ${arcs}<text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="11" fill="#8c8073" font-weight="700">PFC</text>
+        <text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="12" fill="#3a332c" font-weight="800">バランス</text></svg>`;
+    }
+    // べんり機能タブから開くときは、今日に一番近い献立を対象にする
+    async function openNutritionFromTab() {
+      if (!household) return showSetup();
+      try { plansCache = await apiOK("/api/plans?householdId=" + encodeURIComponent(household.id)); } catch {}
+      if (!(plansCache || []).length) { alert("先に献立を作成してください。"); return; }
+      const today = fmt(new Date());
+      const near = [...plansCache].sort((a, b) =>
+        Math.abs(parseDate(a.startDate) - parseDate(today)) - Math.abs(parseDate(b.startDate) - parseDate(today)))[0];
+      currentPlan = near;
+      await showNutritionView(showSoonView);
+    }
+    async function showNutritionView(back) {
+      if (!currentPlan?.id) return;
+      backHandler = back || backToOverview;
+      $("nutriBody").innerHTML = `<p class="empty">計算中…</p>`;
+      showView("nutrition", "栄養", { back: true, tab: back ? "soon" : null });
+      let n;
+      try { n = await apiOK(`/api/plans/${currentPlan.id}/nutrition`); }
+      catch (e) { $("nutriBody").innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+      renderNutrition(n);
+    }
+    function renderNutrition(n) {
+      const a = n.average;
+      const legend = ["p", "f", "c"].map((k) =>
+        `<span class="nu-leg"><i style="background:${PFC_COLORS[k]}"></i>${PFC_LABEL[k]}
+          <b>${a.pfc[k]}%</b><span class="g">${a[k]}g</span></span>`).join("");
+
+      let html = `<div class="card">
+        <div class="nu-hero">
+          <div class="nu-kcal">${a.kcal}<small>kcal</small></div>
+          <p class="nu-sub">1人あたり・1日平均（${n.days.length}日分／${n.people}人分の献立から）</p>
+        </div>
+        <div class="nu-donutwrap">${pfcDonut(a.pfc)}<div class="nu-legend">${legend}</div></div>
+        <div class="nu-stats">
+          <div class="nu-stat"><div class="k">たんぱく質</div><div class="v">${a.p}<small>g</small></div></div>
+          <div class="nu-stat"><div class="k">脂質</div><div class="v">${a.f}<small>g</small></div></div>
+          <div class="nu-stat"><div class="k">炭水化物</div><div class="v">${a.c}<small>g</small></div></div>
+          <div class="nu-stat"><div class="k">食物繊維</div><div class="v">${a.fiber}<small>g</small></div></div>
+          <div class="nu-stat"><div class="k">食塩相当量</div><div class="v">${a.salt}<small>g</small></div></div>
+          <div class="nu-stat"><div class="k">合計（${n.days.length}日）</div><div class="v">${n.total.kcal}<small>kcal</small></div></div>
+        </div>
+      </div>`;
+
+      // 日ごとのカロリー（PFCの内訳で色分け）
+      const maxK = Math.max(1, ...n.days.map((d) => d.kcal));
+      html += `<div class="card">
+        <div class="sec-head"><span class="label">日ごと（1人分）</span><span class="lead"></span></div>
+        ${n.days.map((d) => {
+          const w = (d.kcal / maxK) * 100;
+          const seg = ["p", "f", "c"].map((k) =>
+            `<i style="width:${(d.pfc[k] || 0) * (w / 100)}%;background:${PFC_COLORS[k]}"></i>`).join("");
+          return `<div class="nu-bar"><span class="d">${esc(mdLabel(d.date))}(${esc(dow(d.date))})</span>
+            <span class="track">${seg}</span><span class="n">${d.kcal}</span></div>`;
+        }).join("")}
+      </div>`;
+
+      // 食事・料理ごとの内訳
+      html += n.days.map((d) => `<div class="card">
+        <div class="sec-head"><span class="label">${esc(mdLabel(d.date))}（${esc(dow(d.date))}）</span>
+          <span class="lead"></span><span class="sub" style="font-size:.78rem;color:var(--muted);font-weight:700">${d.kcal}kcal・塩分${d.salt}g</span></div>
+        ${d.meals.map((m) => `
+          <div class="nu-mealrow"><span class="nm">${esc(m.slot)}</span>
+            <span class="sub">${m.kcal}kcal ／ P${m.p} F${m.f} C${m.c}</span></div>
+          ${m.dishes.map((x) => `<div class="nu-mealrow" style="padding-left:12px">
+            <span class="nm" style="font-weight:600;font-size:.86rem;color:var(--muted)">${esc(x.role || "")} ${esc(x.name)}</span>
+            <span class="sub">${x.kcal}kcal</span></div>`).join("")}`).join("")}
+      </div>`).join("");
+
+      html += `<p class="nu-note">出典: ${esc(n.source)}。材料名と分量から自動で計算した<b>目安</b>です（個数の分量や調味料は概算。実際の量・銘柄で変わります）。`;
+      if (n.unknownCount) html += `<br>計算できなかった材料が ${n.unknownCount} 件あります${n.missing.length ? `（${esc(n.missing.join("、"))}）` : ""}。その分は含まれていません。`;
+      html += `</p>`;
+
+      $("nutriBody").innerHTML = html;
     }
 
     // ---------- 冷蔵庫・作り置き ----------
