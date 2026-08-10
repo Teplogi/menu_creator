@@ -1533,7 +1533,7 @@
       if (foodAliasList) return foodAliasList;
       try {
         // v= はキャッシュ避け。返す中身を増やしたら数字を上げる（24時間キャッシュしているため）
-        const r = await (await fetch("/api/food-aliases?v=2")).json();
+        const r = await (await fetch("/api/food-aliases?v=3")).json();
         foodAliasList = Object.entries(r.aliases || {}).sort((a, b) => b[0].length - a[0].length);
         foodPieceList = byLongestKey(r.pieceWeights);
         foodSpoonList = byLongestKey(r.spoonGrams?.byFood);
@@ -4019,9 +4019,9 @@
     // ---------- 分量の合算 ----------
     // 「1/2個(100g)」「200g」「大さじ2」等を解析し、同じ単位どうしを足し算する。
     // 生成時に表記を統一しているので合算できる（解析できないものは元の文字列を並べる）。
-    const AMT_UNITS = "個|本|枚|袋|束|株|丁|かけ|片|パック|切れ|尾|房|玉|缶|杯";
+    const AMT_UNITS = "個|本|枚|袋|束|株|丁|かけ|片|パック|切れ|尾|房|玉|缶|杯|膳|合|箱|皿|腹";
     // 同じものを指す単位は1つに寄せる（「1かけ＋1と1/2片」が別行にならないように）
-    const UNIT_CANON = { "片": "かけ", "玉": "個", "大匙": "大さじ", "小匙": "小さじ", "cc": "ml" };
+    const UNIT_CANON = { "片": "かけ", "玉": "個", "膳": "杯", "大匙": "大さじ", "小匙": "小さじ", "cc": "ml" };
     const PIECE_UNIT_RE = new RegExp(`^(${AMT_UNITS})$`);
     const AMT_NUM = "\\d+(?:\\.\\d+)?と\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d+(?:\\.\\d+)?";
     function parseNumJa(s) {

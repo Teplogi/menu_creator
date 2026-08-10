@@ -39,6 +39,9 @@ const SPOON_BY_FOOD = normEntries(MAP.spoonGrams.byFood);
 // 栄養に影響しない材料（水・揚げ油など）。計算からも不明件数からも外す。
 const IGNORE = (MAP.ignore || []).map(norm).filter(Boolean);
 const isIgnored = (nameKey) => IGNORE.some((w) => nameKey === w || nameKey.startsWith(w + "の") || nameKey.endsWith(w));
+// 「塩（ゆで用）」「油（分量外）」のように口に入らないと分かる書き方。
+// norm() は括弧書きを落としてしまうので、正規化前の名前で判定する。
+const NOT_EATEN = /(ゆで用|茹で用|下ゆで用|打ち粉|揚げ用|分量外|飾り用)/;
 
 // ---------- 材料名 → 食品 ----------
 const matchCache = new Map();
@@ -101,7 +104,7 @@ function toGrams(amount, name) {
     if (!isNaN(n) && g != null) return { grams: n * g, exact: false };
   }
 
-  m = t.match(new RegExp(`^(${NUM})\\s*(個|本|枚|袋|束|株|丁|片|かけ|パック|切れ|尾|房|玉|缶|節)`));
+  m = t.match(new RegExp(`^(${NUM})\\s*(個|本|枚|袋|束|株|丁|片|かけ|パック|切れ|尾|房|玉|缶|節|合|杯|膳|箱|皿|腹)`));
   if (m) {
     const n = parseNum(m[1]);
     const w = pieceWeight(key, m[2]);
@@ -131,7 +134,7 @@ function dishNutrition(dish, people) {
   const missing = [];
   for (const ing of dish.ingredients || []) {
     if (!ing?.name) continue;
-    if (isIgnored(norm(ing.name))) continue; // 水・揚げ油などは計算しない
+    if (NOT_EATEN.test(ing.name) || isIgnored(norm(ing.name))) continue; // 水・ゆで塩・揚げ油などは計算しない
     const food = findFood(ing.name);
     const { grams } = toGrams(ing.amount, ing.name);
     if (!food || !grams) {
