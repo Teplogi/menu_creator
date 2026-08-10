@@ -2,7 +2,9 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- viewport-fit=cover を付けないと env(safe-area-inset-*) が常に0になり、
+       iPhoneのホームインジケータとタブバーが重なってしまう -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>めにゅらく！</title>
   <link rel="icon" type="image/png" href="/icon.png" />
   <link rel="apple-touch-icon" href="/icon.png" />
@@ -43,8 +45,11 @@
     .appbar {
       position: sticky; top: 0; z-index: 20; background: var(--cream);
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 18px 12px; max-width: 480px; margin: 0 auto;
+      /* ステータスバー／ノッチの下に潜り込まないよう上を空ける */
+      padding: calc(14px + env(safe-area-inset-top, 0px)) 18px 12px; max-width: 480px; margin: 0 auto;
     }
+    /* ヘッダーを出さない画面（ログイン・グループ作成・紹介ページ）では main 側で上を空ける */
+    .appbar.hidden + main { padding-top: calc(4px + env(safe-area-inset-top, 0px)); }
     .appbar .icon-btn {
       width: 34px; height: 34px; border: none; background: none; color: var(--ink);
       cursor: pointer; display: grid; place-items: center; border-radius: 10px;
@@ -56,7 +61,8 @@
     .appbar h1 { font-size: 1.05rem; margin: 0; font-weight: 700; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
     /* ---- Layout ---- */
-    main { max-width: 480px; margin: 0 auto; padding: 4px 16px 96px; }
+    /* 下端はタブバー＋ホームインジケータのぶんだけ空ける（最後の項目が隠れないように） */
+    main { max-width: 480px; margin: 0 auto; padding: 4px 16px calc(96px + env(safe-area-inset-bottom, 0px)); }
     .card { background: var(--card); border-radius: 22px; padding: 20px; box-shadow: var(--shadow); }
     .auth-hero { text-align: center; margin: 8px 0 6px; }
     .auth-logo { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 8px 22px rgba(245,131,31,.28); display: inline-block; }
@@ -153,7 +159,8 @@
     .hist-del svg { width: 18px; height: 18px; }
 
     /* ---- Day agenda (一覧・コンパクト) ---- */
-    .today-fab { position: fixed; left: 50%; transform: translateX(-50%); bottom: 84px; z-index: 30;
+    .today-fab { position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
+      bottom: calc(84px + env(safe-area-inset-bottom, 0px));
       align-items: center; gap: 5px; background: var(--orange); color: #fff; border: none; border-radius: 999px;
       padding: 9px 18px; font-weight: 800; font-size: .85rem; cursor: pointer; box-shadow: 0 6px 18px rgba(245,131,31,.42); }
     .today-fab svg { width: 16px; height: 16px; }
@@ -708,7 +715,8 @@
     /* ---- Bottom tab bar ---- */
     .tabbar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; background: #fff; border-top: 1px solid var(--line);
       display: flex; justify-content: space-around; align-items: flex-end;
-      padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; }
+      /* ホームインジケータ（下から上へスワイプする帯）と重ならないよう余白を確保 */
+      padding: 8px 0 calc(12px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; }
     .tabbar.hidden { display: none; }
     .tab { background: none; border: none; cursor: pointer; color: var(--muted); display: flex; flex-direction: column;
       align-items: center; gap: 3px; font-size: .68rem; font-weight: 700; padding: 4px 14px; }
