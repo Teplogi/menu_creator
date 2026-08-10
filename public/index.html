@@ -16,6 +16,9 @@
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root {
+      /* フッターのタブと iPhone のホームインジケータの間隔。
+         端末のセーフエリア(34px)そのままだと空きすぎるので約20pxに詰める。 */
+      --tabbar-gap: max(12px, calc(env(safe-area-inset-bottom, 0px) - 14px));
       --orange: #f5831f;
       --orange-dark: #e5761a;
       --orange-soft: #fdecda;
@@ -62,7 +65,7 @@
 
     /* ---- Layout ---- */
     /* 下端はタブバー＋ホームインジケータのぶんだけ空ける（最後の項目が隠れないように） */
-    main { max-width: 480px; margin: 0 auto; padding: 4px 16px calc(96px + env(safe-area-inset-bottom, 0px)); }
+    main { max-width: 480px; margin: 0 auto; padding: 4px 16px calc(84px + var(--tabbar-gap)); }
     .card { background: var(--card); border-radius: 22px; padding: 20px; box-shadow: var(--shadow); }
     .auth-hero { text-align: center; margin: 8px 0 6px; }
     .auth-logo { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 8px 22px rgba(245,131,31,.28); display: inline-block; }
@@ -160,7 +163,7 @@
 
     /* ---- Day agenda (一覧・コンパクト) ---- */
     .today-fab { position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
-      bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(76px + var(--tabbar-gap));
       align-items: center; gap: 5px; background: var(--orange); color: #fff; border: none; border-radius: 999px;
       padding: 9px 18px; font-weight: 800; font-size: .85rem; cursor: pointer; box-shadow: 0 6px 18px rgba(245,131,31,.42); }
     .today-fab svg { width: 16px; height: 16px; }
@@ -441,38 +444,160 @@
     .legal-links { text-align: center; font-size: .82rem; margin-top: 4px; }
     .legal-links a { color: var(--muted); text-decoration: underline; }
     /* ---- ランディング(LP) ---- */
-    .lp { max-width: 560px; margin: 0 auto; padding: 8px 4px 48px; }
-    .lp-hero { text-align: center; padding: 16px 0 8px; }
-    .lp-logo { width: 88px; height: 88px; border-radius: 20px; box-shadow: var(--shadow); }
-    .lp-h1 { font-size: 1.55rem; font-weight: 800; line-height: 1.45; margin: 18px 0 10px; }
-    .lp-sub { color: var(--muted); font-size: .98rem; line-height: 1.75; margin: 0 auto 22px; max-width: 460px; }
-    .lp-cta { width: 100%; max-width: 320px; margin: 4px auto 0; display: block; font-size: 1.05rem; }
-    .lp-login { font-size: .9rem; color: var(--muted); margin-top: 14px; }
-    .lp-login a { color: var(--orange-dark); font-weight: 700; }
-    .lp-benefits { display: grid; gap: 12px; margin: 34px 0; }
-    .lp-card { background: var(--card); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
-    .lp-card .lp-ic { font-size: 1.8rem; line-height: 1; }
-    .lp-card h3 { margin: 10px 0 4px; font-size: 1.05rem; }
-    .lp-card p { margin: 0; color: var(--muted); font-size: .92rem; line-height: 1.65; }
-    .lp-h2 { text-align: center; font-size: 1.2rem; margin: 8px 0 18px; }
-    .lp-steps { margin: 34px 0; }
-    .lp-step { display: flex; gap: 14px; align-items: flex-start; padding: 9px 0; }
-    .lp-num { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%; background: var(--orange); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
-    .lp-step b { display: block; }
-    .lp-step p { margin: 3px 0 0; color: var(--muted); font-size: .9rem; line-height: 1.6; }
-    .lp-feats { margin: 34px 0; }
-    .lp-fgrid { display: grid; gap: 10px; }
-    .lp-feat { display: flex; gap: 12px; align-items: flex-start; background: var(--card);
-      border-radius: 14px; padding: 14px 16px; box-shadow: var(--shadow); }
-    .lp-feat .fi { font-size: 1.3rem; line-height: 1.3; flex: none; }
-    .lp-feat b { display: block; font-size: .98rem; }
-    .lp-feat p { margin: 3px 0 0; color: var(--muted); font-size: .87rem; line-height: 1.65; }
-    .lp-price { background: var(--card); border-radius: 16px; padding: 22px 20px; box-shadow: var(--shadow); text-align: center; margin: 34px 0; }
-    .lp-price-lead { font-size: 1.15rem; margin: 0 0 8px; }
-    .lp-price-lead b { color: var(--orange-dark); }
-    .lp-price-note { color: var(--muted); font-size: .92rem; line-height: 1.75; margin: 0; }
-    .lp-foot { text-align: center; font-size: .82rem; margin-top: 28px; }
-    .lp-foot a { color: var(--muted); text-decoration: underline; }
+    /* LPだけは横幅を広く使う（アプリ本体は480px固定） */
+    main:has(> #view-landing.active) { max-width: 900px; padding-left: 0; padding-right: 0; }
+    #view-landing {
+      --lp-orange: #f28c38; --lp-orange-d: #d9741f; --lp-orange-s: #fdf0e2;
+      --lp-base: #fdfbf7; --lp-green: #7f9c7a; --lp-green-s: #eef3ec;
+      --lp-brown: #8a6e5c; --lp-ink: #3a332c; --lp-muted: #857a6e; --lp-line: #efe6db;
+      color: var(--lp-ink);
+    }
+    .lp { margin: 0 auto; padding: 0 0 40px; }
+    .lp section { padding: 0 20px; }
+    .lp-inner { max-width: 780px; margin: 0 auto; }
+    .lp h2 { font-size: clamp(1.25rem, 4.4vw, 1.7rem); line-height: 1.5; margin: 0 0 8px; text-wrap: balance; }
+    .lp .lp-lead { color: var(--lp-muted); font-size: .95rem; line-height: 1.8; margin: 0 0 24px; }
+    .lp-eyebrow { display: inline-block; font-size: .74rem; font-weight: 800; letter-spacing: .12em;
+      color: var(--lp-orange-d); background: var(--lp-orange-s); border-radius: 999px; padding: 5px 14px; margin-bottom: 12px; }
+
+    /* --- ヒーロー --- */
+    .lp-hero { text-align: center; padding: 20px 20px 8px;
+      background: radial-gradient(120% 70% at 50% 0%, #fff6ea 0%, var(--lp-base) 62%); }
+    .lp-logo { width: 76px; height: 76px; border-radius: 20px; box-shadow: 0 10px 26px rgba(242,140,56,.24); }
+    .lp-h1 { font-size: clamp(1.5rem, 6.2vw, 2.3rem); font-weight: 800; line-height: 1.42;
+      margin: 16px 0 12px; letter-spacing: .01em; text-wrap: balance; }
+    .lp-h1 em { font-style: normal; color: var(--lp-orange-d); }
+    .lp-sub { color: var(--lp-muted); font-size: 1rem; line-height: 1.85; margin: 0 auto 22px; max-width: 30em; }
+    .lp-cta { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      background: var(--lp-orange); color: #fff; border: none; border-radius: 999px;
+      padding: 15px 34px; font: inherit; font-size: 1.02rem; font-weight: 800; cursor: pointer;
+      box-shadow: 0 10px 22px rgba(242,140,56,.34); }
+    .lp-cta:hover { background: var(--lp-orange-d); }
+    .lp-cta.ghost { background: #fff; color: var(--lp-orange-d); border: 1.5px solid var(--lp-orange);
+      box-shadow: none; }
+    .lp-ctarow { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .lp-note { font-size: .82rem; color: var(--lp-muted); margin: 14px 0 0; }
+    .lp-note a { color: var(--lp-orange-d); font-weight: 700; }
+
+    /* --- スマホ画面のモック --- */
+    .phone { width: 208px; border-radius: 26px; background: #fff; border: 6px solid #efe4d6;
+      box-shadow: 0 16px 34px rgba(90,64,40,.16); overflow: hidden; flex: none; margin: 0 auto; }
+    .phone-bar { height: 20px; background: var(--lp-orange-s); display: flex; align-items: center;
+      justify-content: center; }
+    .phone-bar i { width: 46px; height: 5px; border-radius: 999px; background: #e8cfb2; display: block; }
+    .phone-body { padding: 10px; font-size: .58rem; line-height: 1.5; }
+    .ph-title { font-weight: 800; font-size: .64rem; margin-bottom: 7px; color: var(--lp-ink); }
+    .ph-row { display: flex; align-items: center; gap: 5px; padding: 5px 6px; border-radius: 8px;
+      background: var(--lp-base); margin-bottom: 4px; }
+    .ph-row .dot { width: 5px; height: 16px; border-radius: 3px; flex: none; background: var(--lp-orange); }
+    .ph-row .nm { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ph-row .sm { color: var(--lp-muted); font-size: .52rem; white-space: nowrap; }
+    .ph-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+    .ph-cal span { text-align: center; font-size: .5rem; color: var(--lp-muted); padding: 1px 0; }
+    .ph-cal b { display: block; text-align: center; font-size: .52rem; font-weight: 700; border-radius: 5px;
+      padding: 4px 0; background: var(--lp-base); }
+    .ph-cal b.on { background: var(--lp-orange); color: #fff; }
+    .ph-chip { display: inline-block; font-size: .5rem; font-weight: 800; border-radius: 999px;
+      padding: 2px 7px; background: var(--lp-orange-s); color: var(--lp-orange-d); margin: 0 3px 3px 0; }
+    .ph-chip.g { background: var(--lp-green-s); color: var(--lp-green); }
+    .ph-check { width: 11px; height: 11px; border-radius: 3px; border: 1.5px solid #d8cabb; flex: none; }
+    .ph-check.on { background: var(--lp-orange); border-color: var(--lp-orange); }
+
+    /* --- 課題（Before） --- */
+    .lp-before { background: var(--lp-green-s); padding-top: 40px; padding-bottom: 40px; margin-top: 34px; }
+    .lp-before h2 { text-align: center; }
+    .lp-before .lp-lead { text-align: center; }
+    .lp-probs { display: grid; gap: 12px; }
+    .lp-prob { background: #fff; border-radius: 18px; padding: 16px 18px; display: flex; gap: 12px;
+      align-items: flex-start; box-shadow: 0 4px 14px rgba(90,64,40,.06); }
+    .lp-prob .q { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--lp-green-s);
+      color: var(--lp-green); font-weight: 800; font-size: .8rem; display: grid; place-items: center; }
+    .lp-prob p { margin: 0; font-size: .93rem; line-height: 1.7; }
+
+    /* --- 機能（ジグザグ） --- */
+    .lp-feats { padding-top: 44px; }
+    .lp-feats > .lp-inner > h2 { text-align: center; }
+    .lp-feats > .lp-inner > .lp-lead { text-align: center; }
+    .lp-zig { display: grid; gap: 34px; margin-top: 26px; }
+    .lp-zrow { display: grid; gap: 20px; align-items: center; }
+    .lp-znum { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+      border-radius: 50%; background: var(--lp-orange); color: #fff; font-weight: 800; font-size: .86rem; margin-bottom: 10px; }
+    .lp-zrow h3 { font-size: 1.12rem; margin: 0 0 8px; line-height: 1.55; }
+    .lp-zrow p { margin: 0; color: var(--lp-muted); font-size: .93rem; line-height: 1.8; }
+    .lp-zlist { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
+    .lp-zlist li { font-size: .87rem; color: var(--lp-ink); padding-left: 20px; position: relative; line-height: 1.65; }
+    .lp-zlist li::before { content: "✓"; position: absolute; left: 0; color: var(--lp-green); font-weight: 800; }
+
+    /* --- 変化（After） --- */
+    .lp-after { background: linear-gradient(180deg, #fff6ea, var(--lp-base)); padding: 44px 20px; margin-top: 44px; }
+    .lp-after h2 { text-align: center; }
+    .lp-after .lp-lead { text-align: center; }
+    .lp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 22px; }
+    .lp-stat { background: #fff; border-radius: 18px; padding: 16px 8px; text-align: center;
+      box-shadow: 0 4px 14px rgba(90,64,40,.06); }
+    .lp-stat .n { font-size: clamp(1.3rem, 5.6vw, 1.9rem); font-weight: 800; color: var(--lp-orange-d);
+      line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .lp-stat .n small { font-size: .62em; margin-left: 1px; }
+    .lp-stat .k { font-size: .72rem; color: var(--lp-muted); font-weight: 700; margin-top: 5px; line-height: 1.45; }
+    .lp-ba { display: grid; gap: 10px; }
+    .lp-bacard { background: #fff; border-radius: 18px; padding: 14px 16px; box-shadow: 0 4px 14px rgba(90,64,40,.06); }
+    .lp-bacard .lb { font-size: .7rem; font-weight: 800; letter-spacing: .08em; }
+    .lp-bacard.b .lb { color: var(--lp-muted); }
+    .lp-bacard.a .lb { color: var(--lp-orange-d); }
+    .lp-bacard p { margin: 4px 0 0; font-size: .9rem; line-height: 1.7; }
+    .lp-bacard.b p { color: var(--lp-muted); }
+
+    /* --- 機能一覧 --- */
+    .lp-more { padding-top: 44px; }
+    .lp-more h2 { text-align: center; }
+    .lp-mgrid { display: grid; gap: 10px; margin-top: 18px; }
+    .lp-mitem { display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid var(--lp-line);
+      border-radius: 16px; padding: 14px 16px; }
+    .lp-mitem .mi { font-size: 1.2rem; line-height: 1.3; flex: none; }
+    .lp-mitem b { display: block; font-size: .95rem; }
+    .lp-mitem p { margin: 3px 0 0; color: var(--lp-muted); font-size: .85rem; line-height: 1.7; }
+
+    /* --- 料金 --- */
+    .lp-price { background: #fff; border: 1.5px solid var(--lp-orange-s); border-radius: 22px;
+      padding: 26px 22px; text-align: center; margin-top: 26px; box-shadow: 0 8px 22px rgba(90,64,40,.07); }
+    .lp-price .yen { font-size: 2rem; font-weight: 800; color: var(--lp-orange-d); line-height: 1.1; }
+    .lp-price .yen small { font-size: .5em; margin-left: 2px; }
+    .lp-plans { display: grid; gap: 10px; margin: 16px 0 0; text-align: left; }
+    .lp-plan { border: 1px solid var(--lp-line); border-radius: 14px; padding: 12px 14px; }
+    .lp-plan b { font-size: .92rem; }
+    .lp-plan p { margin: 3px 0 0; font-size: .84rem; color: var(--lp-muted); line-height: 1.7; }
+
+    /* --- FAQ --- */
+    .lp-faq { padding-top: 44px; }
+    .lp-faq h2 { text-align: center; }
+    .lp-qa { background: #fff; border: 1px solid var(--lp-line); border-radius: 16px; margin-bottom: 8px; overflow: hidden; }
+    .lp-qa summary { list-style: none; cursor: pointer; padding: 15px 44px 15px 16px; font-weight: 700;
+      font-size: .93rem; position: relative; line-height: 1.6; }
+    .lp-qa summary::-webkit-details-marker { display: none; }
+    .lp-qa summary::after { content: "＋"; position: absolute; right: 16px; top: 14px;
+      color: var(--lp-orange-d); font-weight: 800; }
+    .lp-qa[open] summary::after { content: "−"; }
+    .lp-qa .ans { padding: 0 16px 15px; color: var(--lp-muted); font-size: .89rem; line-height: 1.85; margin: 0; }
+
+    /* --- 最終CTA・フッター --- */
+    .lp-last { text-align: center; background: var(--lp-orange-s); border-radius: 24px;
+      padding: 34px 22px; margin: 44px 20px 0; }
+    .lp-last h2 { margin-bottom: 6px; }
+    .lp-foot { text-align: center; font-size: .8rem; margin-top: 26px; padding: 0 20px; color: var(--lp-muted); }
+    .lp-foot a { color: var(--lp-muted); text-decoration: underline; }
+    .lp-foot .cp { display: block; margin-top: 10px; font-size: .74rem; }
+
+    /* --- 画面が広いとき --- */
+    @media (min-width: 720px) {
+      .lp-hero { padding-top: 34px; }
+      .lp-probs, .lp-mgrid { grid-template-columns: repeat(2, 1fr); }
+      .lp-ba { grid-template-columns: repeat(2, 1fr); }
+      .lp-plans { grid-template-columns: repeat(2, 1fr); }
+      .lp-zrow { grid-template-columns: 1fr 240px; gap: 34px; }
+      .lp-zrow.rev { grid-template-columns: 240px 1fr; }
+      .lp-zrow.rev .lp-ztext { order: 2; }
+      .lp-zrow.rev .phone { order: 1; }
+    }
     /* ---- 作り方トグル ---- */
     .toggle-field { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 4px; cursor: pointer; }
     .toggle-field input { margin-top: 3px; flex: none; width: 18px; height: 18px; accent-color: var(--orange); }
@@ -715,8 +840,7 @@
     /* ---- Bottom tab bar ---- */
     .tabbar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; background: #fff; border-top: 1px solid var(--line);
       display: flex; justify-content: space-around; align-items: flex-end;
-      /* ホームインジケータ（下から上へスワイプする帯）と重ならないよう余白を確保 */
-      padding: 8px 0 calc(12px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; }
+      padding: 8px 0 var(--tabbar-gap); max-width: 480px; margin: 0 auto; }
     .tabbar.hidden { display: none; }
     .tab { background: none; border: none; cursor: pointer; color: var(--muted); display: flex; flex-direction: column;
       align-items: center; gap: 3px; font-size: .68rem; font-weight: 700; padding: 4px 14px; }
@@ -744,49 +868,207 @@
     <!-- ランディング（未ログインの初回） -->
     <section class="view" id="view-landing">
       <div class="lp">
-        <div class="lp-hero">
-          <img src="/icon.png" class="lp-logo" alt="めにゅらく！" width="88" height="88" />
-          <h1 class="lp-h1">「今日何作ろう」<br />からの解放！</h1>
-          <p class="lp-sub">共働き夫婦や同棲カップルのためのAI献立アプリ。期間を選ぶだけで、毎日の献立も買い物リストも自動。ふたりで共有できます。</p>
-          <button class="btn-primary lp-cta" onclick="startFromLanding('register')">無料ではじめる</button>
-          <p class="lp-login">アカウントをお持ちの方は <a href="#" onclick="startFromLanding('login');return false;">ログイン</a></p>
-        </div>
 
-        <div class="lp-benefits">
-          <div class="lp-card"><div class="lp-ic">🗓️</div><h3>期間を選ぶだけ、数秒で完成</h3><p>数日〜2週間分の献立をAIがまとめて提案。できたものから順に画面に出るので、待たされません。</p></div>
-          <div class="lp-card"><div class="lp-ic">🛒</div><h3>買い物リストが自動</h3><p>材料を自動でまとめ、<b>同じ食材は数量を合算</b>（1/2個＋1/4個→3/4個）。<b>「今日／3日分／7日分」</b>に絞れるから、今日買うものが一目で分かります。</p></div>
-          <div class="lp-card"><div class="lp-ic">🧑‍🤝‍🧑</div><h3>パートナーと共有</h3><p>招待リンクを送るだけ。献立も買い物リストもふたりで共有できて「今日どうする？」のやり取りが減ります。もちろん家族でもOK。</p></div>
-        </div>
-
-        <div class="lp-steps">
-          <h2 class="lp-h2">使い方はかんたん3ステップ</h2>
-          <div class="lp-step"><span class="lp-num">1</span><div><b>期間と食事を選ぶ</b><p>いつ・どの食事を作るか選ぶだけ。「肉多め」「和食中心」などのこだわりもタップで指定できます。</p></div></div>
-          <div class="lp-step"><span class="lp-num">2</span><div><b>AIが献立を作成</b><p>ボタンひとつでまとめて完成。気に入らない一皿は、その場でAIに作り直してもらえます。</p></div></div>
-          <div class="lp-step"><span class="lp-num">3</span><div><b>買い物リストで買う</b><p>自動でまとまったリストを見ながらお買い物。買ったものはタップでチェック。</p></div></div>
-        </div>
-
-        <div class="lp-feats">
-          <h2 class="lp-h2">毎日つかうための工夫</h2>
-          <div class="lp-fgrid">
-            <div class="lp-feat"><span class="fi">🔁</span><div><b>献立がマンネリしない</b><p>肉・魚・卵などの主材料が続かないよう自動で配分。最近作った料理も避けます。</p></div></div>
-            <div class="lp-feat"><span class="fi">🍚</span><div><b>ご飯・麺・パンを選べる</b><p>主食のタイプと品数を指定。「麺類＋主菜のみ」でラーメン一杯だけ、も作れます。</p></div></div>
-            <div class="lp-feat"><span class="fi">🧊</span><div><b>冷蔵庫の使い切り</b><p>残っている食材をタップで選ぶと、それを活かした献立に。鶏肉＋豆腐＋白菜なら鍋、のように提案します。</p></div></div>
-            <div class="lp-feat"><span class="fi">🔥</span><div><b>カロリー・PFCが分かる</b><p>文部科学省の食品成分表をもとに、カロリー・栄養バランス・塩分をグラフで表示。</p></div></div>
-            <div class="lp-feat"><span class="fi">⭐</span><div><b>お気に入り登録</b><p>気に入った料理を保存して、次の献立にワンタップで追加。「実家の肉じゃが」など名前だけでもOK。</p></div></div>
-            <div class="lp-feat"><span class="fi">🔔</span><div><b>お知らせが届く</b><p>今日の夕食や献立づくりのリマインド。パートナーが献立を作ったときもお知らせ（種類ごとにON/OFF可）。</p></div></div>
-            <div class="lp-feat"><span class="fi">🚫</span><div><b>苦手・アレルギーを除外</b><p>一度登録すれば毎回自動で除外。「買いにくい食材は控えめに」も設定できます。</p></div></div>
-            <div class="lp-feat"><span class="fi">📱</span><div><b>アプリのように使える</b><p>ホーム画面に追加すれば全画面で起動。インストール不要、iPhoneでもAndroidでも。</p></div></div>
+        <!-- 1. ヒーロー -->
+        <header class="lp-hero">
+          <img src="/icon.png" class="lp-logo" alt="めにゅらく！" width="76" height="76" />
+          <h1 class="lp-h1">「今日なに食べる？」のストレスを、<br /><em>ふたりの楽しみ</em>に。</h1>
+          <p class="lp-sub">献立作成から買い物リストの共有まで、これひとつ。ふたりの食卓をもっとスムーズに。</p>
+          <div class="lp-ctarow">
+            <button class="lp-cta" onclick="startFromLanding('register')">無料で試してみる</button>
+            <button class="lp-cta ghost" onclick="startFromLanding('login')">ログイン</button>
           </div>
-        </div>
+          <p class="lp-note">インストール不要・登録は30秒。<a href="#lp-price" onclick="lpScroll('lp-price');return false;">料金を見る</a></p>
 
-        <div class="lp-price">
-          <h2 class="lp-h2" style="margin-top:0">料金</h2>
-          <p class="lp-price-lead"><b>無料</b>ではじめられます</p>
-          <p class="lp-price-note">手動での献立入力・買い物リストはずっと無料。AI献立作成は<b>月10食分</b>＋<b>AI修正5回</b>まで無料、もっと使いたい方は<b>プレミアム（月480円・税込）</b>で使い放題です。</p>
-        </div>
+          <div class="phone" style="margin-top:26px" aria-hidden="true">
+            <div class="phone-bar"><i></i></div>
+            <div class="phone-body">
+              <div class="ph-title">8月のこんだて</div>
+              <div class="ph-cal">
+                <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+                <b>9</b><b class="on">10</b><b>11</b><b>12</b><b>13</b><b>14</b><b>15</b>
+              </div>
+              <div style="margin-top:8px">
+                <div class="ph-row"><i class="dot"></i><span class="nm">鶏の竜田揚げ</span><span class="sm">30分</span></div>
+                <div class="ph-row"><i class="dot" style="background:#7f9c7a"></i><span class="nm">小松菜のおひたし</span><span class="sm">10分</span></div>
+                <div class="ph-row"><i class="dot" style="background:#e8b04b"></i><span class="nm">豆腐の味噌汁</span><span class="sm">10分</span></div>
+              </div>
+            </div>
+          </div>
+        </header>
 
-        <button class="btn-primary lp-cta" onclick="startFromLanding('register')">無料ではじめる</button>
-        <p class="lp-foot"><a href="/terms.html">利用規約</a> ・ <a href="/privacy.html">プライバシーポリシー</a> ・ <a href="/tokushoho.html">特定商取引法に基づく表記</a></p>
+        <!-- 2. 共感・課題 -->
+        <section class="lp-before">
+          <div class="lp-inner">
+            <span class="lp-eyebrow" style="display:block;width:fit-content;margin:0 auto 12px">BEFORE</span>
+            <h2>こんなお悩み、ありませんか？</h2>
+            <p class="lp-lead">毎日のことだからこそ、小さなストレスが積み重なっていきます。</p>
+            <div class="lp-probs">
+              <div class="lp-prob"><span class="q">?</span><p>帰りの電車で、毎晩「今日なに作ろう」と考えるのが大変。</p></div>
+              <div class="lp-prob"><span class="q">?</span><p>相手に聞いても「なんでもいい」と言われて、結局ひとりで決めている。</p></div>
+              <div class="lp-prob"><span class="q">?</span><p>買い出しのメモがうまく共有できず、買い忘れたり同じものを買ってしまう。</p></div>
+              <div class="lp-prob"><span class="q">?</span><p>気づけば同じような料理ばかり。栄養が偏っていないかも気になる。</p></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. 解決策・機能 -->
+        <section class="lp-feats">
+          <div class="lp-inner">
+            <span class="lp-eyebrow" style="display:block;width:fit-content;margin:0 auto 12px">HOW</span>
+            <h2>「めにゅらく！」がふたりの食卓を変える3つの理由</h2>
+            <p class="lp-lead">考える・決める・共有する。その全部をアプリにおまかせできます。</p>
+
+            <div class="lp-zig">
+              <div class="lp-zrow">
+                <div class="lp-ztext">
+                  <span class="lp-znum">1</span>
+                  <h3>期間を選ぶだけ。数秒で一週間の献立が決まる</h3>
+                  <p>いつ・どの食事を作るかを選ぶだけ。AIがまとめて提案し、できたものから順に画面に出るので待たされません。</p>
+                  <ul class="lp-zlist">
+                    <li>肉・魚・卵が続かないよう自動で配分</li>
+                    <li>「肉多め」「和食中心」などタップで指定</li>
+                    <li>気に入らない一皿はその場で作り直し</li>
+                  </ul>
+                </div>
+                <div class="phone" aria-hidden="true">
+                  <div class="phone-bar"><i></i></div>
+                  <div class="phone-body">
+                    <div class="ph-title">こだわり</div>
+                    <div><span class="ph-chip">おまかせ</span><span class="ph-chip">肉多め</span><span class="ph-chip g">和食中心</span></div>
+                    <div style="margin:8px 0 6px" class="ph-title">できた献立</div>
+                    <div class="ph-row"><i class="dot"></i><span class="nm">豚の生姜焼き</span><span class="sm">肉</span></div>
+                    <div class="ph-row"><i class="dot" style="background:#5aa2d8"></i><span class="nm">鮭のムニエル</span><span class="sm">魚</span></div>
+                    <div class="ph-row"><i class="dot" style="background:#e8b04b"></i><span class="nm">オムライス</span><span class="sm">卵</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lp-zrow rev">
+                <div class="lp-ztext">
+                  <span class="lp-znum">2</span>
+                  <h3>ふたりでリアルタイムに共有</h3>
+                  <p>招待リンクを送るだけでパートナーと同じ献立を見られます。「今日どうする？」のやり取りが、そもそも要らなくなります。</p>
+                  <ul class="lp-zlist">
+                    <li>献立も買い物リストもふたりで共有</li>
+                    <li>相手が献立を作るとお知らせが届く</li>
+                    <li>苦手な食材やアレルギーは登録して自動で除外</li>
+                  </ul>
+                </div>
+                <div class="phone" aria-hidden="true">
+                  <div class="phone-bar"><i></i></div>
+                  <div class="phone-body">
+                    <div class="ph-title">ふたりのごはん</div>
+                    <div class="ph-row"><i class="dot"></i><span class="nm">てっぺい</span><span class="sm">オーナー</span></div>
+                    <div class="ph-row"><i class="dot" style="background:#7f9c7a"></i><span class="nm">かな</span><span class="sm">メンバー</span></div>
+                    <div style="margin:8px 0 6px" class="ph-title">お知らせ</div>
+                    <div class="ph-row" style="background:var(--lp-orange-s)"><span class="nm" style="font-weight:600">かなさんが献立を作りました</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="lp-zrow">
+                <div class="lp-ztext">
+                  <span class="lp-znum">3</span>
+                  <h3>買い物リストは自動。今日買うものだけ見える</h3>
+                  <p>献立の材料を自動でまとめます。同じ食材は数量を合算し、「今日／3日分／7日分」に絞れるので、余計な情報が目に入りません。</p>
+                  <ul class="lp-zlist">
+                    <li>1/2個＋1/4個 → 3/4個(150g) と合算</li>
+                    <li>何の料理に使うかも一緒に表示</li>
+                    <li>冷蔵庫にあるものは「買わなくてOK」に仕分け</li>
+                  </ul>
+                </div>
+                <div class="phone" aria-hidden="true">
+                  <div class="phone-bar"><i></i></div>
+                  <div class="phone-body">
+                    <div class="ph-title">買うもの（今日）</div>
+                    <div class="ph-row"><i class="ph-check on"></i><span class="nm">玉ねぎ 3/4個</span></div>
+                    <div class="ph-row"><i class="ph-check"></i><span class="nm">鶏もも肉 300g</span></div>
+                    <div class="ph-row"><i class="ph-check"></i><span class="nm">小松菜 1袋</span></div>
+                    <div style="margin-top:7px"><span class="ph-chip g">🧊 冷蔵庫にある 2</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. 導入メリット -->
+        <section class="lp-after">
+          <div class="lp-inner">
+            <span class="lp-eyebrow" style="display:block;width:fit-content;margin:0 auto 12px">AFTER</span>
+            <h2>献立を「考える時間」が、まるごと空きます</h2>
+            <p class="lp-lead">1日10分の献立決めも、1か月なら5時間。その時間を、ふたりの時間に。</p>
+            <div class="lp-stats">
+              <div class="lp-stat"><div class="n">約5<small>時間</small></div><div class="k">1か月で浮く<br>献立を考える時間</div></div>
+              <div class="lp-stat"><div class="n">数<small>秒</small></div><div class="k">1週間分の<br>献立ができるまで</div></div>
+              <div class="lp-stat"><div class="n">0<small>円</small></div><div class="k">ふたり目以降も<br>ずっと無料</div></div>
+            </div>
+            <div class="lp-ba">
+              <div class="lp-bacard b"><span class="lb">BEFORE</span><p>帰り道に献立を考え、スーパーで迷い、家で「あれ買い忘れた」。</p></div>
+              <div class="lp-bacard a"><span class="lb">AFTER</span><p>献立はもう決まっている。買うものはスマホに出ている。あとは作るだけ。</p></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 機能一覧 -->
+        <section class="lp-more">
+          <div class="lp-inner">
+            <h2>毎日つかうための工夫</h2>
+            <div class="lp-mgrid">
+              <div class="lp-mitem"><span class="mi">🍚</span><div><b>ご飯・麺・パンを選べる</b><p>主食と品数を指定。「麺類＋主菜のみ」でラーメン一杯だけ、も作れます。</p></div></div>
+              <div class="lp-mitem"><span class="mi">🧊</span><div><b>冷蔵庫の使い切り</b><p>残っている食材を選ぶと、それを活かした献立に。鶏肉＋豆腐＋白菜なら鍋、のように提案します。</p></div></div>
+              <div class="lp-mitem"><span class="mi">🔥</span><div><b>カロリー・栄養が分かる</b><p>文部科学省の食品成分表をもとに、カロリー・PFCバランス・塩分をグラフで表示。</p></div></div>
+              <div class="lp-mitem"><span class="mi">⭐</span><div><b>お気に入り登録</b><p>気に入った料理を保存して、次の献立にワンタップで追加。名前だけの登録もできます。</p></div></div>
+              <div class="lp-mitem"><span class="mi">🔔</span><div><b>お知らせが届く</b><p>今日の夕食や献立づくりのリマインド。種類ごとにオン・オフできます。</p></div></div>
+              <div class="lp-mitem"><span class="mi">📱</span><div><b>アプリのように使える</b><p>ホーム画面に追加すれば全画面で起動。インストール不要で、iPhoneでもAndroidでも。</p></div></div>
+            </div>
+
+            <!-- 5. 料金 -->
+            <div class="lp-price" id="lp-price">
+              <div class="lp-eyebrow">PRICE</div>
+              <div class="yen">0<small>円</small><span style="font-size:.5em;color:var(--lp-muted);margin-left:6px">ではじめられます</span></div>
+              <div class="lp-plans">
+                <div class="lp-plan"><b>無料プラン</b><p>手動での献立入力・買い物リストの共有はずっと無料。AIの献立作成も毎月10食分＋AI修正5回まで。</p></div>
+                <div class="lp-plan"><b>プレミアム（月480円・税込）</b><p>AIの献立作成・作り直し・1品差し替えが使い放題。いつでも解約できます。</p></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. FAQ -->
+        <section class="lp-faq">
+          <div class="lp-inner">
+            <h2>よくあるご質問</h2>
+            <details class="lp-qa"><summary>パートナーも無料で使えますか？</summary>
+              <p class="ans">はい。人数による追加料金はありません。招待した相手も無料のまま、献立と買い物リストを一緒に使えます。</p></details>
+            <details class="lp-qa"><summary>共有のやり方は簡単ですか？</summary>
+              <p class="ans">設定画面の招待リンクをLINEなどで送るだけです。相手がリンクを開いて登録すると、そのままふたりのグループに参加できます。</p></details>
+            <details class="lp-qa"><summary>アプリのインストールは必要ですか？</summary>
+              <p class="ans">必要ありません。ブラウザで開いてすぐ使えます。ホーム画面に追加すると、アプリのように全画面で起動でき、お知らせも受け取れます。</p></details>
+            <details class="lp-qa"><summary>苦手な食材やアレルギーには対応していますか？</summary>
+              <p class="ans">対応しています。設定に登録しておくと、以降の献立から自動で除外されます。「買いにくいので控えめに」といった調整もできます。</p></details>
+            <details class="lp-qa"><summary>同じような料理ばかりになりませんか？</summary>
+              <p class="ans">主材料（肉・魚・卵など）が続かないよう自動で配分し、最近作った料理も避けます。「肉多め」「和食中心」のような希望も指定できます。</p></details>
+            <details class="lp-qa"><summary>解約はいつでもできますか？</summary>
+              <p class="ans">はい。プレミアムはいつでも解約でき、解約後も無料の範囲で引き続きご利用いただけます。</p></details>
+          </div>
+        </section>
+
+        <!-- 最終CTA -->
+        <section class="lp-last">
+          <h2>今日の献立から、ラクにしませんか。</h2>
+          <p class="lp-lead" style="margin-bottom:20px">登録は30秒。まずは1週間分の夕食を作ってみてください。</p>
+          <div class="lp-ctarow">
+            <button class="lp-cta" onclick="startFromLanding('register')">無料で試してみる</button>
+          </div>
+          <p class="lp-note">アカウントをお持ちの方は <a href="#" onclick="startFromLanding('login');return false;">ログイン</a></p>
+        </section>
+
+        <footer class="lp-foot">
+          <a href="/terms.html">利用規約</a> ・ <a href="/privacy.html">プライバシーポリシー</a> ・ <a href="/tokushoho.html">特定商取引法に基づく表記</a>
+          <span class="cp">© めにゅらく！</span>
+        </footer>
       </div>
     </section>
 
@@ -1315,6 +1597,7 @@
     }
 
     function showLanding() { showView("landing", "めにゅらく！"); }
+    function lpScroll(id) { $(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }
     function startFromLanding(mode) { setAuthMode(mode || "register"); showView("auth", "めにゅらく！"); renderGoogleButton(); updateJoinNote(); }
     function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); renderGoogleButton(); updateJoinNote(); }
     function updateJoinNote() { const n = $("joinNote"); if (n) n.style.display = sessionStorage.getItem("joinToken") ? "block" : "none"; }

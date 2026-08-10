@@ -30,3 +30,7 @@ Thumbs.db
 
 # 成分表の元Excel（抽出済みの data/nutrition.json をコミットするため元ファイルは除外）
 *.xlsx
+
+# 相談用に置いたスクリーンショット等
+IMG_*.jpg
+IMG_*.png
