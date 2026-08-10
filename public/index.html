@@ -257,8 +257,11 @@
     #calWrap .cal-cell.sel { background: #fdf1e6; color: var(--ink); }
     #calWrap .cal-cell.sel .cal-num { color: var(--ink); }
     .cal-meals { margin-top: 3px; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
-    .cm { border-left: 3px solid #bbb; padding-left: 3px; font-size: .55rem; line-height: 1.25; text-align: left;
-      font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--ink); }
+    /* 狭いマスでも料理名が伝わるよう2行まで表示（1行だと「豚肉の…」で素材しか見えない） */
+    .cm { border-left: 3px solid #bbb; padding-left: 3px; font-size: .56rem; line-height: 1.3; text-align: left;
+      font-weight: 600; min-width: 0; color: var(--ink); overflow: hidden;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+      overflow-wrap: anywhere; }
     .range-hint { margin: 10px 4px 0; font-size: .9rem; color: var(--ink); }
     .range-hint .muted { color: var(--muted); font-weight: 500; }
     .range-hint .warn { color: #d9534f; font-size: .8rem; font-weight: 700; }
@@ -2570,6 +2573,16 @@
     function shiftMonth(y, m, delta) { const d = new Date(y, m + delta, 1); return { y: d.getFullYear(), m: d.getMonth() }; }
     const DOWH = ["日", "月", "火", "水", "木", "金", "土"];
 
+    // カレンダーの狭いマス用に、料理名から「料理そのもの」が見える部分を取り出す。
+    // 「豚肉のトマト煮込み」→「トマト煮込み」のように、頭の素材名（〜の）を落とす。
+    // 素材はタップすれば分かるので、限られた文字数は料理の個性に使う。
+    function calDishLabel(name) {
+      const s = String(name || "").trim();
+      if (s.length <= 5) return s; // 短い名前（肉じゃが・焼き魚など）はそのまま
+      const m = s.match(/^[^のと]{1,5}の(.+)$/); // 「AとBの〜」は素材の組み合わせが主役なので落とさない
+      if (m && m[1].length >= 3) return m[1];
+      return s;
+    }
     function renderCalendar() {
       const map = buildDateMap();
       if (!calCursor) {
@@ -2589,7 +2602,7 @@
         const has = dayMeals.length;
         const lines = dayMeals.map((mm) => {
           const nm = (mm.dishes || []).map((d) => d.name).filter(Boolean)[0] || mm.slot;
-          return `<div class="cm" style="border-color:${SLOT_COLOR[mm.slot] || "#bbb"}">${esc(nm)}</div>`;
+          return `<div class="cm" title="${esc(nm)}" style="border-color:${SLOT_COLOR[mm.slot] || "#bbb"}">${esc(calDishLabel(nm))}</div>`;
         }).join("");
         cells += `<div class="cal-cell ${has ? "has" : ""} ${isToday(ds) ? "today" : ""} ${ds === calSelectedDate ? "sel" : ""}" data-date="${ds}">
           <div class="cal-num">${day}</div>${has ? `<div class="cal-meals">${lines}</div>` : ""}</div>`;
