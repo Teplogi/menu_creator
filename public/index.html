@@ -503,6 +503,23 @@
     .ph-check { width: 11px; height: 11px; border-radius: 3px; border: 1.5px solid #d8cabb; flex: none; }
     .ph-check.on { background: var(--lp-orange); border-color: var(--lp-orange); }
 
+    /* --- 実際の画面キャプチャ --- */
+    /* 画面写真そのものに上部バーが写っているので、モックのノッチは付けずに枠だけ被せる */
+    .lp-shot { width: 208px; margin: 0 auto; flex: none; border-radius: 24px; overflow: hidden;
+      border: 6px solid #efe4d6; background: #fff; box-shadow: 0 16px 34px rgba(90,64,40,.16); }
+    .lp-shot img { display: block; width: 100%; height: auto; }
+    .lp-hero .lp-shot { width: 240px; margin-top: 26px; }
+    .lp-shot.wide { width: 100%; max-width: 300px; border-radius: 18px; border-width: 5px; }
+
+    /* --- 使い方3ステップ --- */
+    .lp-steps { display: grid; gap: 26px; margin-top: 24px; }
+    .lp-step { text-align: center; }
+    .lp-step .sn { display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      font-size: .7rem; font-weight: 800; letter-spacing: .1em; color: var(--lp-orange-d);
+      background: var(--lp-orange-s); border-radius: 999px; padding: 4px 12px; margin-bottom: 12px; }
+    .lp-step h3 { font-size: 1rem; margin: 12px 0 5px; line-height: 1.55; }
+    .lp-step p { margin: 0; font-size: .86rem; color: var(--lp-muted); line-height: 1.8; }
+
     /* --- 課題（Before） --- */
     .lp-before { background: var(--lp-green-s); padding-top: 40px; padding-bottom: 40px; margin-top: 34px; }
     .lp-before h2 { text-align: center; }
@@ -596,7 +613,8 @@
       .lp-zrow { grid-template-columns: 1fr 240px; gap: 34px; }
       .lp-zrow.rev { grid-template-columns: 240px 1fr; }
       .lp-zrow.rev .lp-ztext { order: 2; }
-      .lp-zrow.rev .phone { order: 1; }
+      .lp-zrow.rev .phone, .lp-zrow.rev .lp-shot { order: 1; }
+      .lp-steps { grid-template-columns: repeat(3, 1fr); gap: 18px; }
     }
     /* ---- 作り方トグル ---- */
     .toggle-field { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 4px; cursor: pointer; }
@@ -880,20 +898,9 @@
           </div>
           <p class="lp-note">インストール不要・登録は30秒。<a href="#lp-price" onclick="lpScroll('lp-price');return false;">料金を見る</a></p>
 
-          <div class="phone" style="margin-top:26px" aria-hidden="true">
-            <div class="phone-bar"><i></i></div>
-            <div class="phone-body">
-              <div class="ph-title">8月のこんだて</div>
-              <div class="ph-cal">
-                <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
-                <b>9</b><b class="on">10</b><b>11</b><b>12</b><b>13</b><b>14</b><b>15</b>
-              </div>
-              <div style="margin-top:8px">
-                <div class="ph-row"><i class="dot"></i><span class="nm">鶏の竜田揚げ</span><span class="sm">30分</span></div>
-                <div class="ph-row"><i class="dot" style="background:#7f9c7a"></i><span class="nm">小松菜のおひたし</span><span class="sm">10分</span></div>
-                <div class="ph-row"><i class="dot" style="background:#e8b04b"></i><span class="nm">豆腐の味噌汁</span><span class="sm">10分</span></div>
-              </div>
-            </div>
+          <div class="lp-shot">
+            <img src="/lp/home-calendar.jpg" width="620" height="823"
+              alt="ひと月の献立がカレンダーに並んだホーム画面" />
           </div>
         </header>
 
@@ -931,16 +938,9 @@
                     <li>気に入らない一皿はその場で作り直し</li>
                   </ul>
                 </div>
-                <div class="phone" aria-hidden="true">
-                  <div class="phone-bar"><i></i></div>
-                  <div class="phone-body">
-                    <div class="ph-title">こだわり</div>
-                    <div><span class="ph-chip">おまかせ</span><span class="ph-chip">肉多め</span><span class="ph-chip g">和食中心</span></div>
-                    <div style="margin:8px 0 6px" class="ph-title">できた献立</div>
-                    <div class="ph-row"><i class="dot"></i><span class="nm">豚の生姜焼き</span><span class="sm">肉</span></div>
-                    <div class="ph-row"><i class="dot" style="background:#5aa2d8"></i><span class="nm">鮭のムニエル</span><span class="sm">魚</span></div>
-                    <div class="ph-row"><i class="dot" style="background:#e8b04b"></i><span class="nm">オムライス</span><span class="sm">卵</span></div>
-                  </div>
+                <div class="lp-shot">
+                  <img src="/lp/plan-list.jpg" width="620" height="740" loading="lazy"
+                    alt="日付ごとに主菜と副菜、調理時間が並んだ献立の一覧" />
                 </div>
               </div>
 
@@ -955,15 +955,9 @@
                     <li>苦手な食材やアレルギーは登録して自動で除外</li>
                   </ul>
                 </div>
-                <div class="phone" aria-hidden="true">
-                  <div class="phone-bar"><i></i></div>
-                  <div class="phone-body">
-                    <div class="ph-title">ふたりのごはん</div>
-                    <div class="ph-row"><i class="dot"></i><span class="nm">てっぺい</span><span class="sm">オーナー</span></div>
-                    <div class="ph-row"><i class="dot" style="background:#7f9c7a"></i><span class="nm">かな</span><span class="sm">メンバー</span></div>
-                    <div style="margin:8px 0 6px" class="ph-title">お知らせ</div>
-                    <div class="ph-row" style="background:var(--lp-orange-s)"><span class="nm" style="font-weight:600">かなさんが献立を作りました</span></div>
-                  </div>
+                <div class="lp-shot wide">
+                  <img src="/lp/invite.jpg" width="620" height="516" loading="lazy"
+                    alt="招待リンクをコピーしてパートナーを招待する設定画面" />
                 </div>
               </div>
 
@@ -993,7 +987,45 @@
           </div>
         </section>
 
-        <!-- 4. 導入メリット -->
+        <!-- 4. 使い方 -->
+        <section class="lp-steps-sec" style="padding-top:44px">
+          <div class="lp-inner">
+            <span class="lp-eyebrow" style="display:block;width:fit-content;margin:0 auto 12px">STEP</span>
+            <h2 style="text-align:center">使い方は、3ステップだけ</h2>
+            <p class="lp-lead" style="text-align:center">むずかしい設定はありません。はじめての日から、そのまま使えます。</p>
+            <div class="lp-steps">
+              <div class="lp-step">
+                <span class="sn">STEP 1</span>
+                <div class="lp-shot">
+                  <img src="/lp/step1-range.jpg" width="620" height="874" loading="lazy"
+                    alt="カレンダーで作る期間を選び、日ごとに朝・昼・夕を指定する画面" />
+                </div>
+                <h3>作りたい期間を選ぶ</h3>
+                <p>カレンダーをなぞるだけ。「平日の夕食だけ」もワンタップで指定できます。</p>
+              </div>
+              <div class="lp-step">
+                <span class="sn">STEP 2</span>
+                <div class="lp-shot">
+                  <img src="/lp/step2-prefs.jpg" width="620" height="874" loading="lazy"
+                    alt="人数・調理時間・主食・品数と、こだわりのチップを選ぶ画面" />
+                </div>
+                <h3>こだわりをタップする</h3>
+                <p>人数や調理時間、「肉多め」「和食中心」などを選ぶだけ。空欄のままでも大丈夫です。</p>
+              </div>
+              <div class="lp-step">
+                <span class="sn">STEP 3</span>
+                <div class="lp-shot">
+                  <img src="/lp/step3-create.jpg" width="620" height="874" loading="lazy"
+                    alt="「AIで作成する」ボタンを押して献立を作る画面" />
+                </div>
+                <h3>ボタンを押して待つだけ</h3>
+                <p>できた献立から順に画面へ。買い物リストも同時にできあがります。</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. 導入メリット -->
         <section class="lp-after">
           <div class="lp-inner">
             <span class="lp-eyebrow" style="display:block;width:fit-content;margin:0 auto 12px">AFTER</span>
@@ -1024,7 +1056,7 @@
               <div class="lp-mitem"><span class="mi">📱</span><div><b>アプリのように使える</b><p>ホーム画面に追加すれば全画面で起動。インストール不要で、iPhoneでもAndroidでも。</p></div></div>
             </div>
 
-            <!-- 5. 料金 -->
+            <!-- 6. 料金 -->
             <div class="lp-price" id="lp-price">
               <div class="lp-eyebrow">PRICE</div>
               <div class="yen">0<small>円</small><span style="font-size:.5em;color:var(--lp-muted);margin-left:6px">ではじめられます</span></div>
@@ -1036,7 +1068,7 @@
           </div>
         </section>
 
-        <!-- 6. FAQ -->
+        <!-- 7. FAQ -->
         <section class="lp-faq">
           <div class="lp-inner">
             <h2>よくあるご質問</h2>
