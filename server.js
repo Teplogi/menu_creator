@@ -25,11 +25,12 @@ app.use(
         // Googleログイン（Google Identity Services）用に accounts.google.com を許可
         scriptSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com/gsi/client"],
         scriptSrcAttr: ["'unsafe-inline'"], // onclick 等のインラインハンドラを許可（既定の'none'だとUIが壊れる）
-        styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com/gsi/style"],
+        // LPの丸ゴシック（Zen Maru Gothic）を Google Fonts から読むため fonts.* を許可
+        styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com/gsi/style", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "https://*.googleusercontent.com"],
         connectSrc: ["'self'", "https://accounts.google.com/gsi/"],
         frameSrc: ["'self'", "https://accounts.google.com/gsi/"],
-        fontSrc: ["'self'", "data:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         objectSrc: ["'none'"],
         workerSrc: ["'self'"], // Service Worker（/sw.js）を許可（プッシュ通知/PWA用）
         baseUri: ["'self'"],

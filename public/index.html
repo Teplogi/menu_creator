@@ -14,6 +14,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="めにゅらく！" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- LP用の丸ゴシック。実際に使われる文字ぶんだけ落ちてくる（display=swapで表示は止めない）。
+       アプリ本体の画面では使わないので、ログイン後は読み込まれない -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700&display=swap" />
   <style>
     :root {
       /* フッターのタブと iPhone のホームインジケータの間隔。
@@ -449,8 +454,22 @@
     #view-landing {
       --lp-orange: #f28c38; --lp-orange-d: #d9741f; --lp-orange-s: #fdf0e2;
       --lp-base: #fdfbf7; --lp-green: #7f9c7a; --lp-green-s: #eef3ec;
+      --lp-pink: #e79aa2; --lp-pink-d: #cf7a86; --lp-pink-s: #fdeef0;
       --lp-brown: #8a6e5c; --lp-ink: #3a332c; --lp-muted: #857a6e; --lp-line: #efe6db;
       color: var(--lp-ink);
+      /* 本文は端末の丸ゴシック（iPhoneならヒラギノ丸ゴ）。webフォントは落とさない */
+      font-family: "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4",
+        "Rounded Mplus 1c", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
+      letter-spacing: .015em;
+    }
+    /* 見出しまわりだけ Zen Maru Gothic（webフォント）にする。
+       本文まで指定すると使う文字が一気に増えてダウンロード量が数倍になるため、
+       あえて見出し・ボタン・数字に絞っている。 */
+    .lp h1, .lp h2, .lp h3, .lp-eyebrow, .lp-cta, .lp-znum, .lp-step .sn,
+    .lp-stat .n, .lp-price .yen, .lp-bacard .lb {
+      font-family: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "ヒラギノ丸ゴ ProN W4",
+        "Rounded Mplus 1c", "Hiragino Sans", system-ui, sans-serif;
+      font-weight: 700;
     }
     .lp { margin: 0 auto; padding: 0 0 40px; }
     .lp section { padding: 0 20px; }
@@ -479,37 +498,22 @@
     .lp-note { font-size: .82rem; color: var(--lp-muted); margin: 14px 0 0; }
     .lp-note a { color: var(--lp-orange-d); font-weight: 700; }
 
-    /* --- スマホ画面のモック --- */
-    .phone { width: 208px; border-radius: 26px; background: #fff; border: 6px solid #efe4d6;
-      box-shadow: 0 16px 34px rgba(90,64,40,.16); overflow: hidden; flex: none; margin: 0 auto; }
-    .phone-bar { height: 20px; background: var(--lp-orange-s); display: flex; align-items: center;
-      justify-content: center; }
-    .phone-bar i { width: 46px; height: 5px; border-radius: 999px; background: #e8cfb2; display: block; }
-    .phone-body { padding: 10px; font-size: .58rem; line-height: 1.5; }
-    .ph-title { font-weight: 800; font-size: .64rem; margin-bottom: 7px; color: var(--lp-ink); }
-    .ph-row { display: flex; align-items: center; gap: 5px; padding: 5px 6px; border-radius: 8px;
-      background: var(--lp-base); margin-bottom: 4px; }
-    .ph-row .dot { width: 5px; height: 16px; border-radius: 3px; flex: none; background: var(--lp-orange); }
-    .ph-row .nm { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ph-row .sm { color: var(--lp-muted); font-size: .52rem; white-space: nowrap; }
-    .ph-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
-    .ph-cal span { text-align: center; font-size: .5rem; color: var(--lp-muted); padding: 1px 0; }
-    .ph-cal b { display: block; text-align: center; font-size: .52rem; font-weight: 700; border-radius: 5px;
-      padding: 4px 0; background: var(--lp-base); }
-    .ph-cal b.on { background: var(--lp-orange); color: #fff; }
-    .ph-chip { display: inline-block; font-size: .5rem; font-weight: 800; border-radius: 999px;
-      padding: 2px 7px; background: var(--lp-orange-s); color: var(--lp-orange-d); margin: 0 3px 3px 0; }
-    .ph-chip.g { background: var(--lp-green-s); color: var(--lp-green); }
-    .ph-check { width: 11px; height: 11px; border-radius: 3px; border: 1.5px solid #d8cabb; flex: none; }
-    .ph-check.on { background: var(--lp-orange); border-color: var(--lp-orange); }
-
     /* --- 実際の画面キャプチャ --- */
-    /* 画面写真そのものに上部バーが写っているので、モックのノッチは付けずに枠だけ被せる */
-    .lp-shot { width: 208px; margin: 0 auto; flex: none; border-radius: 24px; overflow: hidden;
-      border: 6px solid #efe4d6; background: #fff; box-shadow: 0 16px 34px rgba(90,64,40,.16); }
-    .lp-shot img { display: block; width: 100%; height: auto; }
-    .lp-hero .lp-shot { width: 240px; margin-top: 26px; }
-    .lp-shot.wide { width: 100%; max-width: 300px; border-radius: 18px; border-width: 5px; }
+    /* iPhoneの枠(透過PNG)を上に重ね、その内側に画面写真を敷く。
+       枠の画面部分の実寸は 1080x1920 の中の x113..968 / y36..1890 なので、その比率で配置する。
+       画面写真は枠と同じ縦横比(856:1855)で書き出し済み。枠に描かれた時計・電池と重ならないよう、
+       上端にアプリの背景色の帯を焼き込んである。 */
+    .lp-shot { position: relative; width: 208px; margin: 0 auto; flex: none;
+      aspect-ratio: 1080 / 1920; filter: drop-shadow(0 14px 26px rgba(90, 64, 40, .22)); }
+    .lp-shot .scr { position: absolute; left: 10.46%; top: 1.88%; width: 79.26%; height: 96.61%;
+      display: block; object-fit: cover; object-position: top center; }
+    .lp-shot .frm { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .lp-hero .lp-shot { width: 250px; margin-top: 26px; }
+    /* 一部だけを切り出したキャプチャ（枠に入れると余白だらけになるもの）はカード風に見せる */
+    .lp-flat { width: 100%; max-width: 300px; margin: 0 auto; flex: none; border-radius: 18px;
+      overflow: hidden; border: 5px solid #efe4d6; background: #fff;
+      box-shadow: 0 12px 26px rgba(90, 64, 40, .14); }
+    .lp-flat img { display: block; width: 100%; height: auto; }
 
     /* --- 使い方3ステップ --- */
     .lp-steps { display: grid; gap: 26px; margin-top: 24px; }
@@ -521,14 +525,15 @@
     .lp-step p { margin: 0; font-size: .86rem; color: var(--lp-muted); line-height: 1.8; }
 
     /* --- 課題（Before） --- */
-    .lp-before { background: var(--lp-green-s); padding-top: 40px; padding-bottom: 40px; margin-top: 34px; }
+    .lp-before { background: var(--lp-pink-s); padding-top: 64px; padding-bottom: 64px; margin-top: 44px; }
     .lp-before h2 { text-align: center; }
-    .lp-before .lp-lead { text-align: center; }
-    .lp-probs { display: grid; gap: 12px; }
-    .lp-prob { background: #fff; border-radius: 18px; padding: 16px 18px; display: flex; gap: 12px;
-      align-items: flex-start; box-shadow: 0 4px 14px rgba(90,64,40,.06); }
-    .lp-prob .q { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--lp-green-s);
-      color: var(--lp-green); font-weight: 800; font-size: .8rem; display: grid; place-items: center; }
+    .lp-before .lp-lead { text-align: center; margin-bottom: 30px; }
+    .lp-before .lp-eyebrow { color: var(--lp-pink-d); background: #fff; }
+    .lp-probs { display: grid; gap: 14px; }
+    .lp-prob { background: #fff; border-radius: 20px; padding: 18px 20px; display: flex; gap: 12px;
+      align-items: flex-start; box-shadow: 0 4px 14px rgba(150, 100, 110, .07); }
+    .lp-prob .q { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--lp-pink-s);
+      color: var(--lp-pink-d); font-weight: 800; font-size: .8rem; display: grid; place-items: center; }
     .lp-prob p { margin: 0; font-size: .93rem; line-height: 1.7; }
 
     /* --- 機能（ジグザグ） --- */
@@ -613,7 +618,7 @@
       .lp-zrow { grid-template-columns: 1fr 240px; gap: 34px; }
       .lp-zrow.rev { grid-template-columns: 240px 1fr; }
       .lp-zrow.rev .lp-ztext { order: 2; }
-      .lp-zrow.rev .phone, .lp-zrow.rev .lp-shot { order: 1; }
+      .lp-zrow.rev .lp-shot, .lp-zrow.rev .lp-flat { order: 1; }
       .lp-steps { grid-template-columns: repeat(3, 1fr); gap: 18px; }
     }
     /* ---- 作り方トグル ---- */
@@ -899,8 +904,9 @@
           <p class="lp-note">インストール不要・登録は30秒。<a href="#lp-price" onclick="lpScroll('lp-price');return false;">料金を見る</a></p>
 
           <div class="lp-shot">
-            <img src="/lp/home-calendar.jpg" width="620" height="823"
+            <img class="scr" src="/lp/home-calendar.jpg" width="520" height="1127"
               alt="ひと月の献立がカレンダーに並んだホーム画面" />
+            <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" alt="" aria-hidden="true" />
           </div>
         </header>
 
@@ -930,7 +936,7 @@
               <div class="lp-zrow">
                 <div class="lp-ztext">
                   <span class="lp-znum">1</span>
-                  <h3>期間を選ぶだけ。数秒で一週間の献立が決まる</h3>
+                  <h3>期間を選ぶだけ。約20秒で一週間の献立が決まる</h3>
                   <p>いつ・どの食事を作るかを選ぶだけ。AIがまとめて提案し、できたものから順に画面に出るので待たされません。</p>
                   <ul class="lp-zlist">
                     <li>肉・魚・卵が続かないよう自動で配分</li>
@@ -939,8 +945,9 @@
                   </ul>
                 </div>
                 <div class="lp-shot">
-                  <img src="/lp/plan-list.jpg" width="620" height="740" loading="lazy"
+                  <img class="scr" src="/lp/plan-list.jpg" width="520" height="1127" loading="lazy"
                     alt="日付ごとに主菜と副菜、調理時間が並んだ献立の一覧" />
+                  <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" loading="lazy" alt="" aria-hidden="true" />
                 </div>
               </div>
 
@@ -955,7 +962,7 @@
                     <li>苦手な食材やアレルギーは登録して自動で除外</li>
                   </ul>
                 </div>
-                <div class="lp-shot wide">
+                <div class="lp-flat">
                   <img src="/lp/invite.jpg" width="620" height="516" loading="lazy"
                     alt="招待リンクをコピーしてパートナーを招待する設定画面" />
                 </div>
@@ -972,15 +979,10 @@
                     <li>冷蔵庫にあるものは「買わなくてOK」に仕分け</li>
                   </ul>
                 </div>
-                <div class="phone" aria-hidden="true">
-                  <div class="phone-bar"><i></i></div>
-                  <div class="phone-body">
-                    <div class="ph-title">買うもの（今日）</div>
-                    <div class="ph-row"><i class="ph-check on"></i><span class="nm">玉ねぎ 3/4個</span></div>
-                    <div class="ph-row"><i class="ph-check"></i><span class="nm">鶏もも肉 300g</span></div>
-                    <div class="ph-row"><i class="ph-check"></i><span class="nm">小松菜 1袋</span></div>
-                    <div style="margin-top:7px"><span class="ph-chip g">🧊 冷蔵庫にある 2</span></div>
-                  </div>
+                <div class="lp-shot">
+                  <img class="scr" src="/lp/shopping.jpg" width="520" height="1127" loading="lazy"
+                    alt="今日・3日分・7日分で絞り込める買い物リスト。食材ごとに使う料理と日付が並ぶ" />
+                  <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" loading="lazy" alt="" aria-hidden="true" />
                 </div>
               </div>
             </div>
@@ -997,8 +999,9 @@
               <div class="lp-step">
                 <span class="sn">STEP 1</span>
                 <div class="lp-shot">
-                  <img src="/lp/step1-range.jpg" width="620" height="874" loading="lazy"
+                  <img class="scr" src="/lp/step1-range.jpg" width="520" height="1127" loading="lazy"
                     alt="カレンダーで作る期間を選び、日ごとに朝・昼・夕を指定する画面" />
+                  <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" loading="lazy" alt="" aria-hidden="true" />
                 </div>
                 <h3>作りたい期間を選ぶ</h3>
                 <p>カレンダーをなぞるだけ。「平日の夕食だけ」もワンタップで指定できます。</p>
@@ -1006,8 +1009,9 @@
               <div class="lp-step">
                 <span class="sn">STEP 2</span>
                 <div class="lp-shot">
-                  <img src="/lp/step2-prefs.jpg" width="620" height="874" loading="lazy"
+                  <img class="scr" src="/lp/step2-prefs.jpg" width="520" height="1127" loading="lazy"
                     alt="人数・調理時間・主食・品数と、こだわりのチップを選ぶ画面" />
+                  <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" loading="lazy" alt="" aria-hidden="true" />
                 </div>
                 <h3>こだわりをタップする</h3>
                 <p>人数や調理時間、「肉多め」「和食中心」などを選ぶだけ。空欄のままでも大丈夫です。</p>
@@ -1015,8 +1019,9 @@
               <div class="lp-step">
                 <span class="sn">STEP 3</span>
                 <div class="lp-shot">
-                  <img src="/lp/step3-create.jpg" width="620" height="874" loading="lazy"
+                  <img class="scr" src="/lp/step3-create.jpg" width="520" height="1127" loading="lazy"
                     alt="「AIで作成する」ボタンを押して献立を作る画面" />
+                  <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" loading="lazy" alt="" aria-hidden="true" />
                 </div>
                 <h3>ボタンを押して待つだけ</h3>
                 <p>できた献立から順に画面へ。買い物リストも同時にできあがります。</p>
@@ -1033,8 +1038,8 @@
             <p class="lp-lead">1日10分の献立決めも、1か月なら5時間。その時間を、ふたりの時間に。</p>
             <div class="lp-stats">
               <div class="lp-stat"><div class="n">約5<small>時間</small></div><div class="k">1か月で浮く<br>献立を考える時間</div></div>
-              <div class="lp-stat"><div class="n">数<small>秒</small></div><div class="k">1週間分の<br>献立ができるまで</div></div>
-              <div class="lp-stat"><div class="n">0<small>円</small></div><div class="k">ふたり目以降も<br>ずっと無料</div></div>
+              <div class="lp-stat"><div class="n">約20<small>秒</small></div><div class="k">1週間分の<br>献立ができるまで</div></div>
+              <div class="lp-stat"><div class="n">＋0<small>円</small></div><div class="k">ふたり目以降の追加料金<br>1契約でグループ全員</div></div>
             </div>
             <div class="lp-ba">
               <div class="lp-bacard b"><span class="lb">BEFORE</span><p>帰り道に献立を考え、スーパーで迷い、家で「あれ買い忘れた」。</p></div>
@@ -1062,7 +1067,7 @@
               <div class="yen">0<small>円</small><span style="font-size:.5em;color:var(--lp-muted);margin-left:6px">ではじめられます</span></div>
               <div class="lp-plans">
                 <div class="lp-plan"><b>無料プラン</b><p>手動での献立入力・買い物リストの共有はずっと無料。AIの献立作成も毎月10食分＋AI修正5回まで。</p></div>
-                <div class="lp-plan"><b>プレミアム（月480円・税込）</b><p>AIの献立作成・作り直し・1品差し替えが使い放題。いつでも解約できます。</p></div>
+                <div class="lp-plan"><b>プレミアム（月480円・税込）</b><p>AIの献立作成・作り直し・1品差し替えが使い放題。ひとりが契約すれば、招待したパートナーも追加料金なしで同じように使えます。いつでも解約できます。</p></div>
               </div>
             </div>
           </div>
@@ -1073,7 +1078,7 @@
           <div class="lp-inner">
             <h2>よくあるご質問</h2>
             <details class="lp-qa"><summary>パートナーも無料で使えますか？</summary>
-              <p class="ans">はい。人数による追加料金はありません。招待した相手も無料のまま、献立と買い物リストを一緒に使えます。</p></details>
+              <p class="ans">はい。人数ぶんの料金はかかりません。無料プランのままふたりで使えますし、どちらかひとりがプレミアムを契約すれば、招待したパートナーも追加料金なしでAIの献立作成を使えます。</p></details>
             <details class="lp-qa"><summary>共有のやり方は簡単ですか？</summary>
               <p class="ans">設定画面の招待リンクをLINEなどで送るだけです。相手がリンクを開いて登録すると、そのままふたりのグループに参加できます。</p></details>
             <details class="lp-qa"><summary>アプリのインストールは必要ですか？</summary>
