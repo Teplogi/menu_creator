@@ -654,6 +654,12 @@
       border-radius: 12px; padding: 10px 0; font-weight: 700; font-size: .9rem; cursor: pointer; }
     .slotpill.on { background: var(--orange); color: #fff; border-color: var(--orange); }
     .mp-hint { font-size: .88rem; color: var(--ink); margin: 4px 2px 12px; min-height: 1.2em; }
+    /* 「1品だけ変更」の2択（お気に入りから選ぶ／AIで作り直す） */
+    .mp-choice { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .mp-choice small { font-weight: 500; font-size: .76rem; color: var(--muted); }
+    .mp-or { display: flex; align-items: center; gap: 10px; margin: 14px 0 12px; }
+    .mp-or::before, .mp-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+    .mp-or span { font-size: .78rem; color: var(--muted); }
 
     /* ---- Dish editor ---- */
     .dish-edit .ef { display: block; margin-bottom: 12px; }
@@ -3562,7 +3568,7 @@
         let inner = `
           <div class="dish-top">${roleChip}${mtagHtml(mainTypeOf(dish))}<div class="dish-actions">
             <button class="dish-fav-btn ${isFav ? "on" : ""}" data-fav="${idx}" aria-label="${isFav ? "お気に入りから外す" : "お気に入りに保存"}" title="${isFav ? "お気に入りから外す" : "お気に入りに保存"}">${isFav ? "★" : "☆"}</button>
-            <button class="dish-ai-btn" data-ai="${idx}" aria-label="AIで変更">✨ AIで変更</button>
+            <button class="dish-ai-btn" data-ai="${idx}" aria-label="この1品だけ変更">🔁 1品だけ変更</button>
             <button class="dish-edit-btn" data-idx="${idx}" aria-label="編集">${EDIT_SVG}</button>
             <button class="dish-edit-btn dish-del-btn" data-del="${idx}" aria-label="この料理を削除">${TRASH_SVG}</button></div></div>
           <h3>${esc(dish.name)}</h3>
@@ -3577,7 +3583,7 @@
           inner += `<div class="subsec"><div class="sec-head"><span class="label">作り方</span><span class="lead"></span></div>`
             + (hasSteps
               ? `<ol class="steps">${dish.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>`
-              : `<p class="empty" style="padding:6px 0">この献立は「作り方なし」で作成しました。<br>鉛筆マークから追記するか、「✨ AIで変更」で作り直すと手順を付けられます。</p>`)
+              : `<p class="empty" style="padding:6px 0">この献立は「作り方なし」で作成しました。<br>鉛筆マークから追記するか、「🔁 1品だけ変更」からAIで作り直すと手順を付けられます。</p>`)
             + `</div>`;
         }
         el.innerHTML = inner;
@@ -3665,19 +3671,22 @@
       renderRecipe();
     }
 
-    // ---------- AIで変更（ポップアップ） ----------
+    // ---------- 1品だけ変更（ポップアップ） ----------
+    // 「お気に入りから選ぶ」はAIを使わない差し替えなので、AIの作り直しと
+    // 対等な2つの選択肢として並べる（入口のボタンもAI前提の名前にしない）。
     let replaceCtx = null; // { idx }
     function ensureReplaceModal() {
       if ($("replaceModal")) return;
       const ov = document.createElement("div");
       ov.id = "replaceModal"; ov.className = "modal-overlay"; ov.style.display = "none";
       ov.innerHTML = `<div class="modal-card">
-        <div class="mp-title" id="replaceTitle">✨ AIで変更</div>
-        <label class="ef"><span>この料理をどう変えますか？（AIが1品だけ作り直します）</span>
+        <div class="mp-title" id="replaceTitle">🔁 1品だけ変更</div>
+        <button class="btn-ghost mp-choice" id="replaceFromFav">⭐ お気に入りから選ぶ<small>AIは使いません（回数も減りません）</small></button>
+        <div class="mp-or"><span>または</span></div>
+        <label class="ef"><span>AIで作り直す — この料理をどう変えますか？</span>
           <input id="replaceInput" placeholder="例: ただのサラダに／鶏を使った別の主菜／具材だけ変えて"></label>
         <p class="mp-hint" id="replaceHint"></p>
-        <div class="ef-savecancel"><button class="btn-primary" id="replaceGo">AIで作り直す</button><button class="btn-ghost" id="replaceCancel">取消</button></div>
-        <button class="btn-ghost" id="replaceFromFav" style="width:100%;margin-top:8px">⭐ お気に入りと差し替える（AIを使わない）</button>
+        <div class="ef-savecancel"><button class="btn-primary" id="replaceGo">✨ AIで作り直す</button><button class="btn-ghost" id="replaceCancel">取消</button></div>
       </div>`;
       document.body.appendChild(ov);
       ov.addEventListener("click", (e) => { if (e.target === ov) closeReplaceModal(); });
@@ -3692,10 +3701,10 @@
       if (!dish) return;
       replaceCtx = { idx };
       ensureReplaceModal();
-      $("replaceTitle").innerHTML = `✨ AIで変更<span class="mm-sub">${esc(dish.role || "料理")}：${esc(dish.name || "")}</span>`;
+      $("replaceTitle").innerHTML = `🔁 1品だけ変更<span class="mm-sub">${esc(dish.role || "料理")}：${esc(dish.name || "")}</span>`;
       $("replaceInput").value = "";
       $("replaceHint").textContent = "";
-      $("replaceGo").disabled = false; $("replaceGo").textContent = "AIで作り直す";
+      $("replaceGo").disabled = false; $("replaceGo").textContent = "✨ AIで作り直す";
       $("replaceModal").style.display = "flex";
       setTimeout(() => $("replaceInput").focus(), 0);
     }
@@ -3716,7 +3725,7 @@
         renderRecipe();
       } catch (e) {
         if (!e.upgrade) $("replaceHint").textContent = e.message;
-        go.disabled = false; go.textContent = "AIで作り直す";
+        go.disabled = false; go.textContent = "✨ AIで作り直す";
       }
     }
 
