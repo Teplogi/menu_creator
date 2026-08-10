@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
-import { analyzePlan, foodAliasMap } from "./nutrition.js";
+import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -525,6 +525,8 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     "- 個数の単位は 個・本・枚・袋・束・株・丁・かけ など食材に合った自然なものを使い、数は 1/4・1/3・1/2・1・2 のようなきれいな整数か分数にする。野菜に「120g」のようなgだけの表記は使わない。",
     "- 肉・魚は「200g」「2切れ(160g)」のように重量を基本にする。調味料は 大さじ・小さじ・少々。",
     "- 同じ食材はどの料理でも同じ単位で書く（玉ねぎを「個」と「g」で混在させない）。",
+    "- にんにく・しょうがは「1かけ(5g)」「1かけ(15g)」のように必ず「かけ」で書く（「片」「小さじ」「すりおろし小さじ1」は使わない）。",
+    "- 食材名の書き方も統一する。ひらがな・カタカナ・漢字を混ぜない。○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ　× ニンニク／人参／生姜／タマネギ／ジャガイモ。",
     "",
     "【魚・サラダの書き方（入手しやすさ優先）】",
     "- 魚の種類を変えても成立する料理（塩焼き・照り焼き・ムニエル・フライ・煮付け・南蛮漬け・刺身など）は、料理名にも材料にも魚の種類を書かない。近所のスーパーに特定の魚が無いことがあるため、ユーザーが後で種類を選べるようにする。",
@@ -833,6 +835,7 @@ function buildDishPrompt(instruction, ctx) {
     "- 魚は種類を変えても成立する料理（塩焼き・ムニエル・フライ・煮付け・刺身等）なら魚種を特定しない一般名にし、材料も「魚の切り身」等にする（さばの味噌煮・ぶり大根のように魚種と一体の定番はそのままでよい）。サラダは定番野菜で作る。",
     "- 材料は name（食材名）・amount（分量）・category（分類）に分ける。category は 野菜・果物 / 肉・魚 / 卵・乳・豆腐 / 主食・乾物 / 調味料 / その他 から選び、常備調味料と水・お湯は必ず「調味料」にする。",
     "- 分量表記: 野菜・果物・豆腐など数えられる食材は「1/2個(100g)」のように個数(目安の重量g)で書く（単位は個・本・枚・袋・束・株・丁・かけ等、数は整数かきれいな分数。gだけの表記は野菜に使わない）。肉・魚は「200g」「2切れ(160g)」など重量基本、調味料は大さじ・小さじ・少々。",
+    "- にんにく・しょうがは必ず「かけ」で書く（「片」「小さじ」は使わない）。食材名はひらがな・カタカナ・漢字を混ぜず、○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ　× ニンニク／人参／生姜／タマネギ に揃える。",
     "- 手順は簡潔な箇条書き。すべて日本語。",
     "- 料理は1品だけ、save_dish ツールで返す。",
   ]
@@ -1049,12 +1052,13 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
 
 // クライアントに渡す認証設定（Googleログインの有効可否とクライアントID＝非秘密）
 // 食材名の別名表（正規化キー→食品番号）。画面側で「玉ねぎ」と「たまねぎ」を
-// 同じ食材として扱うために配る。内容は起動中変わらないのでキャッシュ可。
+// 同じ食材として扱うために配る。あわせて、買い物リストで単位を揃えるのに使う
+// 1個・大さじ1のグラム数も返す。内容は起動中変わらないのでキャッシュ可。
 let FOOD_ALIAS_CACHE = null;
 app.get("/api/food-aliases", (req, res) => {
-  if (!FOOD_ALIAS_CACHE) FOOD_ALIAS_CACHE = foodAliasMap();
+  if (!FOOD_ALIAS_CACHE) FOOD_ALIAS_CACHE = { aliases: foodAliasMap(), ...foodUnitTables() };
   res.set("Cache-Control", "public, max-age=86400");
-  res.json({ aliases: FOOD_ALIAS_CACHE });
+  res.json(FOOD_ALIAS_CACHE);
 });
 
 app.get("/api/auth/config", (req, res) => {

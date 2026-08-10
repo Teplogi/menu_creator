@@ -1516,12 +1516,23 @@
       .replace(/[\s・,、.。/／|｜'"’”`~〜－-]/g, "")
       .toLowerCase();
     let foodAliasList = null; // [正規化キー, 食品番号] を長い順に
+    let foodPieceList = null; // [正規化キー, {単位:グラム}] 長い順（1個=200g など）
+    let foodSpoonList = null; // [正規化キー, 大さじ1のグラム] 長い順
+    let spoonDefault = { "大さじ": 15, "小さじ": 5, "カップ": 200 };
+    // キーも同じ正規化を通し、長いキーを先に当てる（「鶏もも肉」を「鶏肉」より優先）
+    const byLongestKey = (obj) => Object.entries(obj || {})
+      .map(([k, v]) => [foodNorm(k), v]).filter(([k]) => k)
+      .sort((a, b) => b[0].length - a[0].length);
     async function loadFoodAliases() {
       if (foodAliasList) return foodAliasList;
       try {
-        const r = await (await fetch("/api/food-aliases")).json();
+        // v= はキャッシュ避け。返す中身を増やしたら数字を上げる（24時間キャッシュしているため）
+        const r = await (await fetch("/api/food-aliases?v=2")).json();
         foodAliasList = Object.entries(r.aliases || {}).sort((a, b) => b[0].length - a[0].length);
-      } catch { foodAliasList = []; }
+        foodPieceList = byLongestKey(r.pieceWeights);
+        foodSpoonList = byLongestKey(r.spoonGrams?.byFood);
+        if (r.spoonGrams?.default) spoonDefault = r.spoonGrams.default;
+      } catch { foodAliasList = []; foodPieceList = []; foodSpoonList = []; }
       return foodAliasList;
     }
     // 同じ食材なら同じ文字列を返す（対応表に無ければ正規化した名前そのもの）
@@ -1530,6 +1541,17 @@
       if (!n) return "";
       for (const [alias, id] of foodAliasList || []) if (n.includes(alias)) return "#" + id;
       return n;
+    }
+    // 「1かけ」「小さじ1」が何グラムか（分からなければ null）
+    function pieceGramOf(nameKey, unit) {
+      for (const [k, units] of foodPieceList || []) if (nameKey.includes(k) && units[unit] != null) return units[unit];
+      return null;
+    }
+    function spoonGramOf(nameKey, unit) {
+      for (const [k, g] of foodSpoonList || []) if (nameKey.includes(k)) {
+        return unit === "大さじ" ? g : unit === "小さじ" ? g / 3 : g * (200 / 15);
+      }
+      return spoonDefault[unit] ?? null;
     }
     // ---------- 日本語の読みやすい改行 ----------
     // 句読点までを1かたまりとして扱い、その途中では改行させない。
@@ -3989,6 +4011,9 @@
     // 「1/2個(100g)」「200g」「大さじ2」等を解析し、同じ単位どうしを足し算する。
     // 生成時に表記を統一しているので合算できる（解析できないものは元の文字列を並べる）。
     const AMT_UNITS = "個|本|枚|袋|束|株|丁|かけ|片|パック|切れ|尾|房|玉|缶|杯";
+    // 同じものを指す単位は1つに寄せる（「1かけ＋1と1/2片」が別行にならないように）
+    const UNIT_CANON = { "片": "かけ", "玉": "個", "大匙": "大さじ", "小匙": "小さじ", "cc": "ml" };
+    const PIECE_UNIT_RE = new RegExp(`^(${AMT_UNITS})$`);
     const AMT_NUM = "\\d+(?:\\.\\d+)?と\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d+(?:\\.\\d+)?";
     function parseNumJa(s) {
       const t = String(s == null ? "" : s).trim();
@@ -4005,10 +4030,45 @@
       let m = t.match(new RegExp(`^(大さじ|小さじ|カップ)\\s*(${AMT_NUM})$`)); // 単位が前
       if (m) { const n = parseNumJa(m[2]); return isNaN(n) ? null : { unit: m[1], count: n, grams: 0, pre: true }; }
       m = t.match(new RegExp(`^(${AMT_NUM})\\s*(${AMT_UNITS})\\s*(?:[（(]\\s*(\\d+(?:\\.\\d+)?)\\s*g\\s*[）)])?$`));
-      if (m) { const n = parseNumJa(m[1]); return isNaN(n) ? null : { unit: m[2], count: n, grams: m[3] ? parseFloat(m[3]) : 0 }; }
+      if (m) { const n = parseNumJa(m[1]); return isNaN(n) ? null : { unit: UNIT_CANON[m[2]] || m[2], count: n, grams: m[3] ? parseFloat(m[3]) : 0 }; }
       m = t.match(new RegExp(`^(${AMT_NUM})\\s*(g|ml|cc|kg|L|l)$`));
-      if (m) { const n = parseNumJa(m[1]); return isNaN(n) ? null : { unit: m[2].toLowerCase(), count: n, grams: 0 }; }
+      if (m) {
+        const n = parseNumJa(m[1]);
+        if (isNaN(n)) return null;
+        const u = m[2].toLowerCase();
+        if (u === "kg") return { unit: "g", count: n * 1000, grams: 0 };
+        if (u === "l") return { unit: "ml", count: n * 1000, grams: 0 };
+        return { unit: UNIT_CANON[u] || u, count: n, grams: 0 };
+      }
       return null;
+    }
+    // 1つぶんが何グラムか（換算できなければ null）
+    function partGrams(p, nameKey) {
+      if (p.grams) return p.grams;                       // 「1/2個(100g)」は書いてある値を使う
+      if (p.unit === "g" || p.unit === "ml") return p.count; // ml は水と同じ重さとみなす
+      const per = p.pre ? spoonGramOf(nameKey, p.unit) : pieceGramOf(nameKey, p.unit);
+      return per == null ? null : p.count * per;
+    }
+    // 単位がバラバラなときだけ、いったんグラムに直して1つの表記にまとめる。
+    // 例: しょうが「1かけ」＋「小さじ1」→ 1と1/3かけ(20g)
+    function mergeByGrams(parts, name) {
+      const nameKey = foodNorm(name);
+      if (!nameKey) return null;
+      let total = 0;
+      const byUnit = new Map();
+      for (const p of parts) {
+        const g = partGrams(p, nameKey);
+        if (!(g > 0)) return null; // 1つでも換算できなければ、無理にまとめない
+        total += g;
+        byUnit.set(p.unit, (byUnit.get(p.unit) || 0) + g);
+      }
+      // 寄せ先は「グラム数が一番多い単位」。ただし買うときの数え方になる個数系を優先する
+      const ranked = [...byUnit.entries()].sort((a, b) => b[1] - a[1]);
+      const target = (ranked.find(([u]) => PIECE_UNIT_RE.test(u)) || ranked[0])[0];
+      if (target === "g" || target === "ml") return `${Math.round(total)}${target}`;
+      const per = PIECE_UNIT_RE.test(target) ? pieceGramOf(nameKey, target) : spoonGramOf(nameKey, target);
+      if (!(per > 0)) return null;
+      return `${formatNum(total / per)}${target}(${Math.round(total)}g)`;
     }
     function formatAmountPart(p) {
       if (p.pre) return `${p.unit}${formatNum(p.count)}`;
@@ -4016,29 +4076,56 @@
       return `${formatNum(p.count)}${p.unit}${p.grams ? `(${Math.round(p.grams)}g)` : ""}`;
     }
     // 分量の配列を1つの表記に合算する（例: 1/2個(100g) + 1/4個(50g) → 3/4個(150g)）
-    function sumAmounts(list) {
+    function sumAmounts(list, name) {
       const groups = new Map();
       const rawCnt = new Map();
+      const nameKey = name ? foodNorm(name) : "";
+      const parsed = [];
+      const hasG = new Set(); // 括弧でgが書かれている単位
       for (const s of list || []) {
         const p = parseAmount(s);
         if (!p) { const t = (s || "").trim(); if (t) rawCnt.set(t, (rawCnt.get(t) || 0) + 1); continue; }
+        if (p.grams) hasG.add(p.unit);
+        parsed.push(p);
+      }
+      for (const p of parsed) {
+        // 「1かけ(15g)」と「1/2かけ」が混ざると括弧のgだけ足りなくなるので、
+        // g が書かれているところに揃えて、書かれていないぶんは目安の重量で埋める
+        if (!p.grams && hasG.has(p.unit) && nameKey) {
+          const per = pieceGramOf(nameKey, p.unit);
+          if (per > 0) p.grams = p.count * per;
+        }
         const g = groups.get(p.unit);
         if (g) { g.count += p.count; g.grams += p.grams; } else groups.set(p.unit, { ...p });
+      }
+      // 単位が2種類以上に割れたときは、グラム換算で1つの表記に寄せてみる
+      if (groups.size > 1 && !rawCnt.size && name) {
+        const merged = mergeByGrams([...groups.values()], name);
+        if (merged) return merged;
       }
       const parts = [...groups.values()].map(formatAmountPart);
       for (const [r, c] of rawCnt) parts.push(c > 1 ? `${r} ×${c}` : r);
       return parts.join(" ＋ ");
     }
 
+    // 同じ食材の書き方が割れていても1つにまとめるためのキー
+    // （にんにく／ニンニク、にんじん／人参 などを同じ扱いにする）
+    const shopKeyOf = (name) => foodKeyOf(name) || normName(name) || (name || "").trim();
+    // どの書き方で見せるか。一番よく使われている書き方を採り、同数なら具体的なほう（長いほう）
+    const pickDisplayName = (names) =>
+      [...names.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0][0];
+
     function aggregateIngredients(plan, extra = []) {
-      const map = new Map(); // name -> { amounts: [], category, dishes: Set }
+      const map = new Map(); // 食材キー -> { names: Map, amounts: [], category, dishes: Set }
       const add = (name0, amount0, category0, dishName) => {
         const name = (name0 || "").trim();
         if (!name) return;
         const amount = (amount0 || "").trim();
         const category = (category0 || "").trim();
-        if (!map.has(name)) map.set(name, { amounts: [], category, dishes: new Set() });
-        const rec = map.get(name);
+        const key = shopKeyOf(name);
+        if (!map.has(key)) map.set(key, { names: new Map(), amounts: [], category, dishes: new Set() });
+        const rec = map.get(key);
+        rec.names.set(name, (rec.names.get(name) || 0) + 1);
         if (!rec.category && category) rec.category = category;
         if (amount) rec.amounts.push(amount);
         if (dishName) rec.dishes.add(dishName);
@@ -4049,8 +4136,9 @@
             for (const ing of dish.ingredients || []) add(ing.name, ing.amount, ing.category, dish.name);
       for (const e of extra) add(e.name, e.amount, e.category, (e.dishes || [])[0]);
       const items = [];
-      for (const [name, rec] of map) {
-        items.push({ name, amountText: sumAmounts(rec.amounts), category: rec.category || "", dishes: [...rec.dishes] });
+      for (const rec of map.values()) {
+        const name = pickDisplayName(rec.names);
+        items.push({ name, amountText: sumAmounts(rec.amounts, name), category: rec.category || "", dishes: [...rec.dishes] });
       }
       return items;
     }
@@ -4180,26 +4268,7 @@
       saveList(l.filter((x) => x.id !== id));
       renderShopping();
     }
-    const getSameCheck = () => localStorage.getItem("shopSameCheck") === "1";
-    const setSameCheck = (v) => localStorage.setItem("shopSameCheck", v ? "1" : "0");
-
-    function setChecked(id, val) {
-      const l = getList();
-      const it = l.find((x) => x.id === id);
-      if (!it) return;
-      if (getSameCheck()) l.forEach((x) => { if (x.name === it.name) x.checked = val; });
-      else it.checked = val;
-      saveList(l);
-    }
-    // トグルON時、同名の全チェックボックス表示を揃える
-    function syncCheckboxesByName(id, val) {
-      const l = getList();
-      const nm = l.find((x) => x.id === id)?.name;
-      document.querySelectorAll("#shopBody .shopitem input[type=checkbox]").forEach((o) => {
-        const oit = l.find((x) => x.id === o.dataset.id);
-        if (oit && oit.name === nm) { o.checked = val; o.closest(".shopitem").classList.toggle("done", val); }
-      });
-    }
+    // 同じ食材は1行にまとめて表示するので、チェックは行ごと（setCheckedByIds）で足りる
     function uncheckAll() { const l = getList(); l.forEach((it) => (it.checked = false)); saveList(l); renderShopping(); }
     function resyncList() {
       if (!confirm("編集内容を破棄して、献立の材料からリストを作り直しますか？")) return;
@@ -4252,8 +4321,10 @@
     function buildAgg(list) {
       const map = new Map();
       for (const it of list) {
-        if (!map.has(it.name)) map.set(it.name, { name: it.name, parts: [], dates: new Set(), dishes: new Set(), category: it.category || "", items: [] });
-        const g = map.get(it.name);
+        const key = shopKeyOf(it.name); // 書き方が割れていても同じ行にまとめる
+        if (!map.has(key)) map.set(key, { names: new Map(), parts: [], dates: new Set(), dishes: new Set(), category: it.category || "", items: [] });
+        const g = map.get(key);
+        g.names.set(it.name, (g.names.get(it.name) || 0) + 1);
         g.items.push(it);
         if (it.amount) g.parts.push(it.amount);
         if (it.date && it.date !== "__season__") g.dates.add(it.date);
@@ -4262,23 +4333,29 @@
       }
       const rows = [];
       for (const g of map.values()) {
-        const amount = sumAmounts(g.parts); // 同じ食材の分量を合計（1/2個+1/4個 → 3/4個）
+        const name = pickDisplayName(g.names);
+        const amount = sumAmounts(g.parts, name); // 同じ食材の分量を合計（1/2個+1/4個 → 3/4個）
         rows.push({
-          name: g.name, amount, dates: [...g.dates].sort(), dishes: [...g.dishes], category: g.category,
+          name, amount, dates: [...g.dates].sort(), dishes: [...g.dishes], category: g.category,
           ids: g.items.map((x) => x.id),
           checked: g.items.length > 0 && g.items.every((x) => x.checked),
-          isSeason: g.items.some((x) => x.date === "__season__") || isSeasoning({ name: g.name, category: g.category }),
+          isSeason: g.items.some((x) => x.date === "__season__") || isSeasoning({ name, category: g.category }),
           moved: g.items.some((x) => x.movedFrom),
         });
       }
       return rows;
     }
-    function setCheckedByName(name, val) {
-      const l = getList(); l.forEach((x) => { if (x.name === name) x.checked = val; }); saveList(l);
+    // 1行にまとめた複数のアイテムをまとめて操作する（表示名ではなくidで指すのは、
+    // 「にんじん」と「人参」のように行の中で名前が違うことがあるため）
+    const idsOf = (s) => new Set(String(s || "").split(","). filter(Boolean));
+    function setCheckedByIds(ids, val) {
+      const set = idsOf(ids);
+      const l = getList(); l.forEach((x) => { if (set.has(x.id)) x.checked = val; }); saveList(l);
     }
-    function deleteByName(name) {
-      if (!confirm(`「${name}」を削除しますか？`)) return;
-      saveList(getList().filter((x) => x.name !== name));
+    function deleteByIds(ids, label) {
+      if (!confirm(`「${label}」を削除しますか？`)) return;
+      const set = idsOf(ids);
+      saveList(getList().filter((x) => !set.has(x.id)));
       renderShopping();
     }
 
@@ -4377,10 +4454,11 @@
         const moved = r.moved ? `<span class="moved-tag">移動</span>` : "";
         const buy = o.pantry ? `<button class="buyback" data-name="${esc(r.name)}" aria-label="買う物に戻す">🛒 買う</button>` : "";
         const edit = single ? `<button class="edit" data-id="${esc(single)}" aria-label="編集">${EDIT_SVG}</button>` : "";
+        const ids = esc(r.ids.join(","));
         return `<div class="shopitem ${r.checked ? "done" : ""}">
-          <label class="shoptap"><input type="checkbox" data-name="${esc(r.name)}" ${r.checked ? "checked" : ""}><span class="cb">${CHECK_SVG}</span>
+          <label class="shoptap"><input type="checkbox" data-ids="${ids}" ${r.checked ? "checked" : ""}><span class="cb">${CHECK_SVG}</span>
             <span class="txt"><span class="nm">${esc(r.name)}</span>${r.amount ? `<span class="am">${esc(r.amount)}</span>` : ""}${moved}${meta}</span></label>
-          ${buy}${edit}<button class="del" data-name="${esc(r.name)}" aria-label="削除">${TRASH_SVG}</button></div>`;
+          ${buy}${edit}<button class="del" data-ids="${ids}" data-name="${esc(r.name)}" aria-label="削除">${TRASH_SVG}</button></div>`;
       };
 
       let hasAny = false;
@@ -4453,12 +4531,9 @@
       if (anchorToday) anchorToday.addEventListener("click", () => { openShoppingWeek(fmt(new Date()), false); });
       body.querySelectorAll(".shopitem input[type=checkbox]").forEach((cb) =>
         cb.addEventListener("change", () => {
-          if (cb.dataset.name != null) setCheckedByName(cb.dataset.name, cb.checked);
-          else setChecked(cb.dataset.id, cb.checked);
+          setCheckedByIds(cb.dataset.ids, cb.checked);
           renderShopping(); // チェック済みは「買ったもの」枠へ移動
         }));
-      const sct = $("sameCheckToggle");
-      if (sct) sct.addEventListener("change", () => setSameCheck(sct.checked));
       body.querySelectorAll(".edit").forEach((b) =>
         b.addEventListener("click", () => {
           editingId = b.dataset.id;
@@ -4467,7 +4542,7 @@
           if (n) { n.focus({ preventScroll: true }); n.select(); }
         }));
       body.querySelectorAll(".del").forEach((b) =>
-        b.addEventListener("click", () => { if (b.dataset.name != null) deleteByName(b.dataset.name); else deleteItemById(b.dataset.id); }));
+        b.addEventListener("click", () => { if (b.dataset.ids != null) deleteByIds(b.dataset.ids, b.dataset.name); else deleteItemById(b.dataset.id); }));
       body.querySelectorAll(".ed-save").forEach((b) =>
         b.addEventListener("click", () => saveEdit(b.dataset.id)));
       const cancel = body.querySelector(".ed-cancel");

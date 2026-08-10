@@ -216,4 +216,10 @@ export function foodAliasMap() {
   return Object.fromEntries(ALIASES);
 }
 
+// 1個・大さじ1が何グラムか。買い物リストで「1かけ＋小さじ1」のように
+// 単位が混ざったものを、いったんグラムにしてから1つの表記へまとめるのに使う。
+export function foodUnitTables() {
+  return { pieceWeights: MAP.pieceWeights, spoonGrams: MAP.spoonGrams };
+}
+
 export const _internals = { norm, findFood, toGrams, pfcRatio };
