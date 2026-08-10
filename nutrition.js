@@ -210,4 +210,10 @@ export function analyzePlan(plan, people) {
   };
 }
 
+// 別名表（正規化済みキー → 食品番号）。画面側で「玉ねぎ」と「たまねぎ」を
+// 同じ food として扱うために使う。
+export function foodAliasMap() {
+  return Object.fromEntries(ALIASES);
+}
+
 export const _internals = { norm, findFood, toGrams, pfcRatio };

@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
-import { analyzePlan } from "./nutrition.js";
+import { analyzePlan, foodAliasMap } from "./nutrition.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -1047,6 +1047,15 @@ app.post("/api/auth/login", authLimiter, async (req, res) => {
 });
 
 // クライアントに渡す認証設定（Googleログインの有効可否とクライアントID＝非秘密）
+// 食材名の別名表（正規化キー→食品番号）。画面側で「玉ねぎ」と「たまねぎ」を
+// 同じ食材として扱うために配る。内容は起動中変わらないのでキャッシュ可。
+let FOOD_ALIAS_CACHE = null;
+app.get("/api/food-aliases", (req, res) => {
+  if (!FOOD_ALIAS_CACHE) FOOD_ALIAS_CACHE = foodAliasMap();
+  res.set("Cache-Control", "public, max-age=86400");
+  res.json({ aliases: FOOD_ALIAS_CACHE });
+});
+
 app.get("/api/auth/config", (req, res) => {
   res.json({ googleEnabled: googleEnabled(), googleClientId: googleEnabled() ? GOOGLE_CLIENT_ID : null });
 });

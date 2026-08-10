@@ -1158,6 +1158,45 @@
     const $ = (id) => document.getElementById(id);
     // 食材名の正規化（表記ゆれ吸収。server.js の normName と揃える）
     const normName = (s) => (s || "").normalize("NFKC").replace(/\s+/g, "").toLowerCase();
+
+    // 食材名を「同じ食材か」で比べるための仕組み（nutrition.js の正規化と揃える）。
+    // 「玉ねぎ」「たまねぎ」「玉葱」を同じものとして扱えるようにする。
+    const FOOD_PREP = /(みじん切り|千切り|せん切り|薄切り|うすぎり|乱切り|ざく切り|くし切り|輪切り|そぎ切り|一口大|ひとくちだい|お好み|好みで|下ゆで|水煮|冷凍|生の|新鮮な|市販の|お好きな)/g;
+    const foodNorm = (s) => String(s || "")
+      .replace(/[Ａ-Ｚａ-ｚ０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+      .replace(/[ァ-ヶ]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0x60))
+      .replace(/[（(][^）)]*[）)]/g, "")
+      .replace(FOOD_PREP, "")
+      .replace(/[\s・,、.。/／|｜'"’”`~〜－-]/g, "")
+      .toLowerCase();
+    let foodAliasList = null; // [正規化キー, 食品番号] を長い順に
+    async function loadFoodAliases() {
+      if (foodAliasList) return foodAliasList;
+      try {
+        const r = await (await fetch("/api/food-aliases")).json();
+        foodAliasList = Object.entries(r.aliases || {}).sort((a, b) => b[0].length - a[0].length);
+      } catch { foodAliasList = []; }
+      return foodAliasList;
+    }
+    // 同じ食材なら同じ文字列を返す（対応表に無ければ正規化した名前そのもの）
+    function foodKeyOf(name) {
+      const n = foodNorm(name);
+      if (!n) return "";
+      for (const [alias, id] of foodAliasList || []) if (n.includes(alias)) return "#" + id;
+      return n;
+    }
+    // 1文字ぶんの打ち間違い（挿入・削除・置換）まで許容する
+    function nearlySame(a, b) {
+      if (a === b) return true;
+      if (Math.min(a.length, b.length) < 3 || Math.abs(a.length - b.length) > 1) return false;
+      const [s, t] = a.length >= b.length ? [a, b] : [b, a];
+      for (let i = 0, j = 0, diff = 0; i < s.length; i++) {
+        if (s[i] === t[j]) { j++; continue; }
+        if (++diff > 1) return false;
+        if (s.length === t.length) j++; // 置換
+      }
+      return true;
+    }
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     const DOW = ["日", "月", "火", "水", "木", "金", "土"];
     const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -3644,12 +3683,17 @@
     function isFridge(it) {
       const n = normName(it.name);
       if (!n) return false;
+      const key = foodKeyOf(it.name);
+      const fn2 = foodNorm(it.name);
       return (fridgeItems || []).some((f) => {
         if (f.kind !== "ingredient") return false;
+        // 同じ食材だと辞書で分かる場合（玉ねぎ⇔たまねぎ⇔玉葱）
+        if (key.startsWith("#") && foodKeyOf(f.name) === key) return true;
         const fn = normName(f.name);
         if (!fn) return false;
         if (n === fn) return true;
-        return fn.length >= 2 && (n.includes(fn) || fn.includes(n)); // ひき肉⇔豚ひき肉 等を吸収
+        if (fn.length >= 2 && (n.includes(fn) || fn.includes(n))) return true; // ひき肉⇔豚ひき肉
+        return nearlySame(fn2, foodNorm(f.name)); // 1文字の打ち間違いを許容
       });
     }
     let shopWeek = null;   // 保存先の基準になる週（日曜の YYYY-MM-DD）＝ weekStart(shopAnchor)
@@ -3794,7 +3838,8 @@
         const [plans, pantry] = await Promise.all([
           apiOK("/api/plans?householdId=" + encodeURIComponent(household.id)),
           apiOK(`/api/households/${household.id}/pantry`),
-          loadFridge(), // 冷蔵庫にあるものは「買うもの」から外すため
+          loadFridge(),       // 冷蔵庫にあるものは「買うもの」から外すため
+          loadFoodAliases(),  // 「玉ねぎ」と「たまねぎ」を同じ食材として照合するため
         ]);
         plansCache = plans; pantryItems = pantry;
         renderShopping();
