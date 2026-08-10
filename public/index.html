@@ -32,6 +32,10 @@
         "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif;
       background: var(--cream); color: var(--ink); line-height: 1.7;
       -webkit-font-smoothing: antialiased;
+      /* 日本語を文節の切れ目で折り返す（「たっぷ／り」のような不自然な改行を防ぐ）。
+         対応していないブラウザでは従来どおりの折り返しになるだけで害はない。 */
+      word-break: auto-phrase;
+      text-wrap: pretty; /* 行末に1文字だけ残るのを避ける */
     }
     svg { width: 20px; height: 20px; }
 
@@ -361,9 +365,11 @@
     .undo-btn:hover { color: var(--orange-dark); border-color: var(--orange); }
     .undo-meal { margin: 0 0 12px; display: block; }
     /* 冷蔵庫・作り置き */
-    .amt-row { display: flex; align-items: center; gap: 6px; margin: 8px 0 4px; font-size: .78rem; color: var(--muted); font-weight: 700; }
+    .amt-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px;
+      font-size: .78rem; color: var(--muted); font-weight: 700; }
     .amt-row button { border: 1px solid var(--line); background: var(--cream); color: var(--muted);
-      border-radius: 999px; padding: 3px 12px; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+      border-radius: 999px; padding: 3px 12px; font: inherit; font-size: .78rem; font-weight: 700;
+      cursor: pointer; flex: none; white-space: nowrap; } /* チップ内で「たっぷ/り」と割れないように */
     .amt-row button.on { background: var(--orange); border-color: var(--orange); color: #fff; }
     .preset-chip.sel { background: var(--orange); border-color: var(--orange); }
     .preset-chip.sel .pt { color: #fff; }
@@ -584,7 +590,10 @@
     .seg { flex: 1; border: none; background: none; padding: 9px; border-radius: 9px; font: inherit; font-weight: 700; color: var(--orange-dark); cursor: pointer; }
     .seg.on { background: #fff; color: var(--orange); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
     .dtags { display: inline-flex; gap: 4px; flex-wrap: wrap; }
-    .dtag { font-size: .66rem; font-weight: 700; color: var(--orange); background: var(--orange-soft); border-radius: 6px; padding: 1px 6px; }
+    .dtag { font-size: .66rem; font-weight: 700; color: var(--orange); background: var(--orange-soft); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+    /* 短いラベルは途中で割らない（「たっぷ／り」「半／分」のような改行を防ぐ） */
+    .seg, .chip, .role-chip, .mtag, .preset-chip, .fish-btn, .soon-badge,
+    .plan-badge, .frole, .ftag, .cal-dow, .wk-label, .slot-chip { white-space: nowrap; }
     /* 曜日ごとの色（日=太陽・月=月・火=炎・水=水・木=葉・金=金色・土=土） */
     .dtag.d0 { color: #c0334a; background: #fdeaee; }
     .dtag.d1 { color: #6a58ad; background: #efecfb; }
@@ -1935,9 +1944,8 @@
         // 量のざっくりチップ
         const amtEl = $("amtRow-" + s.kind);
         if (amtEl) {
-          amtEl.innerHTML = "<span>量:</span>" + AMT_OPTIONS.map((a) =>
-            `<button type="button" class="${frAmtSel[s.kind] === a ? "on" : ""}" data-amt="${esc(a)}">${esc(a)}</button>`).join("") +
-            `<span style="font-weight:400">（任意・タップで選択）</span>`;
+          amtEl.innerHTML = `<span style="white-space:nowrap">量（任意）:</span>` + AMT_OPTIONS.map((a) =>
+            `<button type="button" class="${frAmtSel[s.kind] === a ? "on" : ""}" data-amt="${esc(a)}">${esc(a)}</button>`).join("");
           amtEl.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
             frAmtSel[s.kind] = frAmtSel[s.kind] === b.dataset.amt ? "" : b.dataset.amt;
             renderFridge();
