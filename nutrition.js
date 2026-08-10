@@ -36,6 +36,9 @@ const normEntries = (obj) =>
 const ALIASES = normEntries(MAP.aliases);
 const PIECE = normEntries(MAP.pieceWeights);
 const SPOON_BY_FOOD = normEntries(MAP.spoonGrams.byFood);
+// 栄養に影響しない材料（水・揚げ油など）。計算からも不明件数からも外す。
+const IGNORE = (MAP.ignore || []).map(norm).filter(Boolean);
+const isIgnored = (nameKey) => IGNORE.some((w) => nameKey === w || nameKey.startsWith(w + "の") || nameKey.endsWith(w));
 
 // ---------- 材料名 → 食品 ----------
 const matchCache = new Map();
@@ -110,6 +113,9 @@ function toGrams(amount, name) {
 }
 
 // ---------- 集計 ----------
+// 1材料の上限。これを超えたら照合ミス・分量の取り違えとみなして計算から外す
+// （人数で割る前の、料理1品ぶんの値で判定する）。
+const SANITY = { salt: 25, kcal: 4000 };
 const ZERO = () => ({ kcal: 0, p: 0, f: 0, c: 0, fiber: 0, salt: 0 });
 const addInto = (acc, n) => { for (const k of Object.keys(acc)) acc[k] += n[k] || 0; return acc; };
 const round = (n, d = 1) => Math.round(n * 10 ** d) / 10 ** d;
@@ -125,6 +131,7 @@ function dishNutrition(dish, people) {
   const missing = [];
   for (const ing of dish.ingredients || []) {
     if (!ing?.name) continue;
+    if (isIgnored(norm(ing.name))) continue; // 水・揚げ油などは計算しない
     const food = findFood(ing.name);
     const { grams } = toGrams(ing.amount, ing.name);
     if (!food || !grams) {
@@ -134,10 +141,17 @@ function dishNutrition(dish, people) {
       continue;
     }
     const r = grams / 100;
-    addInto(total, {
+    const add = {
       kcal: food.kcal * r, p: food.p * r, f: food.f * r,
       c: food.c * r, fiber: food.fiber * r, salt: food.salt * r,
-    });
+    };
+    // 安全弁: 1つの材料から出るはずのない量になったら、照合か分量の取り違えとみなして除外する
+    // （例: 液体の「だし汁400ml」を粉末だしとして数えると塩分が160gになる）
+    if (add.salt > SANITY.salt || add.kcal > SANITY.kcal) {
+      unknown++; missing.push(ing.name);
+      continue;
+    }
+    addInto(total, add);
     known++;
   }
   const per = ZERO();
