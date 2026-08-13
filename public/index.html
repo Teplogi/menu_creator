@@ -868,6 +868,40 @@
     .alldone { text-align: center; color: #4caf88; font-weight: 800; font-size: .95rem; padding: 18px 10px 6px; }
     .memo-wrap { margin-top: 24px; }
 
+    /* ---- コラム（薬剤師・管理栄養士監修の読み物） ---- */
+    .col-card { display: flex; gap: 12px; background: var(--card); border-radius: 16px; padding: 14px 16px;
+      box-shadow: var(--shadow); margin-bottom: 10px; cursor: pointer; align-items: flex-start; }
+    .col-card .thumb { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex: none; background: var(--orange-soft); }
+    .col-card .tx { flex: 1; min-width: 0; }
+    .col-card .ti { font-weight: 800; font-size: .96rem; line-height: 1.5; }
+    .col-card .su { color: var(--muted); font-size: .84rem; line-height: 1.7; margin-top: 3px; }
+    .col-card .by { color: var(--muted); font-size: .74rem; margin-top: 6px; }
+    .col-body { background: var(--card); border-radius: 16px; padding: 20px 18px; box-shadow: var(--shadow); }
+    .col-body h1 { font-size: 1.2rem; line-height: 1.6; margin: 0 0 10px; }
+    .col-body .by { color: var(--muted); font-size: .8rem; margin: 0 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+    .col-body h2 { font-size: 1.05rem; margin: 26px 0 8px; padding-left: 10px; border-left: 4px solid var(--orange); line-height: 1.5; }
+    .col-body h3 { font-size: .96rem; margin: 20px 0 6px; }
+    .col-body p { margin: 0 0 14px; line-height: 1.95; }
+    .col-body ul, .col-body ol { margin: 0 0 14px; padding-left: 1.3em; }
+    .col-body li { margin-bottom: 6px; line-height: 1.9; }
+    .col-body img { max-width: 100%; height: auto; border-radius: 12px; margin: 6px 0 16px; }
+    .col-body hr { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
+    .col-body a { color: var(--orange-dark); font-weight: 700; }
+    /* 引用（>）は「注意ボックス」として出す（「主治医にご相談を」等） */
+    .col-note { background: #fdf6ee; border: 1px solid #f3e2cd; border-left: 4px solid var(--orange);
+      border-radius: 10px; padding: 12px 14px; margin: 0 0 16px; font-size: .9rem; line-height: 1.85; color: #6b5c4c; }
+    .col-foot { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line);
+      font-size: .8rem; color: var(--muted); line-height: 1.8; }
+    .col-foot b { color: var(--ink); }
+    /* 献立の材料に関係する記事があるとき、料理カードの下に出す一言 */
+    .col-tip { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; margin-top: 10px;
+      background: #fdf6ee; border: 1px solid #f3e2cd; border-radius: 12px; padding: 9px 12px;
+      font: inherit; font-size: .82rem; cursor: pointer; }
+    .col-tip .ic { font-size: 1rem; flex: none; }
+    .col-tip .tt { flex: 1; min-width: 0; font-weight: 600; color: #6b5c4c;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .col-tip .go { color: var(--orange-dark); font-weight: 800; flex: none; }
+
     /* ---- Share ---- */
     .urlbox { display: flex; gap: 8px; margin-top: 8px; }
     .urlbox input { background: #fff; font-size: .82rem; }
@@ -1425,6 +1459,14 @@
       <div id="nutriBody"></div>
     </section>
 
+    <!-- コラム（一覧・記事） -->
+    <section class="view" id="view-columns">
+      <div id="columnsBody"></div>
+    </section>
+    <section class="view" id="view-column">
+      <div id="columnBody"></div>
+    </section>
+
     <!-- 冷蔵庫・作り置き -->
     <section class="view" id="view-fridge">
       <div class="card">
@@ -1575,6 +1617,8 @@
     const JPW_SEL = "p, li, summary, .t, .hint, .desc, .empty, .soon-ds, .nu-note, .ex-note, .lp-sub";
     function jpWrapEl(el) {
       if (el.dataset.jpw) return;
+      // 記事の本文は長いので、句読点ごとに固めると行がガタガタになる。ここは普通に折り返す。
+      if (el.closest(".col-body")) return;
       el.dataset.jpw = "1";
       for (const node of [...el.childNodes]) {
         if (node.nodeType !== 3) continue; // テキストノードだけ触る（<b>や<a>は壊さない）
@@ -2159,6 +2203,9 @@
         `<div class="soon-card live" id="nuOpenCard"><span class="soon-ic">🔥</span>
           <div class="soon-tx"><div class="soon-nm">カロリー・栄養計算</div><div class="soon-ds">献立のカロリーとPFCバランスを自動で表示</div></div>
           <span class="soon-go">›</span></div>` +
+        `<div class="soon-card live" id="colOpenCard"><span class="soon-ic">📖</span>
+          <div class="soon-tx"><div class="soon-nm">コラム</div><div class="soon-ds">食べ物とお薬・栄養のはなし。薬剤師・管理栄養士が書いています</div></div>
+          <span class="soon-go">›</span></div>` +
         SOON_FEATURES.map((f) =>
         `<div class="soon-card"><span class="soon-ic">${f.icon}</span>
           <div class="soon-tx"><div class="soon-nm">${esc(f.name)}</div><div class="soon-ds">${esc(f.desc)}</div></div>
@@ -2167,6 +2214,7 @@
       $("favOpenCard").addEventListener("click", showFavoritesView);
       $("frOpenCard").addEventListener("click", showFridgeView);
       $("nuOpenCard").addEventListener("click", openNutritionFromTab);
+      $("colOpenCard").addEventListener("click", () => showColumnsView(showSoonView));
       showView("soon", "べんり機能", { back: true, tab: "soon" });
     }
 
@@ -2354,6 +2402,67 @@
       html += `</p>`;
 
       $("nutriBody").innerHTML = html;
+    }
+
+    // ---------- コラム（薬剤師・管理栄養士監修の読み物） ----------
+    // 記事は content/columns/*.md を npm run columns で public/columns.json にしたもの。
+    let columnsData = null;
+    async function loadColumns() {
+      if (columnsData) return columnsData;
+      try { columnsData = await (await fetch("/columns.json")).json(); }
+      catch { columnsData = { columns: [], byFood: {} }; }
+      return columnsData;
+    }
+    const columnBySlug = (slug) => (columnsData?.columns || []).find((c) => c.slug === slug);
+    const byline = (c) => [c.authorTitle, c.author].filter(Boolean).join("　") + (c.date ? `　${c.date.replace(/-/g, "/")}` : "");
+
+    async function showColumnsView(back) {
+      backHandler = back || goHome;
+      showView("columns", "コラム", { back: true, tab: back ? "soon" : null });
+      $("columnsBody").innerHTML = `<p class="empty">読み込み中…</p>`;
+      const d = await loadColumns();
+      if (!d.columns.length) { $("columnsBody").innerHTML = `<p class="empty">まだ記事がありません。</p>`; return; }
+      $("columnsBody").innerHTML =
+        `<p class="hint" style="margin:0 0 12px">食べ物とお薬・栄養のはなし。薬剤師・管理栄養士が書いています。</p>` +
+        d.columns.map((c) => `<div class="col-card" data-slug="${esc(c.slug)}">
+          ${c.hero ? `<img class="thumb" src="${esc(c.hero)}" alt="" loading="lazy">` : `<div class="thumb" style="display:grid;place-items:center;font-size:1.5rem">📖</div>`}
+          <div class="tx"><div class="ti">${esc(c.title)}</div><div class="su">${esc(c.summary)}</div>
+            <div class="by">${esc(byline(c))}</div></div></div>`).join("");
+      $("columnsBody").querySelectorAll(".col-card").forEach((el) =>
+        el.addEventListener("click", () => showColumnView(el.dataset.slug, () => showColumnsView(back))));
+    }
+
+    async function showColumnView(slug, back) {
+      await loadColumns();
+      const c = columnBySlug(slug);
+      if (!c) return showColumnsView(back);
+      backHandler = back || (() => showColumnsView());
+      showView("column", "コラム", { back: true });
+      // 免責と著者名は記事ごとに書かず、ここで必ず付ける
+      $("columnBody").innerHTML = `<article class="col-body">
+        <h1>${esc(c.title)}</h1>
+        <p class="by">${esc(byline(c))}${c.updated ? `　（${esc(c.updated.replace(/-/g, "/"))} 更新）` : ""}</p>
+        ${c.hero ? `<img src="${esc(c.hero)}" alt="">` : ""}
+        ${c.html}
+        <div class="col-foot">この記事は一般的な情報をお伝えするものです。お薬の効き方や必要な量は一人ひとり違います。
+          実際にどうするかは、<b>必ず主治医・薬剤師にご相談ください</b>。<br>
+          文責: <b>${esc([c.authorTitle, c.author].filter(Boolean).join(" "))}</b></div>
+      </article>`;
+    }
+
+    // 献立の材料に関係する記事を探す（1品につき最初の1件だけ出す）
+    function columnForDish(dish) {
+      const map = columnsData?.byFood;
+      if (!map) return null;
+      for (const ing of dish?.ingredients || []) {
+        const key = normName(ing.name);
+        for (const food of Object.keys(map)) {
+          if (!key.includes(normName(food))) continue;
+          const c = columnBySlug(map[food][0]);
+          if (c) return { food, column: c };
+        }
+      }
+      return null;
     }
 
     // ---------- 冷蔵庫・作り置き ----------
@@ -3552,8 +3661,9 @@
       renderRecipe();
       backHandler = backToOverview;
       showView("recipe", `${mdLabel(date)}(${dow(date)}) の${slot}`, { back: true });
-      // お気に入りの最新状態を取り込み、⭐の点灯を更新（開いた画面のままなら再描画）
-      loadFavorites().then(() => { if (currentRecipe && currentRecipe.date === date && currentRecipe.slot === slot) renderRecipe(); });
+      // お気に入りとコラムを読み込んでから、⭐の点灯と「この食材のコラム」を出し直す
+      const stillHere = () => currentRecipe && currentRecipe.date === date && currentRecipe.slot === slot;
+      Promise.all([loadFavorites(), loadColumns()]).then(() => { if (stillHere()) renderRecipe(); });
     }
     function backToOverview() {
       renderOverview();
@@ -3839,6 +3949,12 @@
               : `<p class="empty" style="padding:6px 0">この献立は「作り方なし」で作成しました。<br>鉛筆マークから追記するか、「🔁 1品だけ変更」からAIで作り直すと手順を付けられます。</p>`)
             + `</div>`;
         }
+        // 材料に関係するコラムがあれば、そこから読めるようにする
+        const rel = columnForDish(dish);
+        if (rel) {
+          inner += `<button class="col-tip" data-col="${esc(rel.column.slug)}">
+            <span class="ic">📖</span><span class="tt">${esc(rel.food)}のこと：${esc(rel.column.title)}</span><span class="go">›</span></button>`;
+        }
         el.innerHTML = inner;
         body.appendChild(el);
       });
@@ -3889,6 +4005,12 @@
         b.addEventListener("click", () => openFishPicker(Number(b.dataset.fish))));
       body.querySelectorAll(".fish-btn[data-ing]").forEach((b) =>
         b.addEventListener("click", () => openIngPicker(Number(b.dataset.ing))));
+      body.querySelectorAll(".col-tip[data-col]").forEach((b) =>
+        b.addEventListener("click", () => {
+          const { date, slot } = currentRecipe;
+          const prev = backHandler; // 記事から戻ったら、この料理の画面に帰る
+          showColumnView(b.dataset.col, () => { openRecipe(date, slot); backHandler = prev; });
+        }));
     }
 
     // 差し替え（AI変更/お気に入り）を1つ前に戻す。もう一度押すと入れ替え直す（やり直し）

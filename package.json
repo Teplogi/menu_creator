@@ -14,7 +14,8 @@
     "catalog:view": "node scripts/build-catalog-view.mjs",
     "catalog:check": "node scripts/check-catalog.mjs",
     "catalog:fix": "node scripts/check-catalog.mjs --fix",
-    "catalog:enrich": "node scripts/enrich-catalog.mjs"
+    "catalog:enrich": "node scripts/enrich-catalog.mjs",
+    "columns": "node scripts/build-columns.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
