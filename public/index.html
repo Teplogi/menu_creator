@@ -1250,14 +1250,16 @@
         </div>
 
         <label class="toggle-field">
-          <input type="checkbox" id="noSteps" />
+          <input type="checkbox" id="noSteps" onchange="syncCreateMode()" />
           <span><b>作り方は作らない（献立と材料だけ）</b><small>料理名と材料だけの一覧に。作り方は表示されません（後から鉛筆や「1品だけ変更」で追加できます）</small></span>
         </label>
+        <p class="hint" id="quickNote" style="display:none;margin:-2px 0 10px"></p>
 
         <p id="error"></p>
         <p id="aiQuotaHint" class="hint" style="display:none;margin:0 0 8px"></p>
         <button type="submit" class="btn-primary" id="submitBtn">AIで作成する</button>
-        <button type="button" class="btn-ghost" id="manualBtn" onclick="createManual()">自分で入力する（AIなし）</button>
+        <button type="button" class="btn-ghost" id="aiAnywayBtn" onclick="submitCreate(true)" style="display:none">AIで作成する（要望を反映したいとき）</button>
+        <button type="button" class="btn-ghost" id="manualBtn" onclick="createManual()">自分で入力する（空の献立を作る）</button>
       </form>
     </section>
 
@@ -1700,6 +1702,7 @@
       cookTimeSel = "30"; stapleSel = new Set(); dishSel = { side: 1, soup: false };
       $("cookTime").value = cookTimeSel;
       renderCondChips();
+      syncCreateMode();
       // 既定の期間（今日〜3日後）でカレンダーを初期化。日付を指定されたらそこを起点にする
       const base = typeof fromDate === "string" && parseDate(fromDate) && !isNaN(parseDate(fromDate)) ? parseDate(fromDate) : new Date();
       rangeStart = fmt(base);
@@ -2069,9 +2072,9 @@
       if (!el) return;
       const b = billingStatus;
       if (!b || !b.billingEnabled || b.active) { el.style.display = "none"; return; }
-      el.style.display = "";
       el.innerHTML = `無料枠：今月あと 献立 <b>${b.freeRemaining}</b>/${b.freeLimit}食 ・ AI修正 <b>${b.editRemaining ?? "-"}</b>/${b.editLimit ?? "-"}回。` +
         `これを超える分は<a href="#" onclick="startCheckout();return false;">プレミアム</a>で使い放題です。`;
+      el.style.display = $("noSteps")?.checked ? "none" : ""; // AIを使わないモードでは出さない
     }
 
     // ---------- グループ（作成・引き継ぎ・切替・メンバー） ----------
@@ -3271,9 +3274,26 @@
     }
 
     // ---------- 生成 ----------
+    // 「作り方は作らない」のときは、カタログから組み立てる即時生成に切り替える。
+    // 材料はカタログに入っているのでAIを呼ぶ必要がなく、待ち時間ゼロ・無料枠も減らない。
+    function syncCreateMode() {
+      const quick = $("noSteps").checked;
+      $("submitBtn").textContent = quick ? "すぐに作成する（AIを使わない）" : "AIで作成する";
+      $("aiAnywayBtn").style.display = quick ? "block" : "none";
+      $("quickNote").style.display = quick ? "block" : "none";
+      $("quickNote").textContent = quick
+        ? "料理のリストから条件に合う献立を組み立てます。数秒待たずにでき、AIの回数も減りません。ただし「好み・要望」の自由入力は反映されないので、要望を使いたいときは下の「AIで作成する」を押してください。"
+        : "";
+      updateAiQuotaHint(); // 無料枠の案内はAIを使うときだけ出す
+    }
+
     document.addEventListener("submit", async (e) => {
       if (e.target.id !== "form") return;
       e.preventDefault();
+      submitCreate(false);
+    });
+
+    async function submitCreate(forceAi) {
       $("error").textContent = "";
       const targets = collectTargets();
       if (!targets.length) { $("error").textContent = "作る日と食事を1つ以上選んでください。"; return; }
@@ -3288,6 +3308,8 @@
         );
         if (!overwrite) return; // キャンセル＝何もしない
       }
+
+      if (!forceAi && $("noSteps").checked) return createQuick(targets, overwrite);
 
       const payload = {
         householdId: household.id,
@@ -3313,7 +3335,33 @@
       } finally {
         $("submitBtn").disabled = false;
       }
-    });
+    }
+
+    // AIを使わない即時生成（作り方なしのとき）
+    async function createQuick(targets, overwrite) {
+      const btn = $("submitBtn");
+      btn.disabled = true; btn.textContent = "作成中…";
+      try {
+        const plan = await apiOK("/api/plans/quick", {
+          method: "POST",
+          body: {
+            householdId: household.id, targets, overwrite,
+            people: $("people").value,
+            maxCookMinutes: $("cookTime").value,
+            dishCount: $("dishCount").value,
+            staple: stapleList(),
+            guided: { ...guidedSel },
+          },
+        });
+        plansCache = [plan, ...plansCache.filter((p) => p.id !== plan.id)];
+        showOverview(plan);
+      } catch (e) {
+        $("error").textContent = e.message || "作成に失敗しました。";
+      } finally {
+        btn.disabled = false;
+        syncCreateMode();
+      }
+    }
 
     // ---------- 順次表示（progressive）で献立を生成 ----------
     let streaming = false;

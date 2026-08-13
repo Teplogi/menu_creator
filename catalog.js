@@ -29,7 +29,13 @@ const MAIN_MAP = [
   [/^豆腐/, ["卵", "豆腐大豆"]],
   [/^野菜/, ["野菜"]],
 ];
-const mainsFor = (hint) => (MAIN_MAP.find(([re]) => re.test(String(hint || "").trim())) || [])[1] || null;
+// カタログの main をそのまま渡されることもある（AIなしの組み立てで使う）
+const CATALOG_MAINS = ["鶏肉", "豚肉", "牛肉", "ひき肉", "魚介", "卵", "豆腐大豆", "野菜", "その他"];
+function mainsFor(hint) {
+  const h = String(hint || "").trim();
+  if (CATALOG_MAINS.includes(h)) return [h];
+  return (MAIN_MAP.find(([re]) => re.test(h)) || [])[1] || null;
+}
 
 // 主材料ごとに順番に拾って、候補が特定の主材料に偏らないようにする。
 // カタログは主材料ごとに並んでいるので、先頭から切ると鶏肉ばかりになってしまう。
@@ -199,3 +205,147 @@ export function attachChoice(dish) {
   return dish;
 }
 export const choiceSets = () => CHOICE_SETS;
+
+// ---------- 分量の人数換算 ----------
+// カタログは2人分で持っているので、人数が違うときは掛け算して書き直す。
+const BASE_PEOPLE = DOC.base_people || 2;
+const FRACTIONS = [[0, ""], [0.25, "1/4"], [1 / 3, "1/3"], [0.5, "1/2"], [2 / 3, "2/3"], [0.75, "3/4"], [1, ""]];
+function fmtCount(n) {
+  if (n >= 10) return String(Math.round(n));
+  const whole = Math.floor(n + 1e-9);
+  const frac = n - whole;
+  let best = FRACTIONS[0], bestD = Infinity;
+  for (const f of FRACTIONS) { const d = Math.abs(frac - f[0]); if (d < bestD) { bestD = d; best = f; } }
+  let w = whole + (best[0] === 1 ? 1 : 0);
+  let s = best[0] === 1 ? "" : best[1];
+  if (!s && w === 0 && n > 0.01) s = "1/4"; // 0に消えるのを防ぐ
+  if (!s) return String(w);
+  return w ? `${w}と${s}` : s;
+}
+const fmtGram = (g) => (g >= 100 ? Math.round(g / 10) * 10 : g >= 20 ? Math.round(g / 5) * 5 : Math.round(g));
+const AMT_UNITS = "個|本|枚|袋|束|株|丁|かけ|片|パック|切れ|尾|房|玉|缶|節|合|杯|膳|箱|皿|腹";
+
+export function scaleAmount(amount, ratio) {
+  const t = String(amount || "").trim();
+  if (!t || ratio === 1) return t;
+  if (/^(少々|ひとつまみ|適量|お好みで)$/.test(t)) return t; // 目分量は変えない
+  let m = t.match(new RegExp(`^(大さじ|小さじ|カップ)\\s*(${NUMRE})$`));
+  if (m) { const n = parseNumJa(m[2]) * ratio; return isNaN(n) ? t : `${m[1]}${fmtCount(n)}`; }
+  m = t.match(new RegExp(`^(${NUMRE})\\s*(${AMT_UNITS})(?:\\((\\d+(?:\\.\\d+)?)g\\))?$`));
+  if (m) {
+    const n = parseNumJa(m[1]) * ratio;
+    if (isNaN(n)) return t;
+    return `${fmtCount(n)}${m[2]}${m[3] ? `(${fmtGram(parseFloat(m[3]) * ratio)}g)` : ""}`;
+  }
+  m = t.match(new RegExp(`^(${NUMRE})\\s*(g|ml|kg|l)$`, "i"));
+  if (m) { const n = parseNumJa(m[1]) * ratio; return isNaN(n) ? t : `${fmtGram(n)}${m[2]}`; }
+  return t;
+}
+const NUMRE = "\\d+(?:\\.\\d+)?と\\d+\\s*/\\s*\\d+|\\d+\\s*/\\s*\\d+|\\d+(?:\\.\\d+)?";
+function parseNumJa(s) {
+  const t = String(s || "").trim();
+  let m = t.match(/^(\d+(?:\.\d+)?)と(\d+)\s*\/\s*(\d+)$/);
+  if (m) return parseFloat(m[1]) + Number(m[2]) / Number(m[3]);
+  m = t.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (m) return Number(m[1]) / Number(m[2]);
+  m = t.match(/^(\d+(?:\.\d+)?)$/);
+  return m ? parseFloat(m[1]) : NaN;
+}
+
+// ---------- AIを使わない即時生成 ----------
+// カタログには材料が入っているので、作り方が要らないときはAIなしで献立を組める。
+// 待ち時間ゼロ・無料枠も減らない。自由入力の要望は反映できないので、そこは画面側で伝える。
+const MAIN_ROTATION_KEYS = ["鶏肉", "魚介", "豚肉", "ひき肉", "鶏肉", "魚介", "牛肉", "豚肉", "豆腐大豆", "卵"];
+
+function sideCandidates(all, c) {
+  return all.filter((d) => {
+    if (d.role !== c.role) return false;
+    if (c.slot && !(d.slots || "").includes(SLOT_CHAR[c.slot] || "")) return false;
+    if (c.excludeNames.has(d.name)) return false;
+    if (c.avoid.length && dishHits(d, c.avoid)) return false;
+    if (c.noFry && d.method === "揚げる") return false;
+    if (c.kid && !d.kid_friendly) return false;
+    if (c.mild && d.spicy) return false;
+    if (c.leftover && !d.leftover_ok) return false;
+    if (c.cheap && d.cost === "高め") return false;
+    if (c.season && d.season !== "通年" && d.season !== c.season) return false;
+    if (c.avoidMain && d.main === c.avoidMain) return false; // 主菜と主材料が被らないように
+    return true;
+  });
+}
+
+/**
+ * カタログだけで献立を組み立てる（AIを呼ばない）。
+ * units: [{date, slot}] / opts: 生成条件（people, maxCookMinutes, staple, dishCount, guided, avoid）
+ */
+export function buildPlanFromCatalog(units, opts = {}) {
+  const people = Math.max(1, Number(opts.people) || BASE_PEOPLE);
+  const ratio = people / BASE_PEOPLE;
+  const style = opts.guided?.style || [];
+  const common = {
+    avoid: avoidKeys([opts.avoid, ...(opts.storeAvoid || [])].filter(Boolean).join("、")),
+    noFry: (opts.guided?.cooking || []).includes("揚げ物なし"),
+    kid: style.includes("子どもも食べやすい"),
+    mild: style.includes("辛いものなし"),
+    leftover: style.includes("作り置きしたい"),
+    cheap: style.includes("節約したい"),
+  };
+  const dc = String(opts.dishCount || "main_side");
+  const sideCount = dc.includes("side2") ? 2 : dc.includes("side") ? 1 : 0;
+  const wantSoup = dc.includes("soup");
+  const used = new Set(opts.recentNames || []); // 同じ献立の中と直近履歴で重複させない
+
+  const byDate = new Map();
+  units.forEach((u, i) => {
+    const seed = seedOf(`${u.date}|${u.slot}`);
+    // 主菜: 主材料を順番に回して、同じ食材が続かないようにする
+    const wantMain = MAIN_ROTATION_KEYS[i % MAIN_ROTATION_KEYS.length];
+    const dishes = [];
+    const mainArgs = (hint, exclude) => ({
+      slot: u.slot, date: u.date, maxMinutes: opts.maxCookMinutes, staples: opts.staple,
+      avoidText: [opts.avoid, ...(opts.storeAvoid || [])].filter(Boolean).join("、"),
+      noFry: common.noFry, quick: (opts.guided?.cooking || []).includes("レンジ・時短中心"),
+      style, mainHint: hint, excludeNames: exclude,
+    });
+    // 主菜が見つからないまま食事を作ってしまわないよう、段階的に条件を外す
+    let mainPick = pickOne(pickMainCandidates(mainArgs(wantMain, [...used])).dishes, used);
+    if (!mainPick) mainPick = pickOne(pickMainCandidates(mainArgs("", [...used])).dishes, used);
+    if (!mainPick) mainPick = pickOne(pickMainCandidates(mainArgs("", [])).dishes, used);
+    if (mainPick) dishes.push(toDish(mainPick, ratio));
+
+    const sideCond = { ...common, role: "副菜", slot: u.slot, season: seasonOf(u.date), excludeNames: used, avoidMain: mainPick?.main };
+    for (let k = 0; k < sideCount; k++) {
+      const p = pickOne(spread(sideCandidates(DISHES, sideCond), 12, seed + k), used);
+      if (p) dishes.push(toDish(p, ratio));
+    }
+    if (wantSoup) {
+      const p = pickOne(spread(sideCandidates(DISHES, { ...sideCond, role: "汁物", avoidMain: null }), 12, seed), used);
+      if (p) dishes.push(toDish(p, ratio));
+    }
+    if (!byDate.has(u.date)) byDate.set(u.date, { date: u.date, meals: [] });
+    byDate.get(u.date).meals.push({ slot: u.slot, dishes });
+  });
+  return { days: [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1)) };
+}
+
+function pickOne(list, used) {
+  const hit = list.find((d) => !used.has(d.name)) || list[0];
+  if (hit) used.add(hit.name);
+  return hit || null;
+}
+function toDish(d, ratio) {
+  const dish = {
+    role: d.role,
+    name: d.name,
+    description: "",
+    cook_minutes: d.time,
+    ingredients: (d.ingredients || []).map((i) => ({ ...i, amount: scaleAmount(i.amount, ratio) })),
+    steps: [],
+  };
+  if (d.role === "主菜") dish.main_type = MAIN_TYPE_OF[d.main] || "野菜";
+  return attachChoice(dish);
+}
+const MAIN_TYPE_OF = {
+  鶏肉: "肉", 豚肉: "肉", 牛肉: "肉", ひき肉: "肉", 魚介: "魚",
+  卵: "卵・豆腐", 豆腐大豆: "卵・豆腐", 野菜: "野菜", その他: "野菜",
+};

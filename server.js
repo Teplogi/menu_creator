@@ -7,7 +7,7 @@ import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
 import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
-import { pickMainCandidates, candidateLine, catalogSize, attachChoice } from "./catalog.js";
+import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlanFromCatalog } from "./catalog.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -1964,6 +1964,45 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
 });
 
 // AIを使わず空の献立を作る（手打ち入力用・APIキー不要）
+// 作り方なしの即時生成。カタログに材料が入っているので、AIを呼ばずに献立を組める。
+// 待ち時間ゼロ・無料枠も減らない（requireAi を通さない）。自由入力の要望は反映されない。
+app.post("/api/plans/quick", auth, async (req, res) => {
+  try {
+    const { householdId, targets, people, maxCookMinutes, dishCount, staple, avoid } = req.body || {};
+    const household = await requireMember(req, res, householdId);
+    if (!household) return;
+    const vErr = validateTargets(targets);
+    if (vErr) return res.status(400).json({ error: vErr });
+
+    const store = await getStoreItems(household.id);
+    const opts = {
+      people: Number(people) > 0 ? Math.min(12, Number(people)) : 2,
+      maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
+      dishCount: dishCount || "main_side",
+      staple: normalizeStaple(staple),
+      guided: sanitizeGuided(req.body?.guided),
+      avoid: (avoid || "").toString().trim(),
+      storeAvoid: store.avoid,
+      includeSteps: false, // カタログに作り方は入っていない
+    };
+    const units = [];
+    for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
+    const plan = buildPlanFromCatalog(units, { ...opts, recentNames: await getRecentDishNames(household.id) });
+
+    const dates = targets.map((t) => t.date).sort();
+    const row = await one(INSERT_PLAN, [
+      randomUUID(), household.id, dates[0], dates[dates.length - 1], opts.people, opts.maxCookMinutes,
+      opts.dishCount, "", opts.avoid,
+      JSON.stringify({ targets, opts }), JSON.stringify(plan), new Date().toISOString(),
+    ]);
+    if (req.body?.overwrite) await removeOverlappingMeals(household.id, row.id, targets);
+    notifyPlanCreated(household.id, req.user, row).catch(() => {});
+    res.json(planToClient(row));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 app.post("/api/plans/manual", auth, async (req, res) => {
   try {
     const { householdId, targets, people, dishCount } = req.body || {};
