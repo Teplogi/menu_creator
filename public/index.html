@@ -619,15 +619,43 @@
       margin: 0 auto 20px; border-radius: 20px; background: #fff; box-shadow: 0 6px 20px rgba(90, 64, 40, .08); }
     .lp-illust.plain { background: none; box-shadow: none; }
 
-    /* --- 料金 --- */
-    .lp-price { background: #fff; border: 1.5px solid var(--lp-orange-s); border-radius: 22px;
-      padding: 26px 22px; text-align: center; margin-top: 26px; box-shadow: 0 8px 22px rgba(90,64,40,.07); }
-    .lp-price .yen { font-size: 2rem; font-weight: 800; color: var(--lp-orange-d); line-height: 1.1; }
-    .lp-price .yen small { font-size: .5em; margin-left: 2px; }
-    .lp-plans { display: grid; gap: 10px; margin: 16px 0 0; text-align: left; }
-    .lp-plan { border: 1px solid var(--lp-line); border-radius: 14px; padding: 12px 14px; }
-    .lp-plan b { font-size: .92rem; }
-    .lp-plan p { margin: 3px 0 0; font-size: .84rem; color: var(--lp-muted); line-height: 1.7; }
+    /* --- 料金（無料／プレミアムを並べて比べられるように） --- */
+    .lp-price { margin-top: 26px; text-align: center; }
+    .lp-price .ttl { font-size: 1.15rem; font-weight: 700; margin: 10px 0 4px; }
+    .lp-price .sub { color: var(--lp-muted); font-size: .9rem; line-height: 1.8; margin: 0 0 20px; }
+    .lp-plans { display: grid; gap: 14px; text-align: left; align-items: start; }
+    .lp-plan { position: relative; border-radius: 20px; padding: 22px 20px; background: #fff;
+      border: 1.5px solid var(--lp-line); box-shadow: 0 6px 18px rgba(90, 64, 40, .06); }
+    /* プレミアムは主役なので、枠・背景・影で持ち上げる */
+    .lp-plan.pro { border: none; padding: 2px; background: linear-gradient(135deg, #ffc46b, var(--lp-orange) 55%, #e8734a);
+      box-shadow: 0 14px 34px rgba(226, 130, 60, .28); }
+    .lp-plan.pro > .inner { background: linear-gradient(180deg, #fffaf3, #fff 40%); border-radius: 18px; padding: 22px 20px; }
+    .lp-plan .pl-name { font-size: .82rem; font-weight: 800; letter-spacing: .06em; color: var(--lp-muted); }
+    .lp-plan.pro .pl-name { color: var(--lp-orange-d); }
+    .lp-plan .pl-yen { font-size: 2.2rem; font-weight: 800; line-height: 1.15; margin: 2px 0 2px;
+      font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+    .lp-plan.pro .pl-yen { background: linear-gradient(135deg, #e8912f, #d9541f);
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lp-plan .pl-yen small { font-size: .42em; font-weight: 800; margin-left: 2px; }
+    .lp-plan .pl-yen .per { font-size: .32em; font-weight: 700; color: var(--lp-muted);
+      margin-left: 6px; -webkit-text-fill-color: var(--lp-muted); letter-spacing: 0; }
+    .lp-plan .pl-lead { font-size: .82rem; color: var(--lp-muted); margin: 0 0 14px; line-height: 1.7; }
+    .lp-plan.pro .pl-lead { color: var(--lp-orange-d); font-weight: 700; }
+    .pl-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; }
+    .pl-list li { position: relative; padding-left: 24px; font-size: .87rem; line-height: 1.7; }
+    .pl-list li::before { content: ""; position: absolute; left: 0; top: .35em; width: 16px; height: 16px;
+      border-radius: 50%; background: var(--lp-green-s); }
+    .pl-list li::after { content: ""; position: absolute; left: 5px; top: .62em; width: 6px; height: 3px;
+      border-left: 2px solid var(--lp-green); border-bottom: 2px solid var(--lp-green);
+      transform: rotate(-45deg); }
+    .lp-plan.pro .pl-list li::before { background: #fde8cf; }
+    .lp-plan.pro .pl-list li::after { border-color: var(--lp-orange-d); }
+    .pl-list li b { font-weight: 800; }
+    .pl-list li .d { display: block; color: var(--lp-muted); font-size: .8rem; line-height: 1.65; margin-top: 1px; }
+    .pl-ribbon { position: absolute; top: -11px; right: 18px; z-index: 1; font-size: .68rem; font-weight: 800;
+      letter-spacing: .06em; color: #fff; background: linear-gradient(135deg, #f5a623, #e2703c);
+      border-radius: 999px; padding: 4px 13px; box-shadow: 0 4px 12px rgba(226, 130, 60, .4); }
+    .lp-price .foot { font-size: .82rem; color: var(--lp-muted); line-height: 1.8; margin: 16px 0 0; }
 
     /* --- FAQ --- */
     .lp-faq { padding-top: 44px; }
@@ -654,7 +682,7 @@
       .lp-hero { padding-top: 34px; }
       .lp-probs, .lp-mgrid { grid-template-columns: repeat(2, 1fr); }
       .lp-ba { grid-template-columns: repeat(2, 1fr); }
-      .lp-plans { grid-template-columns: repeat(2, 1fr); }
+      .lp-plans { grid-template-columns: repeat(2, 1fr); gap: 18px; }
       .lp-zrow { grid-template-columns: 1fr 240px; gap: 34px; }
       .lp-zrow.rev { grid-template-columns: 240px 1fr; }
       .lp-zrow.rev .lp-ztext { order: 2; }
@@ -853,6 +881,14 @@
     .nu-stat .k { font-size: .74rem; color: var(--muted); font-weight: 700; }
     .nu-stat .v { font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; }
     .nu-stat .v small { font-size: .72rem; font-weight: 700; color: var(--muted); margin-left: 2px; }
+    /* 目安を大きく超えているときだけ色を付ける（数字だけだと多いのか判断できないため） */
+    .nu-stat.over { background: #fdeceb; }
+    .nu-stat.over .v { color: #c0564f; }
+    .nu-guide { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+    .nu-guide .g-row { display: flex; gap: 8px; font-size: .76rem; line-height: 1.75; margin-bottom: 2px; }
+    .nu-guide .g-k { font-weight: 800; color: var(--muted); }
+    .nu-guide .g-n { flex: none; width: 5.5em; color: var(--muted); font-weight: 700; }
+    .nu-guide .g-v { flex: 1; color: var(--ink); }
     .nu-bar { display: flex; align-items: center; gap: 8px; padding: 7px 2px; }
     .nu-bar .d { width: 66px; flex: none; font-size: .76rem; font-weight: 700; color: var(--muted); }
     .nu-bar .track { flex: 1; height: 16px; background: var(--cream); border-radius: 999px; overflow: hidden; display: flex; }
@@ -1161,17 +1197,41 @@
 
             <!-- 6. 料金 -->
             <div class="lp-price" id="lp-price">
-              <div class="lp-eyebrow">PRICE</div>
-              <div class="yen">0<small>円</small><span style="font-size:.5em;color:var(--lp-muted);margin-left:6px">ではじめられます</span></div>
-              <p style="font-size:.86rem;color:var(--lp-muted);line-height:1.8;margin:8px 0 0">献立づくりと買い物リストの共有は、無料のままずっと使えます。</p>
+              <span class="lp-eyebrow">PRICE</span>
+              <p class="ttl">まずは無料で。物足りなくなったら。</p>
+              <p class="sub">献立づくりと買い物リストの共有は、無料のままずっと使えます。</p>
               <div class="lp-plans">
-                <div class="lp-plan"><b>無料プラン</b>
-                  <p>料理リストからの献立作成は<b>回数無制限</b>。買い物リスト・ふたりでの共有・冷蔵庫の記録・カロリー表示・コラムも全部使えます。作り方つきのAI作成は毎月10食分＋AI修正5回まで。</p></div>
-                <div class="lp-plan"><b>プレミアム（月480円・税込）</b>
-                  <p><b>🗓 毎週おまかせ作成</b>：決めた曜日・時刻にAIが翌週の献立を自動で作って通知。作成ボタンを押す必要がなくなります。<br>
-                  ほかに、作り方つきのAI作成が使い放題／「子どもが食べやすいもの」など自由な要望の反映／冷蔵庫の使い切り献立／1品だけの作り直し。<br>
-                  ひとりが契約すれば、招待したパートナーも追加料金なしで同じように使えます。いつでも解約できます。</p></div>
+                <div class="lp-plan">
+                  <div class="pl-name">無料プラン</div>
+                  <div class="pl-yen">0<small>円</small><span class="per">ずっと</span></div>
+                  <p class="pl-lead">献立決めと買い物を、まずラクに。</p>
+                  <ul class="pl-list">
+                    <li><b>献立づくりが回数無制限</b><span class="d">300品以上の料理から、条件に合う献立をすぐ組み立て</span></li>
+                    <li><b>買い物リストが自動</b><span class="d">同じ食材はまとめて、今日／3日分で絞り込み</span></li>
+                    <li><b>ふたりで共有</b><span class="d">招待リンクを送るだけ。人数ぶんの料金はなし</span></li>
+                    <li>冷蔵庫・作り置きの記録</li>
+                    <li>カロリー・塩分の表示</li>
+                    <li>お気に入り登録／コラム</li>
+                    <li><b>AIで作る</b>のは毎月10食分＋修正5回まで</li>
+                  </ul>
+                </div>
+                <div class="lp-plan pro">
+                  <span class="pl-ribbon">おすすめ</span>
+                  <div class="inner">
+                    <div class="pl-name">プレミアム</div>
+                    <div class="pl-yen">480<small>円</small><span class="per">/ 月・税込</span></div>
+                    <p class="pl-lead">無料プランのすべて ＋</p>
+                    <ul class="pl-list">
+                      <li><b>毎週おまかせ作成</b><span class="d">決めた曜日・時刻にAIが自動で作って通知。ボタンを押す必要がなくなります</span></li>
+                      <li><b>AIの献立作成が使い放題</b><span class="d">作り方つき。回数を気にせず作り直せます</span></li>
+                      <li><b>自由な要望が反映できる</b><span class="d">「子どもが食べやすい」「作り置きしたい」など、文章で指定</span></li>
+                      <li><b>冷蔵庫の使い切り献立</b><span class="d">残っている食材から、それを活かした一皿に</span></li>
+                      <li><b>1品だけ作り直せる</b><span class="d">気に入らない副菜だけ、その場で変更</span></li>
+                    </ul>
+                  </div>
+                </div>
               </div>
+              <p class="foot">ひとりが契約すれば、招待したパートナーも追加料金なしで同じように使えます。<br>いつでも解約でき、解約後も無料の範囲で使い続けられます。</p>
             </div>
           </div>
         </section>
@@ -2593,8 +2653,13 @@
           <div class="nu-stat"><div class="k">脂質</div><div class="v">${a.f}<small>g</small></div></div>
           <div class="nu-stat"><div class="k">炭水化物</div><div class="v">${a.c}<small>g</small></div></div>
           <div class="nu-stat"><div class="k">食物繊維</div><div class="v">${a.fiber}<small>g</small></div></div>
-          <div class="nu-stat"><div class="k">食塩相当量</div><div class="v">${a.salt}<small>g</small></div></div>
+          <div class="nu-stat ${a.salt >= 8 ? "over" : ""}"><div class="k">食塩相当量</div><div class="v">${a.salt}<small>g</small></div></div>
           <div class="nu-stat"><div class="k">合計（${n.days.length}日）</div><div class="v">${n.total.kcal}<small>kcal</small></div></div>
+        </div>
+        <div class="nu-guide">
+          <div class="g-row"><span class="g-k">1日の目安（30〜49歳）</span></div>
+          <div class="g-row"><span class="g-n">エネルギー</span><span class="g-v">男性 2,350〜3,150kcal ／ 女性 1,750〜2,350kcal</span></div>
+          <div class="g-row"><span class="g-n">食塩相当量</span><span class="g-v">男性 7.5g未満 ／ 女性 6.5g未満（高血圧・腎臓病では6g未満）</span></div>
         </div>
       </div>`;
 
