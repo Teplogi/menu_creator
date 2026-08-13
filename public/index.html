@@ -614,8 +614,9 @@
       color: #fff; background: linear-gradient(135deg, #f5a623, var(--lp-orange)); border-radius: 999px;
       padding: 2px 8px; vertical-align: 2px; }
     /* セクションに添えるイラスト（白背景の絵なので、白いカードに載せて馴染ませる） */
-    .lp-illust { display: block; width: 100%; max-width: 230px; margin: 0 auto 20px; border-radius: 20px;
-      background: #fff; box-shadow: 0 6px 20px rgba(90, 64, 40, .08); }
+    /* height:auto を付けないと、HTMLのheight属性(512)がそのまま効いて縦に伸びる */
+    .lp-illust { display: block; width: 100%; max-width: 230px; height: auto; aspect-ratio: 1 / 1;
+      margin: 0 auto 20px; border-radius: 20px; background: #fff; box-shadow: 0 6px 20px rgba(90, 64, 40, .08); }
     .lp-illust.plain { background: none; box-shadow: none; }
 
     /* --- 料金 --- */
