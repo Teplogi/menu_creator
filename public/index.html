@@ -780,6 +780,14 @@
     .toggle-row { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; font-size: .85rem; color: #6f665c; font-weight: 700; }
     .pro-badge { flex: none; font-size: .68rem; font-weight: 800; letter-spacing: .04em; color: #fff;
       background: linear-gradient(135deg, #f5a623, var(--orange)); border-radius: 999px; padding: 3px 10px; }
+    /* 未加入のときの案内。中身は見せたうえで、操作だけできないようにする */
+    .lock-note { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+      background: var(--orange-soft); border: 1px solid #f3ddc2; border-radius: 14px;
+      padding: 12px 14px; margin: 0 0 14px; font-size: .84rem; line-height: 1.7; color: #6b5c4c; }
+    .lock-note .ic { font-size: 1.1rem; flex: none; }
+    .lock-note div { flex: 1; min-width: 150px; }
+    .lock-note .btn-primary { width: auto; margin: 0; padding: 9px 16px; font-size: .85rem; flex: none; }
+    .locked-fields { opacity: .55; pointer-events: none; filter: saturate(.6); }
     .switch { margin-left: auto; position: relative; width: 46px; height: 26px; flex: none; }
     .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
     .switch .track { position: absolute; inset: 0; background: var(--line); border-radius: 999px; transition: .15s; }
@@ -1400,8 +1408,14 @@
         <div class="sec-head"><span class="label">🗓 毎週おまかせ作成</span><span class="lead"></span>
           <span class="pro-badge">プレミアム</span></div>
         <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">決めた曜日・時刻に、AIが翌週の献立を<b>自動で作って通知</b>します。買い物リストもできあがった状態になります。作成ボタンを押す必要はありません。</p>
-        <div id="autoLocked" class="hint" style="display:none">この機能はプレミアム限定です。<a href="#" onclick="startCheckout();return false;">プレミアムを見る</a></div>
-        <div id="autoBody" style="display:none">
+        <!-- 未加入でも中身は見せる（何が使えるようになるか分からないと課金の判断ができない）。
+             操作だけできないようにして、上に案内を出す。 -->
+        <div id="autoLocked" class="lock-note" style="display:none">
+          <span class="ic">🔒</span>
+          <div><b>プレミアム限定の機能です</b><br>下の設定は見るだけできます。オンにするにはプレミアムへ。</div>
+          <button class="btn-primary" onclick="startCheckout()">プレミアムを見る</button>
+        </div>
+        <div id="autoBody">
           <div class="toggle-row">毎週おまかせで作成する<label class="switch"><input type="checkbox" id="autoEnabled" /><span class="track"></span><span class="knob"></span></label></div>
           <div id="autoDetail">
             <div class="row2">
@@ -2273,9 +2287,10 @@
       if (!household) return;
       let a;
       try { a = await apiOK(`/api/households/${household.id}/auto`); } catch { return; }
-      $("autoLocked").style.display = a.premium ? "none" : "block";
-      $("autoBody").style.display = a.premium ? "block" : "none";
-      if (!a.premium) return;
+      // 未加入でも中身は見せる。操作と保存だけ止める。
+      $("autoLocked").style.display = a.premium ? "none" : "flex";
+      $("autoBody").classList.toggle("locked-fields", !a.premium);
+      $("autoSaveBtn").disabled = !a.premium;
       $("autoWeekday").innerHTML = AUTO_DOW.map((l, i) => opt(i, l, a.weekday)).join("");
       $("autoHour").innerHTML = Array.from({ length: 24 }, (_, h) => opt(h, `${h}:00`, a.hour)).join("");
       const dayOpts = [...new Set([3, 5, 7, 10, 14, a.days])].sort((x, y) => x - y); // 保存値が一覧に無くても消えないように
@@ -2290,7 +2305,8 @@
       $("autoPreferences").value = a.opts.preferences || "";
       $("autoEnabled").checked = !!a.enabled;
       $("autoWeekdaysOnly").checked = !!a.weekdaysOnly;
-      $("autoDetail").style.display = a.enabled ? "block" : "none";
+      // 未加入のときは、どんな設定ができるか分かるよう開いたまま見せる
+      $("autoDetail").style.display = a.enabled || !a.premium ? "block" : "none";
       autoSlots = new Set(a.slots.length ? a.slots : ["夕食"]);
       renderAutoSlotChips();
       wireAutoInputs();
