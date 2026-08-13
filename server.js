@@ -470,7 +470,7 @@ const normalizeStaple = (v) =>
   Array.isArray(v) ? v.filter((x) => STAPLE_NAME[x]) : STAPLE_NAME[v] ? [v] : [];
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], storeEasy = [], mainCandidates = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], storeEasy = [], mainCandidates = [], sameDayDishes = [] } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -535,6 +535,10 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
       : "",
     sideHint
       ? `★副菜を作る場合は「${sideHint}」系にすること（主菜と食材・味付けが被らないように）。`
+      : "",
+    // 同じ日に2食以上あるとき、昼と夕で食材が丸かぶりしないようにする
+    sameDayDishes && sameDayDishes.length
+      ? `同じ日の他の食事では「${sameDayDishes.join("」「")}」を作ります。1日のうちで食材が重なると飽きるので、主菜・副菜とも使う食材をできるだけ変えること。`
       : "",
     recentSlotDishes && recentSlotDishes.length
       ? `最近この食事枠で出した料理です（直近30日）。マンネリ防止のため、主菜・副菜ともこれらと同じ・ほぼ同じ料理は出さないこと: ${recentSlotDishes.join("、")}` +
@@ -713,6 +717,27 @@ function breakConsecutive(arr) {
   return out;
 }
 
+// 同じ日の中で主材料が重ならないようにする（昼が魚なら夕は魚以外）。
+// breakConsecutive は「並びの隣」しか見ないので、朝・昼・夕で 鶏/豚/鶏 のような
+// 飛び石の重複が残る。ここも回数は変えず、並べ替えだけで直す。
+function breakSameDayDuplicates(units, arr) {
+  const a = arr.slice();
+  const sameDay = (i, j) => units[i] && units[j] && units[i].date === units[j].date;
+  const dupInDay = (x, i) => x.some((v, j) => j !== i && sameDay(i, j) && v === x[i]);
+  const adjDup = (x, i) => (i > 0 && x[i] === x[i - 1]) || (i + 1 < x.length && x[i] === x[i + 1]);
+  const bad = (x, i) => dupInDay(x, i) || adjDup(x, i);
+  for (let i = 0; i < a.length; i++) {
+    if (!dupInDay(a, i)) continue;
+    for (let k = 0; k < a.length; k++) {
+      if (a[k] === a[i]) continue;
+      [a[i], a[k]] = [a[k], a[i]];
+      if (!bad(a, i) && !bad(a, k)) break; // 両方おさまったら採用
+      [a[i], a[k]] = [a[k], a[i]]; // だめなら戻す
+    }
+  }
+  return a;
+}
+
 async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
   const stream = client.messages.stream({
     model,
@@ -761,9 +786,11 @@ const MEAL_ASSIGN_SCHEMA = {
 };
 // 「肉多め/魚多め/半々」を具体的な食数に変換する（曖昧な「多め」だと反映が弱いため）
 function guidedMainsLine(mains, n) {
-  const more = Math.max(Math.ceil(n * 0.6), Math.min(n, 2));
+  // 「多め」であって「全部」ではない。2食だけのときに全部同じ主材料になると、
+  // 同じ日に魚が2回…のようになるので、必ず1食は別の主材料を残す。
+  const more = Math.min(Math.max(Math.ceil(n * 0.6), Math.min(n, 2)), Math.max(1, n - 1));
   if (mains === "肉多め") return `主菜のバランス指定: 肉多め → ${n}食中${more}食以上を肉系（鶏肉/豚肉/牛肉/ひき肉）にする。残りは魚介や卵・豆腐も混ぜる。`;
-  if (mains === "魚多め") return `主菜のバランス指定: 魚多め → ${n}食中${more}食以上を「魚介（魚・えび・いか等）」にする。`;
+  if (mains === "魚多め") return `主菜のバランス指定: 魚多め → ${n}食中${more}食以上を「魚介（魚・えび・いか等）」にする。残りは肉なども混ぜる。`;
   if (mains === "肉と魚を半々") { const half = Math.floor(n / 2); return `主菜のバランス指定: 肉と魚を半々 → ${n}食中、肉系${half}食・魚介${n - half}食程度にする。`; }
   return "";
 }
@@ -794,6 +821,7 @@ async function planMealAssignments(units, opts, avoidText) {
     "- 要望に主材料の配分・希望（例:「肉を5日・魚を2日」「魚多め」「野菜中心の日を作る」など）があれば、それを最優先で正確に反映する（日数・比率を必ず守る）。",
     "- 要望に配分の指定が無ければ、栄養バランスよく散らす。",
     "- いずれの場合も、同じ主材料が2日以上連続しないようにする（要望と両立できる範囲で）。",
+    "- 同じ日に2食以上作るときは、その日の中でも主材料を重ならせない（昼が魚介なら夕は魚介以外にする）。副菜のカテゴリも同様。",
     // 卵・豆腐と野菜中心は軽くなりやすく、夕食で続くと物足りない献立になる
     "- 「豆腐・厚揚げ・卵」と「野菜中心」は軽い主菜になりやすいので、夕食では合わせて全体の1〜2割程度（7食なら1食、多くて2食）にとどめ、肉・魚介を中心に配分する。朝食・昼食ではこの制限はない。",
     `- main は必ず次のいずれか: ${allowed.join(" / ")}`,
@@ -822,8 +850,9 @@ async function planMealAssignments(units, opts, avoidText) {
       arr.every((x) => x && MAIN_LABELS.includes(x.main) && SIDE_LABELS.includes(x.side))
     ) {
       return {
-        mains: breakConsecutive(arr.map((x) => x.main)), // AIがルールを守り損ねても連続はコードで排除
-        sides: breakConsecutive(arr.map((x) => x.side)),
+        // AIがルールを守り損ねても、連続と「同じ日の重複」はコードで排除する
+        mains: breakSameDayDuplicates(units, breakConsecutive(arr.map((x) => x.main))),
+        sides: breakSameDayDuplicates(units, breakConsecutive(arr.map((x) => x.side))),
         fridgeDishes: arr.map((x) => (x.fridgeDish || "").toString().trim().slice(0, 30)), // 使い切りの一皿（該当食のみ）
       };
     }
@@ -1891,6 +1920,10 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     const collected = new Map();
     const batchMains = new Set(); // このバッチで確定した主菜名（並列でも同名に収束しないよう照合する）
     const mainNameOf = (ds) => ((ds || []).find((d) => d.role === "主菜") || (ds || [])[0] || {}).name || "";
+    // 同じ日の他の食事に何を割り当てたか（並列生成でも先に決まっているので順序に依存しない）
+    const sameDayOf = (i) => units
+      .map((v, k) => (k !== i && v.date === units[i].date ? `${v.slot}: ${assign.mains[k] || "おまかせ"}` : null))
+      .filter(Boolean);
     await mapLimit(units, 4, async (u, i) => {
       let dishes = [];
       const fridgeDishHint = (assign.fridgeDishes || [])[i] || ""; // 使い切りの一皿（例: 鶏と豆腐の水炊き）
@@ -1903,6 +1936,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
         storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy,
         // 冷蔵庫の使い切りで料理が決まっている食事は、候補を出さない（そちらが最優先のため）
         mainCandidates: fridgeDishHint ? [] : mainCandidatesFor(u, opts, store, [...batchMains, ...(avoid || [])], mainHint),
+        sameDayDishes: sameDayOf(i),
       });
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {

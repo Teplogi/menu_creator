@@ -138,6 +138,9 @@
       border-radius: 14px; background: #fdfaf6; }
     .dayrow .d { font-weight: 700; font-size: .88rem; }
     .dayrow .d .dow { color: var(--muted); font-size: .76rem; font-weight: 500; margin-left: 3px; }
+    /* 曜日の色はカレンダーと揃える（休みかどうかは家庭ごとに違うので決めつけない） */
+    .dayrow .d.d0 { color: #d9534f; }
+    .dayrow .d.d6 { color: #4a90d9; }
     .dayrow .minis { display: flex; gap: 6px; margin-left: auto; }
     .minipill { position: relative; cursor: pointer; }
     .minipill input { position: absolute; opacity: 0; pointer-events: none; }
@@ -2277,7 +2280,8 @@
       w.innerHTML = AUTO_DOW.map((label, d) => {
         const on = autoDowSlots[d] || [];
         const pill = (s) => `<label class="minipill"><input type="checkbox" data-d="${d}" value="${s}" ${on.includes(s) ? "checked" : ""}><span>${s[0]}</span></label>`;
-        return `<div class="dayrow"><div class="d">${label}${d === 0 ? '<span class="dow">(休)</span>' : d === 6 ? '<span class="dow">(休)</span>' : ""}</div>
+        // 休みかどうかは家庭によるので決めつけない。カレンダーと同じで日曜=赤・土曜=青にするだけ。
+        return `<div class="dayrow"><div class="d d${d}">${label}</div>
           <div class="minis">${SLOTS3.map(pill).join("")}</div></div>`;
       }).join("");
       w.querySelectorAll("input[type=checkbox]").forEach((c) =>
