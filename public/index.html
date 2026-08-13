@@ -1419,20 +1419,33 @@
           <div class="toggle-row">毎週おまかせで作成する<label class="switch"><input type="checkbox" id="autoEnabled" /><span class="track"></span><span class="knob"></span></label></div>
           <div id="autoDetail">
             <div class="row2">
-              <label class="field"><span class="t">曜日</span><select id="autoWeekday"></select></label>
+              <label class="field"><span class="t">いつ作る</span><select id="autoWeekday"></select></label>
               <label class="field"><span class="t">時刻（日本時間）</span><select id="autoHour"></select></label>
             </div>
-            <div class="row2">
-              <label class="field"><span class="t">何日分</span><select id="autoDays"></select></label>
-              <label class="field"><span class="t">人数</span><input type="number" id="autoPeople" min="1" max="12" value="2" /></label>
+            <label class="field"><span class="t">何日先まで</span><select id="autoDays"></select></label>
+
+            <div class="field"><span class="t">曜日ごとに作る食事</span>
+              <p class="hint" style="margin:-2px 0 8px">曜日ごとに朝・昼・夕を選べます（土日はお昼も、など）。何も選ばない曜日は作りません。</p>
+              <div class="preset-row" style="margin-bottom:8px">
+                <div class="preset-chips">
+                  <button type="button" class="preset" onclick="autoPreset('weekday')">平日の夕食</button>
+                  <button type="button" class="preset" onclick="autoPreset('everyday')">毎日の夕食</button>
+                  <button type="button" class="preset" onclick="autoPreset('weekend_lunch')">＋土日は昼も</button>
+                  <button type="button" class="preset" onclick="autoPreset('clear')">クリア</button>
+                </div>
+              </div>
+              <div class="dayrows" id="autoDowRows"></div>
             </div>
-            <div class="field"><span class="t">作る食事</span><div class="grow" id="autoSlotChips"></div></div>
-            <div class="toggle-row">平日だけ作る（土日は作らない）<label class="switch"><input type="checkbox" id="autoWeekdaysOnly" /><span class="track"></span><span class="knob"></span></label></div>
-            <div class="row2">
-              <label class="field"><span class="t">調理時間の上限</span><select id="autoCookTime"></select></label>
-              <label class="field"><span class="t">品数</span><select id="autoDishCount"></select></label>
+
+            <label class="field" style="max-width:150px"><span class="t">人数</span><input type="number" id="autoPeople" min="1" max="12" value="2" /></label>
+            <div class="field"><span class="t">調理時間の上限</span><div class="grow" id="autoTimeChips"></div></div>
+            <div class="field"><span class="t">主食（複数選べます）</span><div class="grow" id="autoStapleChips"></div></div>
+            <p class="hint" id="autoStapleHint" style="margin:-6px 0 10px"></p>
+            <div class="field"><span class="t">品数</span><div class="grow" id="autoDishChips"></div></div>
+            <div style="margin:0 0 12px">
+              <span class="t" style="display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:6px">こだわり（任意・タップで選択）</span>
+              <div id="autoGuidedRows"></div>
             </div>
-            <label class="field"><span class="t">主食</span><select id="autoStaple"></select></label>
             <label class="field"><span class="t">好み・要望</span>
               <textarea id="autoPreferences" placeholder="例: 和食多めで、野菜をたっぷり。子どもも食べやすいもの。" maxlength="300"></textarea></label>
             <p class="hint" id="autoNextHint" style="margin:2px 0 10px"></p>
@@ -1792,8 +1805,7 @@
       loadFridge().then(renderFridgeUseChips);
       guidedSel = emptyGuided(); // こだわりも毎回おまかせに戻す
       renderGuided();
-      cookTimeSel = "30"; stapleSel = new Set(); dishSel = { side: 1, soup: false };
-      $("cookTime").value = cookTimeSel;
+      Object.assign(cond, newCond()); // 条件は毎回はじめの状態に戻す
       renderCondChips();
       syncCreateMode();
       // 既定の期間（今日〜3日後）でカレンダーを初期化。日付を指定されたらそこを起点にする
@@ -2240,29 +2252,43 @@
     // ---------- 毎週おまかせ作成（プレミアム） ----------
     // 曜日・時刻はすべて日本時間で扱う（サーバも同じ）。端末のタイムゾーンは見ない。
     const AUTO_DOW = ["日曜", "月曜", "火曜", "水曜", "木曜", "金曜", "土曜"];
-    const AUTO_STAPLE_OPTS = [
-      ["any", "おまかせ", []], ["rice", "ご飯のみ", ["rice"]],
-      ["nonoodle", "麺なし（ご飯・パン）", ["rice", "bread"]], ["nobread", "パンなし（ご飯・麺）", ["rice", "noodle"]],
-    ];
-    const AUTO_DISH_OPTS = [
-      ["main", "主菜のみ"], ["main_side", "主菜＋副菜"], ["main_soup", "主菜＋汁物"],
-      ["main_side_soup", "主菜＋副菜＋汁物"], ["main_side2", "主菜＋副菜2品"], ["main_side2_soup", "主菜＋副菜2品＋汁物"],
-    ];
-    let autoSlots = new Set(["夕食"]);
+    const SLOTS3 = ["朝食", "昼食", "夕食"];
+    // 曜日ごとに作る食事。{ 0:["夕食"], 6:["昼食","夕食"] } のように持つ。
+    let autoDowSlots = { 0: ["夕食"], 1: ["夕食"], 2: ["夕食"], 3: ["夕食"], 4: ["夕食"], 5: ["夕食"], 6: ["夕食"] };
+    // 中身は loadAutoPlan で入れる（newCond/emptyGuided はこの下で定義されるため、
+    // ここで呼ぶとスクリプト読み込み時に落ちる）
+    let autoCond = null;
+    let autoGuided = null;
     const opt = (v, l, sel) => `<option value="${esc(v)}" ${String(sel) === String(v) ? "selected" : ""}>${esc(l)}</option>`;
 
-    function renderAutoSlotChips() {
-      const w = $("autoSlotChips");
-      w.innerHTML = ["朝食", "昼食", "夕食"].map((s) =>
-        `<button type="button" class="gchip ${autoSlots.has(s) ? "on" : ""}" data-s="${s}">${s}</button>`).join("");
-      w.querySelectorAll(".gchip").forEach((b) =>
-        b.addEventListener("click", () => {
-          const s = b.dataset.s;
-          if (autoSlots.has(s)) { if (autoSlots.size > 1) autoSlots.delete(s); } else autoSlots.add(s);
-          renderAutoSlotChips(); updateAutoNextHint();
+    function autoPreset(kind) {
+      const set = (dows, slots) => dows.forEach((d) => { autoDowSlots[d] = [...slots]; });
+      if (kind === "clear") autoDowSlots = {};
+      else if (kind === "weekday") { autoDowSlots = {}; set([1, 2, 3, 4, 5], ["夕食"]); }
+      else if (kind === "everyday") set([0, 1, 2, 3, 4, 5, 6], ["夕食"]);
+      else if (kind === "weekend_lunch") { // いまの設定に土日の昼を足す
+        for (const d of [0, 6]) autoDowSlots[d] = [...new Set([...(autoDowSlots[d] || []), "昼食"])];
+      }
+      renderAutoDowRows(); updateAutoNextHint();
+    }
+    function renderAutoDowRows() {
+      const w = $("autoDowRows");
+      if (!w) return;
+      w.innerHTML = AUTO_DOW.map((label, d) => {
+        const on = autoDowSlots[d] || [];
+        const pill = (s) => `<label class="minipill"><input type="checkbox" data-d="${d}" value="${s}" ${on.includes(s) ? "checked" : ""}><span>${s[0]}</span></label>`;
+        return `<div class="dayrow"><div class="d">${label}${d === 0 ? '<span class="dow">(休)</span>' : d === 6 ? '<span class="dow">(休)</span>' : ""}</div>
+          <div class="minis">${SLOTS3.map(pill).join("")}</div></div>`;
+      }).join("");
+      w.querySelectorAll("input[type=checkbox]").forEach((c) =>
+        c.addEventListener("change", () => {
+          const d = c.dataset.d, cur = new Set(autoDowSlots[d] || []);
+          if (c.checked) cur.add(c.value); else cur.delete(c.value);
+          if (cur.size) autoDowSlots[d] = SLOTS3.filter((s) => cur.has(s)); else delete autoDowSlots[d];
+          updateAutoNextHint();
         }));
     }
-    // 「次はいつ作られるか」を日本時間で出す（設定が意図どおりか、その場で確かめられるように）
+    // 「次はいつ、何食作られるか」を日本時間で出す（設定が意図どおりか、その場で確かめられるように）
     function updateAutoNextHint() {
       const wd = Number($("autoWeekday").value), hh = Number($("autoHour").value), days = Number($("autoDays").value);
       const jst = new Date(Date.now() + 9 * 3600 * 1000);
@@ -2270,10 +2296,14 @@
       if (add === 0 && jst.getUTCHours() >= hh) add = 7; // 今日の時刻を過ぎていれば来週
       const run = new Date(jst.getTime() + add * 86400000);
       const md = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+      let meals = 0;
+      for (let i = 1; i <= days; i++) meals += (autoDowSlots[new Date(run.getTime() + i * 86400000).getUTCDay()] || []).length;
       const from = new Date(run.getTime() + 86400000);
       const to = new Date(run.getTime() + days * 86400000);
-      $("autoNextHint").innerHTML = `次回: <b>${md(run)}(${AUTO_DOW[run.getUTCDay()][0]}) ${hh}時ごろ</b>に、`
-        + `<b>${md(from)}〜${md(to)}</b> の${[...autoSlots].join("・")}を作ります。すでに献立がある日は作りません。`;
+      $("autoNextHint").innerHTML = meals
+        ? `次回: <b>${md(run)}(${AUTO_DOW[run.getUTCDay()][0]}) ${hh}時ごろ</b>に、`
+          + `<b>${md(from)}〜${md(to)}</b> の <b>${meals}食分</b>を作ります。すでに献立がある食事は作りません。`
+        : `作る食事が選ばれていません。上の曜日ごとの表で朝・昼・夕を選んでください。`;
     }
     function wireAutoInputs() {
       if ($("autoWeekday").dataset.wired) return;
@@ -2294,21 +2324,19 @@
       $("autoWeekday").innerHTML = AUTO_DOW.map((l, i) => opt(i, l, a.weekday)).join("");
       $("autoHour").innerHTML = Array.from({ length: 24 }, (_, h) => opt(h, `${h}:00`, a.hour)).join("");
       const dayOpts = [...new Set([3, 5, 7, 10, 14, a.days])].sort((x, y) => x - y); // 保存値が一覧に無くても消えないように
-      $("autoDays").innerHTML = dayOpts.map((d) => opt(d, `${d}日分`, a.days)).join("");
-      $("autoCookTime").innerHTML = [["", "指定なし"], ["20", "20分以内"], ["30", "30分以内"], ["45", "45分以内"]]
-        .map(([v, l]) => opt(v, l, a.opts.maxCookMinutes || "")).join("");
-      $("autoDishCount").innerHTML = AUTO_DISH_OPTS.map(([v, l]) => opt(v, l, a.opts.dishCount || "main_side")).join("");
-      const cur = (a.opts.staple || []).join(",");
-      const hit = AUTO_STAPLE_OPTS.find(([, , arr]) => arr.join(",") === cur) || AUTO_STAPLE_OPTS[0];
-      $("autoStaple").innerHTML = AUTO_STAPLE_OPTS.map(([v, l]) => opt(v, l, hit[0])).join("");
+      $("autoDays").innerHTML = dayOpts.map((d) => opt(d, `${d}日先まで`, a.days)).join("");
       $("autoPeople").value = a.opts.people || 2;
       $("autoPreferences").value = a.opts.preferences || "";
       $("autoEnabled").checked = !!a.enabled;
-      $("autoWeekdaysOnly").checked = !!a.weekdaysOnly;
       // 未加入のときは、どんな設定ができるか分かるよう開いたまま見せる
       $("autoDetail").style.display = a.enabled || !a.premium ? "block" : "none";
-      autoSlots = new Set(a.slots.length ? a.slots : ["夕食"]);
-      renderAutoSlotChips();
+      autoDowSlots = a.dowSlots && Object.keys(a.dowSlots).length ? a.dowSlots : {};
+      renderAutoDowRows();
+      // 条件・こだわりは作成画面とまったく同じチップを使う
+      autoCond = condFrom(a.opts);
+      autoGuided = { ...emptyGuided(), ...(a.opts.guided || {}) };
+      renderCondInto({ time: "autoTimeChips", staple: "autoStapleChips", dish: "autoDishChips", hint: "autoStapleHint" }, autoCond);
+      renderGuidedInto("autoGuidedRows", autoGuided);
       wireAutoInputs();
       updateAutoNextHint();
       $("autoHint").textContent = a.lastRun
@@ -2319,7 +2347,10 @@
       const btn = $("autoSaveBtn");
       btn.disabled = true;
       $("autoHint").textContent = "";
-      const st = AUTO_STAPLE_OPTS.find(([v]) => v === $("autoStaple").value) || AUTO_STAPLE_OPTS[0];
+      if ($("autoEnabled").checked && !Object.keys(autoDowSlots).length) {
+        $("autoHint").textContent = "作る食事が1つも選ばれていません。曜日ごとの表で朝・昼・夕を選んでください。";
+        btn.disabled = false; return;
+      }
       try {
         await apiOK(`/api/households/${household.id}/auto`, {
           method: "POST",
@@ -2328,13 +2359,13 @@
             weekday: Number($("autoWeekday").value),
             hour: Number($("autoHour").value),
             days: Number($("autoDays").value),
-            slots: [...autoSlots],
-            weekdaysOnly: $("autoWeekdaysOnly").checked,
+            dowSlots: autoDowSlots,
             opts: {
               people: Number($("autoPeople").value),
-              maxCookMinutes: $("autoCookTime").value || null,
-              dishCount: $("autoDishCount").value,
-              staple: st[2],
+              maxCookMinutes: autoCond.time || null,
+              dishCount: condDishCount(autoCond),
+              staple: condStaples(autoCond),
+              guided: autoGuided,
               preferences: $("autoPreferences").value.trim(),
             },
           },
@@ -2722,15 +2753,17 @@
     ];
     const emptyGuided = () => ({ mains: "", cooking: [], style: [] });
     let guidedSel = emptyGuided();
-    const guidedOn = (q, v) => (q.multi ? (guidedSel[q.key] || []).includes(v) : guidedSel[q.key] === v);
-    const guidedIsAuto = (q) => (q.multi ? !(guidedSel[q.key] || []).length : guidedSel[q.key] === "");
-    function renderGuided() {
-      const wrap = $("guidedRows");
+    // 作成画面と「毎週おまかせ作成」の両方で同じ見た目・同じ挙動にするため、
+    // 描画先と状態を引数で受け取る形にしてある。
+    function renderGuidedInto(wrapId, sel, onChange) {
+      const wrap = $(wrapId);
       if (!wrap) return;
+      const isOn = (q, v) => (q.multi ? (sel[q.key] || []).includes(v) : sel[q.key] === v);
+      const isAuto = (q) => (q.multi ? !(sel[q.key] || []).length : !sel[q.key]);
       wrap.innerHTML = GUIDED_QUESTIONS.map((q) =>
         `<div class="grow" data-k="${q.key}"><span class="glab">${esc(q.label)}</span>` +
-        `<button type="button" class="gchip ${guidedIsAuto(q) ? "on" : ""}" data-v="">おまかせ</button>` +
-        q.opts.map((o) => `<button type="button" class="gchip ${guidedOn(q, o) ? "on" : ""}" data-v="${esc(o)}">${esc(o)}</button>`).join("") +
+        `<button type="button" class="gchip ${isAuto(q) ? "on" : ""}" data-v="">おまかせ</button>` +
+        q.opts.map((o) => `<button type="button" class="gchip ${isOn(q, o) ? "on" : ""}" data-v="${esc(o)}">${esc(o)}</button>`).join("") +
         `</div>`
       ).join("");
       wrap.querySelectorAll(".grow").forEach((row) => {
@@ -2738,16 +2771,18 @@
         row.querySelectorAll(".gchip").forEach((b) =>
           b.addEventListener("click", () => {
             const v = b.dataset.v;
-            if (!q.multi) { guidedSel[q.key] = v; }
-            else if (v === "") { guidedSel[q.key] = []; } // 「おまかせ」で全解除
+            if (!q.multi) sel[q.key] = v;
+            else if (v === "") sel[q.key] = []; // 「おまかせ」で全解除
             else {
-              const cur = guidedSel[q.key] || [];
-              guidedSel[q.key] = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]; // 複数選択可
+              const cur = sel[q.key] || [];
+              sel[q.key] = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]; // 複数選択可
             }
-            renderGuided();
+            renderGuidedInto(wrapId, sel, onChange);
+            if (onChange) onChange();
           }));
       });
     }
+    const renderGuided = () => renderGuidedInto("guidedRows", guidedSel);
 
     // ---------- 作成画面：条件のタップ選択（調理時間・主食・品数） ----------
     const TIME_OPTS = [["20", "20分以内"], ["30", "30分以内"], ["45", "45分以内"], ["", "指定なし"]];
@@ -2755,57 +2790,75 @@
     // 主食は「使ってよいもの」を選ぶ方式。何も選ばなければ「おまかせ」＝全部あり。
     // これなら「麺なし」＝ご飯＋パン、「ご飯なし」＝麺＋パン のように、
     // 除外の言い方をしなくても全部の組み合わせが表せる。
-    let cookTimeSel = "30";
-    let stapleSel = new Set();
-    let dishSel = { side: 1, soup: false }; // 主菜は常に1品。side は 0/1/2
-
-    const stapleList = () => (stapleSel.size ? STAPLES.map(([v]) => v).filter((v) => stapleSel.has(v)) : []);
-    function dishCountValue() {
-      const s = dishSel.side === 2 ? "_side2" : dishSel.side === 1 ? "_side" : "";
-      return "main" + s + (dishSel.soup ? "_soup" : "");
+    // 条件の状態。作成画面と「毎週おまかせ作成」で同じものを使い回す。
+    const newCond = () => ({ time: "30", staple: new Set(), dish: { side: 1, soup: false } }); // 主菜は常に1品
+    const cond = newCond();
+    const condStaples = (c) => (c.staple.size ? STAPLES.map(([v]) => v).filter((v) => c.staple.has(v)) : []);
+    function condDishCount(c) {
+      const s = c.dish.side === 2 ? "_side2" : c.dish.side === 1 ? "_side" : "";
+      return "main" + s + (c.dish.soup ? "_soup" : "");
     }
-    function stapleHintText() {
-      const on = stapleList();
+    function condStapleHint(c) {
+      const on = condStaples(c);
       if (!on.length) return "おまかせ＝ご飯を中心に、麺・パンの日も時々混ぜます。";
       const names = on.map((v) => (STAPLES.find(([k]) => k === v) || [])[1]);
-      const off = STAPLES.filter(([v]) => !stapleSel.has(v)).map(([, n]) => n);
+      const off = STAPLES.filter(([v]) => !c.staple.has(v)).map(([, n]) => n);
       return `${names.join("・")}の日だけ作ります。${off.length ? `（${off.join("・")}は出しません）` : ""}`;
     }
+    // 保存済みの値（配列・文字列）から状態を復元する
+    function condFrom(saved = {}) {
+      const c = newCond();
+      c.time = saved.maxCookMinutes ? String(saved.maxCookMinutes) : saved.maxCookMinutes === null ? "" : "30";
+      c.staple = new Set(saved.staple || []);
+      const dc = saved.dishCount || "main_side";
+      c.dish = { side: dc.includes("side2") ? 2 : dc.includes("side") ? 1 : 0, soup: dc.includes("soup") };
+      return c;
+    }
     const chip = (on, v, label) => `<button type="button" class="gchip ${on ? "on" : ""}" data-v="${esc(v)}">${esc(label)}</button>`;
-    function renderCondChips() {
-      const t = $("timeChips");
+    // ids = { time, staple, dish, hint }（要素id）。onChange は変更のたびに呼ばれる。
+    function renderCondInto(ids, c, onChange) {
+      const t = $(ids.time);
       if (!t) return;
-      t.innerHTML = TIME_OPTS.map(([v, l]) => chip(cookTimeSel === v, v, l)).join("");
+      const redraw = () => { renderCondInto(ids, c, onChange); if (onChange) onChange(); };
+      t.innerHTML = TIME_OPTS.map(([v, l]) => chip(c.time === v, v, l)).join("");
       t.querySelectorAll(".gchip").forEach((b) =>
-        b.addEventListener("click", () => { cookTimeSel = b.dataset.v; $("cookTime").value = cookTimeSel; renderCondChips(); }));
+        b.addEventListener("click", () => { c.time = b.dataset.v; redraw(); }));
 
-      const s = $("stapleChips");
-      s.innerHTML = chip(!stapleSel.size, "", "おまかせ") + STAPLES.map(([v, l]) => chip(stapleSel.has(v), v, l)).join("");
+      const s = $(ids.staple);
+      s.innerHTML = chip(!c.staple.size, "", "おまかせ") + STAPLES.map(([v, l]) => chip(c.staple.has(v), v, l)).join("");
       s.querySelectorAll(".gchip").forEach((b) =>
         b.addEventListener("click", () => {
           const v = b.dataset.v;
-          if (!v) stapleSel.clear();
-          else if (stapleSel.has(v)) stapleSel.delete(v);
-          else stapleSel.add(v);
-          renderCondChips();
+          if (!v) c.staple.clear();
+          else if (c.staple.has(v)) c.staple.delete(v);
+          else c.staple.add(v);
+          redraw();
         }));
-      $("stapleHint").textContent = stapleHintText();
+      if (ids.hint && $(ids.hint)) $(ids.hint).textContent = condStapleHint(c);
 
-      const d = $("dishChips");
+      const d = $(ids.dish);
       d.innerHTML = `<button type="button" class="gchip on fixed" disabled>主菜</button>`
-        + chip(dishSel.side === 1, "side1", "副菜")
-        + chip(dishSel.side === 2, "side2", "副菜2品")
-        + chip(dishSel.soup, "soup", "汁物");
+        + chip(c.dish.side === 1, "side1", "副菜")
+        + chip(c.dish.side === 2, "side2", "副菜2品")
+        + chip(c.dish.soup, "soup", "汁物");
       d.querySelectorAll(".gchip:not(.fixed)").forEach((b) =>
         b.addEventListener("click", () => {
           const v = b.dataset.v;
-          if (v === "soup") dishSel.soup = !dishSel.soup;
-          else if (v === "side1") dishSel.side = dishSel.side === 1 ? 0 : 1;
-          else dishSel.side = dishSel.side === 2 ? 0 : 2;
-          $("dishCount").value = dishCountValue();
-          renderCondChips();
+          if (v === "soup") c.dish.soup = !c.dish.soup;
+          else if (v === "side1") c.dish.side = c.dish.side === 1 ? 0 : 1;
+          else c.dish.side = c.dish.side === 2 ? 0 : 2;
+          redraw();
         }));
-      $("dishCount").value = dishCountValue();
+    }
+    // 作成画面ぶん。既存の送信処理が読む hidden input に書き戻す
+    const stapleList = () => condStaples(cond);
+    function renderCondChips() {
+      renderCondInto({ time: "timeChips", staple: "stapleChips", dish: "dishChips", hint: "stapleHint" }, cond, () => {
+        $("cookTime").value = cond.time;
+        $("dishCount").value = condDishCount(cond);
+      });
+      $("cookTime").value = cond.time;
+      $("dishCount").value = condDishCount(cond);
     }
 
     // 作成画面：冷蔵庫の食材をタップで選んで「使い切り生成」

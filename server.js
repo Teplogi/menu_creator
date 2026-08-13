@@ -304,6 +304,8 @@ const SCHEMA_STATEMENTS = [
     last_run TEXT,
     last_status TEXT,
     updated_at TEXT NOT NULL)`,
+  // 曜日ごとに作る食事（{"0":["昼食","夕食"],"1":["夕食"]}）。無い曜日は作らない。
+  `ALTER TABLE auto_plans ADD COLUMN IF NOT EXISTS dow_slots TEXT`,
 ];
 async function initDb() {
   for (const sql of SCHEMA_STATEMENTS) {
@@ -1993,14 +1995,44 @@ const clampInt = (v, lo, hi, def) => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : def;
 };
+// 曜日ごとの食事。{"0":["夕食"], ...} の形だけ通す。
+function sanitizeDowSlots(v) {
+  const out = {};
+  if (v && typeof v === "object") {
+    for (let d = 0; d <= 6; d++) {
+      const arr = (Array.isArray(v[d]) ? v[d] : Array.isArray(v[String(d)]) ? v[String(d)] : [])
+        .filter((s) => AUTO_SLOTS.includes(s));
+      const uniq = AUTO_SLOTS.filter((s) => arr.includes(s));
+      if (uniq.length) out[d] = uniq;
+    }
+  }
+  return out;
+}
+// 旧形式（全曜日で同じ slots ＋ 平日のみ）から曜日ごとの形に直す
+function dowSlotsOf(r) {
+  try {
+    const j = JSON.parse(r.dow_slots || "null");
+    if (j && Object.keys(j).length) return sanitizeDowSlots(j);
+  } catch {}
+  const slots = String(r.slots || "夕食").split(",").filter(Boolean);
+  const out = {};
+  for (let d = 0; d <= 6; d++) {
+    if (r.weekdays_only && (d === 0 || d === 6)) continue;
+    out[d] = slots;
+  }
+  return out;
+}
 function autoToClient(r, householdId) {
-  if (!r) return { enabled: false, weekday: 0, hour: 18, days: 7, slots: ["夕食"], weekdaysOnly: false, opts: {}, householdId };
+  if (!r) {
+    const dowSlots = {};
+    for (let d = 1; d <= 5; d++) dowSlots[d] = ["夕食"]; // 既定は平日の夕食
+    return { enabled: false, weekday: 0, hour: 18, days: 7, dowSlots, opts: {}, householdId };
+  }
   let opts = {};
   try { opts = JSON.parse(r.opts_json || "{}"); } catch {}
   return {
     householdId, enabled: !!r.enabled, weekday: r.weekday, hour: r.hour, days: r.days,
-    slots: String(r.slots || "夕食").split(",").filter(Boolean),
-    weekdaysOnly: !!r.weekdays_only, opts, lastRun: r.last_run || null, lastStatus: r.last_status || null,
+    dowSlots: dowSlotsOf(r), opts, lastRun: r.last_run || null, lastStatus: r.last_status || null,
   };
 }
 app.get("/api/households/:id/auto", auth, async (req, res) => {
@@ -2016,7 +2048,7 @@ app.post("/api/households/:id/auto", auth, async (req, res) => {
     const household = await requireMember(req, res, req.params.id);
     if (!household) return;
     const b = req.body || {};
-    const slots = (Array.isArray(b.slots) ? b.slots : ["夕食"]).filter((s) => AUTO_SLOTS.includes(s));
+    const dowSlots = sanitizeDowSlots(b.dowSlots);
     const opts = {
       people: clampInt(b.opts?.people, 1, 12, 2),
       maxCookMinutes: b.opts?.maxCookMinutes ? clampInt(b.opts.maxCookMinutes, 5, 180, 30) : null,
@@ -2027,13 +2059,13 @@ app.post("/api/households/:id/auto", auth, async (req, res) => {
     };
     const now = new Date().toISOString();
     await q(
-      `INSERT INTO auto_plans (household_id, user_id, enabled, weekday, hour, days, slots, weekdays_only, opts_json, updated_at)
+      `INSERT INTO auto_plans (household_id, user_id, enabled, weekday, hour, days, slots, dow_slots, opts_json, updated_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
        ON CONFLICT (household_id) DO UPDATE SET
          user_id = $2, enabled = $3, weekday = $4, hour = $5, days = $6, slots = $7,
-         weekdays_only = $8, opts_json = $9, updated_at = $10`,
+         dow_slots = $8, opts_json = $9, updated_at = $10`,
       [household.id, req.user.id, !!b.enabled, clampInt(b.weekday, 0, 6, 0), clampInt(b.hour, 0, 23, 18),
-       clampInt(b.days, 1, 14, 7), (slots.length ? slots : ["夕食"]).join(","), !!b.weekdaysOnly,
+       clampInt(b.days, 1, 14, 7), "夕食", JSON.stringify(dowSlots),
        JSON.stringify(opts), now]
     );
     const r = await one("SELECT * FROM auto_plans WHERE household_id = $1", [household.id]);
@@ -2536,15 +2568,15 @@ async function runAutoPlans() {
       }
       const household = await one("SELECT * FROM households WHERE id = $1", [r.household_id]);
       if (!household) continue;
-      const slots = String(r.slots || "夕食").split(",").filter(Boolean);
+      const dowSlots = dowSlotsOf(r); // 曜日ごとに作る食事
       const from = jstAddDays(today, 1); // 翌日から
       const to = jstAddDays(today, r.days);
       const busy = await existingSlotSet(r.household_id, from, to);
       const targets = [];
       for (let i = 1; i <= r.days; i++) {
         const date = jstAddDays(today, i);
-        if (r.weekdays_only && [0, 6].includes(jstDow(date))) continue;
-        const open = slots.filter((s) => !busy.has(`${date}|${s}`));
+        const want = dowSlots[jstDow(date)] || [];
+        const open = want.filter((s) => !busy.has(`${date}|${s}`));
         if (open.length) targets.push({ date, slots: open });
       }
       if (!targets.length) {
