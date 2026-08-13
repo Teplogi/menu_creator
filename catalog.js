@@ -93,6 +93,11 @@ function filterDishes(all, c) {
     if (c.avoid && c.avoid.length && dishHits(d, c.avoid)) return false;
     if (c.noFry && d.method === "揚げる") return false;
     if (c.quick && !(d.time <= 20 || (d.equipment || []).includes("電子レンジ"))) return false;
+    if (c.kid && !d.kid_friendly) return false;
+    if (c.mild && d.spicy) return false;
+    if (c.leftover && !d.leftover_ok) return false;
+    if (c.fewDishes && (d.equipment || []).length > 1) return false; // 洗い物少なめ＝器具1つで作れる
+    if (c.cheap && d.cost === "高め") return false;
     if (c.staples && c.staples.length && d.staple !== "どれでも" && !c.staples.includes(d.staple)) return false;
     if (c.maxMinutes && d.time > c.maxMinutes) return false;
     // 夕食の主菜は、卵だけ・豆腐だけのような軽い一皿にしない
@@ -116,6 +121,11 @@ export function pickMainCandidates(opts = {}) {
     avoid: avoidKeys(opts.avoidText),
     noFry: !!opts.noFry,
     quick: !!opts.quick,
+    kid: (opts.style || []).includes("子どもも食べやすい"),
+    mild: (opts.style || []).includes("辛いものなし"),
+    leftover: (opts.style || []).includes("作り置きしたい"),
+    fewDishes: (opts.style || []).includes("洗い物少なめ"),
+    cheap: (opts.style || []).includes("節約したい"),
     substantial: opts.slot === "夕食",
     season: seasonOf(opts.date),
     mains: mainsFor(opts.mainHint),
@@ -130,7 +140,9 @@ export function pickMainCandidates(opts = {}) {
     ["", base],
     ["季節", { ...base, season: null }],
     ["最近作った料理の除外", { ...base, season: null, excludeNames: new Set() }],
-    ["食べごたえ", { ...base, season: null, excludeNames: new Set(), substantial: false }],
+    // 「洗い物少なめ」「節約」は好みの度合いなので、行き詰まったらここも外す
+    ["洗い物・費用", { ...base, season: null, excludeNames: new Set(), fewDishes: false, cheap: false }],
+    ["食べごたえ", { ...base, season: null, excludeNames: new Set(), fewDishes: false, cheap: false, substantial: false }],
   ];
   // 主材料を指定された日は候補が1グループに絞られるので、少なくても許容する
   const minWanted = base.mains ? 5 : MIN_CANDIDATES;
@@ -151,3 +163,39 @@ export function pickMainCandidates(opts = {}) {
 export const candidateLine = (d) => `${d.name}（${d.main}・${d.time}分・${d.genre}）`;
 
 export const catalogSize = () => DISHES.length;
+
+// ---------- 具材の選択（味噌汁・スープ） ----------
+// 味噌汁は具を変えれば何度出しても飽きないので、料理を増やす代わりに
+// ユーザーが具材を選べるようにする。魚の種類を選べるのと同じ考え方。
+const CHOICE_SETS = DOC.choice_sets || {};
+const BY_NAME = new Map(DISHES.map((d) => [d.name, d]));
+
+// できあがった料理に、具材を選べる情報を付ける（カタログに印がある料理だけ）
+// カタログの印が最優先。AIは「わかめと豆腐のみそ汁」のようにカタログと違う名前を
+// 付けてくるので、名前の末尾でも拾う（味噌汁とスープは具材が入れ替わるものなので）。
+function choiceKeyOf(name) {
+  const hit = BY_NAME.get(name)?.choice;
+  if (hit) return hit;
+  if (/(味噌汁|みそ汁|みそしる)$/.test(name)) return "味噌汁の具";
+  if (/スープ$/.test(name)) return "スープの具";
+  return null;
+}
+
+export function attachChoice(dish) {
+  if (!dish || !dish.name) return dish;
+  const key = choiceKeyOf(dish.name);
+  const set = key && CHOICE_SETS[key];
+  if (!set) return dish;
+  // いま入っている具材（材料名が選択肢と一致するもの）を覚えておき、
+  // 選び直したときにこれだけを差し替える
+  const names = new Set((dish.ingredients || []).map((i) => norm(i.name)));
+  dish.choice = {
+    key,
+    label: set.label,
+    max: set.max || 2,
+    options: set.options,
+    current: set.options.filter((o) => names.has(norm(o.name))).map((o) => o.name),
+  };
+  return dish;
+}
+export const choiceSets = () => CHOICE_SETS;

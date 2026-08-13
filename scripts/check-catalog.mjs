@@ -136,7 +136,8 @@ const people = doc.base_people || 2;
 const odd = [];
 for (const d of dishes) {
   const n = analyzePlan({ days: [{ date: "x", meals: [{ slot: "夕食", dishes: [d] }] }] }, people).days[0].meals[0].dishes[0];
-  const heavy = d.role === "主菜";
+  // ポトフのような食べごたえのある汁物は、副菜と同じ物差しでは測れない
+  const heavy = d.role === "主菜" || d.heaviness === "しっかり";
   if (n.kcal > (heavy ? 1100 : 600) || n.kcal < (heavy ? 80 : 10) || n.salt > (heavy ? 6 : 4)) {
     odd.push(`${d.name}（${d.role}）: ${n.kcal}kcal / 塩分${n.salt}g${n.unknown ? ` / 不明${n.unknown}件` : ""}`);
   }

@@ -2448,8 +2448,10 @@
     const GUIDED_QUESTIONS = [
       { key: "mains", label: "主菜", opts: ["肉多め", "魚多め", "肉と魚を半々"] },
       { key: "cooking", label: "調理", opts: ["揚げ物なし", "レンジ・時短中心"], multi: true },
+      // カタログの属性（kid_friendly / spicy / leftover_ok / equipment / cost）をそのまま選べるようにしたもの
+      { key: "style", label: "好み", opts: ["子どもも食べやすい", "辛いものなし", "作り置きしたい", "洗い物少なめ", "節約したい"], multi: true },
     ];
-    const emptyGuided = () => ({ mains: "", cooking: [] });
+    const emptyGuided = () => ({ mains: "", cooking: [], style: [] });
     let guidedSel = emptyGuided();
     const guidedOn = (q, v) => (q.multi ? (guidedSel[q.key] || []).includes(v) : guidedSel[q.key] === v);
     const guidedIsAuto = (q) => (q.multi ? !(guidedSel[q.key] || []).length : guidedSel[q.key] === "");
@@ -3566,6 +3568,75 @@
       ov.style.display = "flex";
     }
 
+    // ---------- 具材を選ぶ（味噌汁・スープ） ----------
+    // 味噌汁は具を変えれば何度出しても飽きないので、料理を増やす代わりに具材を選べるようにする。
+    // dish.choice はサーバーがカタログを見て付けている { label, max, options, current }。
+    function openIngPicker(idx) {
+      const meal = getMeal(currentRecipe.date, currentRecipe.slot);
+      const dish = meal?.dishes[idx];
+      if (!dish?.choice) return;
+      const ch = dish.choice;
+      let sel = new Set(ch.current || []);
+      let ov = $("ingModal");
+      if (!ov) {
+        ov = document.createElement("div");
+        ov.id = "ingModal"; ov.className = "modal-overlay"; ov.style.display = "none";
+        ov.innerHTML = `<div class="modal-card">
+          <div class="mp-title" id="ingTitle">🥣 具材を選ぶ</div>
+          <p class="mp-hint" id="ingHint" style="margin-bottom:8px"></p>
+          <div class="preset-chips" id="ingChips" style="margin-bottom:10px"></div>
+          <div class="ef-savecancel"><button class="btn-primary" id="ingGo">この具材にする</button>
+            <button class="btn-ghost" id="ingCancel">取消</button></div>
+        </div>`;
+        document.body.appendChild(ov);
+        ov.addEventListener("click", (e) => { if (e.target === ov) ov.style.display = "none"; });
+        $("ingCancel").addEventListener("click", () => { ov.style.display = "none"; });
+      }
+      const draw = () => {
+        $("ingTitle").innerHTML = `🥣 ${esc(ch.label)}を選ぶ<span class="mm-sub">${esc(dish.name)}</span>`;
+        $("ingHint").textContent = `${ch.max}つまで選べます（買い物リストにも反映されます）。`;
+        $("ingChips").innerHTML = ch.options.map((o) =>
+          `<span class="preset-chip ${sel.has(o.name) ? "sel" : ""}" data-n="${esc(o.name)}" style="cursor:pointer"><span class="pt">${esc(o.name)}</span></span>`).join("");
+        $("ingChips").querySelectorAll(".preset-chip").forEach((el) =>
+          el.addEventListener("click", () => {
+            const n = el.dataset.n;
+            if (sel.has(n)) sel.delete(n);
+            else { if (sel.size >= ch.max) sel.delete([...sel][0]); sel.add(n); } // 上限を超えたら古いものから外す
+            draw();
+          }));
+        $("ingGo").disabled = !sel.size;
+      };
+      draw();
+      $("ingGo").onclick = () => applyIngChoice(idx, [...sel]);
+      ov.style.display = "flex";
+    }
+
+    async function applyIngChoice(idx, names) {
+      const { date, slot } = currentRecipe;
+      const meal = getMeal(date, slot);
+      const dish = meal?.dishes[idx];
+      if (!dish?.choice || !names.length) return;
+      const ch = dish.choice;
+      const byName = new Map(ch.options.map((o) => [o.name, o]));
+      const oldNames = (ch.current || []).filter((n) => !names.includes(n));
+      // いまの具材を抜いて、選ばれた具材を同じ位置に入れる
+      const keep = (dish.ingredients || []).filter((i) => !(ch.current || []).includes(i.name));
+      const at = (dish.ingredients || []).findIndex((i) => (ch.current || []).includes(i.name));
+      const add = names.map((n) => ({ ...byName.get(n) }));
+      dish.ingredients = at >= 0 ? [...keep.slice(0, at), ...add, ...keep.slice(at)] : [...add, ...keep];
+      ch.current = names;
+      // 「豆腐とわかめの味噌汁」のように具材が名前に入っているものは、名前も付け替える
+      const suffix = (dish.name.match(/(味噌汁|みそ汁|みそしる)$/) || [])[1];
+      if (suffix) dish.name = `${names.join("と")}の${suffix}`;
+      const ov = $("ingModal"); if (ov) ov.style.display = "none";
+      await savePlan();
+      syncPlanCache();
+      // 買い物リストからは外した具材を消し、選んだ具材を足す
+      for (const n of oldNames) removeShopItemForDate(date, n);
+      for (const o of add) addShopItemForDate(date, o.name, o.amount, o.category, dish.name);
+      renderRecipe();
+    }
+
     async function applyFishChoice(idx, fish) {
       const { date, slot } = currentRecipe;
       const meal = getMeal(date, slot);
@@ -3611,6 +3682,32 @@
           localStorage.setItem("shopSig:w:" + wk, weekPlanSig(wk));
         }
       } catch {}
+    }
+    // 買い物リストを直接いじる小道具（具材の入れ替えで使う）。
+    // 作り直すと手で入れた分まで消えてしまうので、その日の該当行だけを足し引きする。
+    function editShopList(date, fn) {
+      try {
+        const wk = weekStart(date);
+        const key = "shoplist:w:" + wk;
+        const raw = localStorage.getItem(key);
+        if (!raw) return; // まだ作られていないリストは、開いたときに献立から作られる
+        const list = JSON.parse(raw);
+        if (!Array.isArray(list)) return;
+        const next = fn(list);
+        localStorage.setItem(key, JSON.stringify(next || list));
+        if (localStorage.getItem("shopSig:w:" + wk) != null) {
+          localStorage.setItem("shopSig:w:" + wk, weekPlanSig(wk));
+        }
+      } catch {}
+    }
+    const removeShopItemForDate = (date, name) =>
+      editShopList(date, (l) => l.filter((it) => !(it.date === date && it.name === name)));
+    function addShopItemForDate(date, name, amount, category, dishName) {
+      editShopList(date, (l) => {
+        if (l.some((it) => it.date === date && it.name === name)) return l; // 既にあれば足さない
+        l.push({ id: newId(), name, amount: amount || "", checked: false, category: category || "", date, dishes: dishName ? [dishName] : [] });
+        return l;
+      });
     }
 
     function renderRecipe() {
@@ -3683,6 +3780,7 @@
           ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
           ${dish._prev ? `<button class="undo-btn" data-undo="${idx}">↩ 「${esc(dish._prev.name || "前の料理")}」に戻す</button>` : ""}
           ${!dish.store_bought && canChooseFish(dish) ? `<button class="fish-btn" data-fish="${idx}">🐟 ${dish.fish_choice ? esc(dish.fish_choice) + "（変更する）" : "魚の種類を選ぶ"}</button>` : ""}
+          ${!dish.store_bought && dish.choice ? `<button class="fish-btn" data-ing="${idx}">🥣 ${(dish.choice.current || []).length ? esc(dish.choice.current.join("・")) + "（具材を変える）" : esc(dish.choice.label) + "を選ぶ"}</button>` : ""}
           <div class="subsec"><div class="sec-head"><span class="label">${dish.store_bought ? "買うもの" : "材料"}</span><span class="lead"></span></div>
             <ul class="ings">${(dish.ingredients || []).map((i) => `<li>${esc(i.name)}${i.amount ? ` ${esc(i.amount)}` : ""}</li>`).join("")}</ul></div>`;
         if (!dish.store_bought) {
@@ -3741,6 +3839,8 @@
         b.addEventListener("click", () => undoDishReplace(Number(b.dataset.undo))));
       body.querySelectorAll(".fish-btn[data-fish]").forEach((b) =>
         b.addEventListener("click", () => openFishPicker(Number(b.dataset.fish))));
+      body.querySelectorAll(".fish-btn[data-ing]").forEach((b) =>
+        b.addEventListener("click", () => openIngPicker(Number(b.dataset.ing))));
     }
 
     // 差し替え（AI変更/お気に入り）を1つ前に戻す。もう一度押すと入れ替え直す（やり直し）

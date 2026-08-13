@@ -7,7 +7,7 @@ import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
 import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
-import { pickMainCandidates, candidateLine, catalogSize } from "./catalog.js";
+import { pickMainCandidates, candidateLine, catalogSize, attachChoice } from "./catalog.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -475,6 +475,14 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     opts.guided?.mains ? `主菜のバランス指定: ${opts.guided.mains}（期間全体でこの配分を守る）` : "",
     (opts.guided?.cooking || []).includes("揚げ物なし") ? "調理法の指定: 揚げ物は作らない（唐揚げ・フライ・天ぷら・揚げ焼きも避ける）。" : "",
     (opts.guided?.cooking || []).includes("レンジ・時短中心") ? "調理法の指定: 電子レンジ活用や炒め・和えものなどの時短調理を中心にし、洗い物が少なく済むようにする。" : "",
+    // 主菜は候補の絞り込みでも効かせているが、副菜・汁物は自由生成なので言葉でも伝える
+    ...(opts.guided?.style || []).map((s) => ({
+      "子どもも食べやすい": "好みの指定: 小さい子どもでも食べやすい料理にする（強い辛さ・クセの強い食材・骨のある魚は避ける）。",
+      "辛いものなし": "好みの指定: 辛い料理は作らない（豆板醤・キムチ・カレー粉・唐辛子を効かせたものを避ける）。",
+      "作り置きしたい": "好みの指定: 作り置きや翌日のお弁当に回しやすい料理を選ぶ（冷めてもおいしいもの、日持ちするもの）。",
+      "洗い物少なめ": "好みの指定: 使う調理器具が少なくて済む料理にする（フライパン1つ・レンジだけ、など）。",
+      "節約したい": "好みの指定: 材料費が抑えられる料理にする（もやし・豆腐・鶏むね肉・卵・旬の野菜などを活かす）。高価な食材は使わない。",
+    }[s] || "")),
     avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
     storeAvoid && storeAvoid.length
       ? `次の食材はアレルギー・苦手のため、料理・材料に一切使わないこと（絶対）: ${storeAvoid.join("、")}`
@@ -824,7 +832,7 @@ function normalizeDishMainType(dish) {
 function normalizePlanMainTypes(plan) {
   for (const d of plan?.days || [])
     for (const m of d.meals || [])
-      for (const dish of m.dishes || []) normalizeDishMainType(dish);
+      for (const dish of m.dishes || []) attachChoice(normalizeDishMainType(dish));
   return plan;
 }
 
@@ -914,15 +922,17 @@ async function generateDish(instruction, ctx) {
     (b) => b.type === "tool_use" && b.name === "save_dish"
   );
   if (!toolBlock || !toolBlock.input?.dish) throw new Error("EMPTY_RESPONSE");
-  return normalizeDishMainType(toolBlock.input.dish);
+  return attachChoice(normalizeDishMainType(toolBlock.input.dish));
 }
 
 // こだわり（誘導式チップ）の値を許可リストで検証する
 const GUIDED_ALLOW = {
   mains: ["肉多め", "魚多め", "肉と魚を半々"],
   cooking: ["揚げ物なし", "レンジ・時短中心"],
+  // カタログの属性をそのまま選べるようにしたもの（候補の絞り込みにも使う）
+  style: ["子どもも食べやすい", "辛いものなし", "作り置きしたい", "洗い物少なめ", "節約したい"],
 };
-const GUIDED_MULTI = ["cooking"]; // 複数選択できる項目（揚げ物なし＋時短 の併用など）
+const GUIDED_MULTI = ["cooking", "style"]; // 複数選択できる項目（揚げ物なし＋時短 の併用など）
 function sanitizeGuided(v) {
   const out = {};
   if (v && typeof v === "object") {
@@ -1877,6 +1887,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
         avoidText: [o.avoid, ...(st.avoid || [])].filter(Boolean).join("、"),
         noFry: (o.guided?.cooking || []).includes("揚げ物なし"),
         quick: (o.guided?.cooking || []).includes("レンジ・時短中心"),
+        style: o.guided?.style || [],
         mainHint,
         excludeNames: [...recentAll, ...(extraAvoid || [])],
       });
@@ -2094,6 +2105,7 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
           avoidText: [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、"),
           noFry: (opts.guided?.cooking || []).includes("揚げ物なし"),
           quick: (opts.guided?.cooking || []).includes("レンジ・時短中心"),
+          style: opts.guided?.style || [],
           excludeNames: [...avoidDishes, ...recentDishes],
         }).dishes.map(candidateLine),
       }, SINGLE_MODEL); // 1食作り直しは単発操作＝速い Haiku

@@ -18170,7 +18170,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "味噌汁の具"
     },
     {
       "name": "大根と油揚げの味噌汁",
@@ -18217,7 +18218,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "味噌汁の具"
     },
     {
       "name": "なめこの味噌汁",
@@ -18264,7 +18266,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "味噌汁の具"
     },
     {
       "name": "じゃがいもと玉ねぎの味噌汁",
@@ -18311,7 +18314,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "味噌汁の具"
     },
     {
       "name": "豚汁",
@@ -18832,7 +18836,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "スープの具"
     },
     {
       "name": "卵スープ",
@@ -18899,7 +18904,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "スープの具"
     },
     {
       "name": "中華コーンスープ",
@@ -19043,7 +19049,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "スープの具"
     },
     {
       "name": "ワンタンスープ",
@@ -19346,7 +19353,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "スープの具"
     },
     {
       "name": "オニオンスープ",
@@ -19825,7 +19833,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "スープの具"
     },
     {
       "name": "野菜スープ",
@@ -19892,7 +19901,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "choice": "スープの具"
     },
     {
       "name": "豆乳味噌スープ",
@@ -19944,8 +19954,2554 @@
         "鍋"
       ],
       "leftover_ok": false,
+      "cost": "安い",
+      "choice": "味噌汁の具"
+    },
+    {
+      "name": "春菊のおひたし",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "冬",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "春菊",
+          "amount": "1袋(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "だし汁",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "かつお節",
+          "amount": "2g",
+          "category": "その他"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "もやしとにらのおひたし",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "もやし",
+          "amount": "1袋(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にら",
+          "amount": "1/2束(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "だし汁",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "かつお節",
+          "amount": "2g",
+          "category": "その他"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "オクラの梅和え",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "夏",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "おくら",
+          "amount": "1袋(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "梅干し",
+          "amount": "1個(10g)",
+          "category": "その他"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "かつお節",
+          "amount": "少々",
+          "category": "その他"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "包丁のみ"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "きゅうりとちくわの和え物",
+      "role": "副菜",
+      "main": "魚介",
+      "genre": "和",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "きゅうり",
+          "amount": "1本(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ちくわ",
+          "amount": "2本(60g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "酢",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "ごま油",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "白ごま",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "包丁のみ"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "納豆と長芋のねばねば和え",
+      "role": "副菜",
+      "main": "豆腐大豆",
+      "genre": "和",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 5,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "納豆",
+          "amount": "2パック(90g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "長芋",
+          "amount": "1/4本(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "刻みのり",
+          "amount": "適量",
+          "category": "その他"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "包丁のみ"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "かぶの浅漬け",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "冬",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "かぶ",
+          "amount": "2個(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "塩",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "昆布",
+          "amount": "2g",
+          "category": "その他"
+        },
+        {
+          "name": "赤唐辛子",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "包丁のみ"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "小松菜のナムル",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "韓",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "小松菜",
+          "amount": "1袋(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1/2かけ(3g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ごま油",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "小さじ1/4",
+          "category": "調味料"
+        },
+        {
+          "name": "鶏がらスープの素",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "白ごま",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "きゅうりとささみの和え物",
+      "role": "副菜",
+      "main": "鶏肉",
+      "genre": "中",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "夏",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "きゅうり",
+          "amount": "1本(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "鶏ささみ",
+          "amount": "2本(120g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "酒",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "ごま油",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "酢",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "白ごま",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "なすとピーマンの味噌炒め",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "夏",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "なす",
+          "amount": "2個(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ピーマン",
+          "amount": "2個(60g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "油",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "味噌",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "大さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "れんこんの甘酢炒め",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "秋",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "れんこん",
+          "amount": "1節(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "赤とうがらし",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "油",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "酢",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "ごま",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "かぼちゃのそぼろ煮",
+      "role": "副菜",
+      "main": "ひき肉",
+      "genre": "和",
+      "method": "煮る",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "かぼちゃ",
+          "amount": "1/4個(300g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "とりひき肉",
+          "amount": "100g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "しょうが",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "だし汁",
+          "amount": "200ml",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "片栗粉",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "たけのこの土佐煮",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "煮る",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "春",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "たけのこ",
+          "amount": "200g",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "かつおぶし",
+          "amount": "1袋(3g)",
+          "category": "その他"
+        },
+        {
+          "name": "だし汁",
+          "amount": "150ml",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "油",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "なめたけ",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "煮る",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "えのきだけ",
+          "amount": "2袋(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "酢",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "厚揚げの煮物",
+      "role": "副菜",
+      "main": "豆腐大豆",
+      "genre": "和",
+      "method": "煮る",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "厚揚げ",
+          "amount": "2枚(300g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "だいこん",
+          "amount": "1/4本(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1/3本(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "だし汁",
+          "amount": "300ml",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "大さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "高野豆腐の卵とじ",
+      "role": "副菜",
+      "main": "豆腐大豆",
+      "genre": "和",
+      "method": "煮る",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "高野豆腐",
+          "amount": "2枚(34g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "卵",
+          "amount": "2個",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/2本(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "だし汁",
+          "amount": "250ml",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "みりん",
+          "amount": "大さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "スナップえんどうの塩ゆで",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "煮る",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "春",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "スナップえんどう",
+          "amount": "1袋(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "塩（ゆで用）",
+          "amount": "大さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "焼きなす",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "夏",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "なす",
+          "amount": "2本(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうが",
+          "amount": "1/2かけ(3g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "かつお節",
+          "amount": "少々",
+          "category": "その他"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "きのこのホイル焼き",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "秋",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "しめじ",
+          "amount": "1袋(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "えのき",
+          "amount": "1袋(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "バター",
+          "amount": "10g",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "ねぎ",
+          "amount": "1/4本(20g)",
+          "category": "野菜・果物"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "オーブン・トースター"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "エリンギのバター醤油焼き",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "エリンギ",
+          "amount": "2本(120g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "バター",
+          "amount": "10g",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "はんぺんのチーズ焼き",
+      "role": "副菜",
+      "main": "魚介",
+      "genre": "和",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "はんぺん",
+          "amount": "1枚(100g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "ピザ用チーズ",
+          "amount": "40g",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "マヨネーズ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "青のり",
+          "amount": "少々",
+          "category": "その他"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "オーブン・トースター"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "ちくわの磯辺揚げ",
+      "role": "副菜",
+      "main": "魚介",
+      "genre": "和",
+      "method": "揚げる",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "ちくわ",
+          "amount": "4本(120g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "小麦粉",
+          "amount": "大さじ4",
+          "category": "主食・乾物"
+        },
+        {
+          "name": "青のり",
+          "amount": "小さじ1",
+          "category": "その他"
+        },
+        {
+          "name": "水",
+          "amount": "大さじ4",
+          "category": "調味料"
+        },
+        {
+          "name": "油",
+          "amount": "適量",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "ごぼうの唐揚げ",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "和",
+      "method": "揚げる",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "秋",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "ごぼう",
+          "amount": "1本(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうが",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "片栗粉",
+          "amount": "大さじ3",
+          "category": "主食・乾物"
+        },
+        {
+          "name": "油",
+          "amount": "適量",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "豆苗とベーコンの炒め物",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "中",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "豆苗",
+          "amount": "1袋(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ベーコン",
+          "amount": "2枚(40g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1/2かけ(3g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "油",
+          "amount": "大さじ1/2",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "チンゲン菜のオイスター炒め",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "中",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "チンゲン菜",
+          "amount": "2株(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1/2かけ(3g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "オイスターソース",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "油",
+          "amount": "大さじ1/2",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "白菜の中華炒め",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "中",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "冬",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "はくさい",
+          "amount": "1/4個(300g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1/4本(30g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "豚肉",
+          "amount": "80g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "ごま油",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "オイスターソース",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "鶏がらスープの素",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "片栗粉",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "50ml",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "トマトと卵の炒め物",
+      "role": "副菜",
+      "main": "卵",
+      "genre": "中",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "夏",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "トマト",
+          "amount": "2個(300g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "卵",
+          "amount": "3個(150g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "ねぎ",
+          "amount": "1/4本(20g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "サラダ油",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "小さじ1/4",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "鶏がらスープの素",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "春雨の中華炒め",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "中",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "春雨",
+          "amount": "50g",
+          "category": "主食・乾物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1/4本(30g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ピーマン",
+          "amount": "1個(30g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "きくらげ",
+          "amount": "5g",
+          "category": "主食・乾物"
+        },
+        {
+          "name": "豚肉",
+          "amount": "80g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "ごま油",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "オイスターソース",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "鶏がらスープの素",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "100ml",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "水菜とツナのサラダ",
+      "role": "副菜",
+      "main": "魚介",
+      "genre": "洋",
+      "method": "生",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "水菜",
+          "amount": "1株(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ツナ缶",
+          "amount": "1缶(70g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "玉ねぎ",
+          "amount": "1/8個(20g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "オリーブオイル",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "しょうゆ",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "酢",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "包丁のみ"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "アスパラのベーコン巻き",
+      "role": "副菜",
+      "main": "豚肉",
+      "genre": "洋",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "春",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "アスパラガス",
+          "amount": "6本(120g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ベーコン",
+          "amount": "6枚(90g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "オリーブオイル",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "ブロッコリーのペペロンチーノ",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "洋",
+      "method": "炒める",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "ブロッコリー",
+          "amount": "1/2株(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "赤唐辛子",
+          "amount": "1本",
+          "category": "調味料"
+        },
+        {
+          "name": "オリーブオイル",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "小さじ1/4",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": false,
+      "spicy": true,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "かぼちゃのチーズ焼き",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "洋",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "かぼちゃ",
+          "amount": "1/4個(300g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ピザ用チーズ",
+          "amount": "50g",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "オリーブオイル",
+          "amount": "大さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "パセリ",
+          "amount": "少々",
+          "category": "野菜・果物"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "オーブン・トースター"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "じゃがいものガレット",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "洋",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "じゃがいも",
+          "amount": "2個(300g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "塩",
+          "amount": "小さじ1/4",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "バター",
+          "amount": "10g",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "サラダ油",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "片栗粉",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "さつまいものサラダ",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "洋",
+      "method": "和える",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "秋",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "さつまいも",
+          "amount": "1本(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "きゅうり",
+          "amount": "1/4本(25g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1/6本(20g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "玉ねぎ",
+          "amount": "1/8個(15g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "マヨネーズ",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "焼きねぎのマリネ",
+      "role": "副菜",
+      "main": "野菜",
+      "genre": "洋",
+      "method": "焼く",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "長ねぎ",
+          "amount": "2本(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "オリーブオイル",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "酢",
+          "amount": "大さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "砂糖",
+          "amount": "小さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "フライパン"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "具だくさん味噌汁",
+      "role": "汁物",
+      "main": "野菜",
+      "genre": "和",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "choice": "味噌汁の具",
+      "ingredients": [
+        {
+          "name": "だいこん",
+          "amount": "1/8本(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1/4本(30g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "じゃがいも",
+          "amount": "1個(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/2本(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "豆腐",
+          "amount": "1/4丁(75g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "だし汁",
+          "amount": "500ml",
+          "category": "調味料"
+        },
+        {
+          "name": "味噌",
+          "amount": "大さじ2",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "あさりの味噌汁",
+      "role": "汁物",
+      "main": "魚介",
+      "genre": "和",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "春",
+      "slots": "朝昼夕",
+      "buy": false,
+      "choice": "味噌汁の具",
+      "ingredients": [
+        {
+          "name": "あさり",
+          "amount": "200g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/4本(25g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "だし汁",
+          "amount": "400ml",
+          "category": "調味料"
+        },
+        {
+          "name": "味噌",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "酒",
+          "amount": "大さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": false,
+      "cost": "普通"
+    },
+    {
+      "name": "しじみの味噌汁",
+      "role": "汁物",
+      "main": "魚介",
+      "genre": "和",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "choice": "味噌汁の具",
+      "ingredients": [
+        {
+          "name": "しじみ",
+          "amount": "200g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/4本(25g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "だし汁",
+          "amount": "400ml",
+          "category": "調味料"
+        },
+        {
+          "name": "味噌",
+          "amount": "大さじ1と1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "酒",
+          "amount": "大さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": false,
+      "cost": "普通"
+    },
+    {
+      "name": "白菜と鶏団子のスープ",
+      "role": "汁物",
+      "main": "鶏肉",
+      "genre": "中",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "冬",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "はくさい",
+          "amount": "1/4株(250g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "鶏ひき肉",
+          "amount": "150g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/4本(25g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しょうが",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "片栗粉",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "酒",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "小さじ1/2",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "鶏がらスープの素",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "600ml",
+          "category": "調味料"
+        },
+        {
+          "name": "ごま油",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "もずくスープ",
+      "role": "汁物",
+      "main": "野菜",
+      "genre": "和",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "夏",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "もずく",
+          "amount": "1袋(80g)",
+          "category": "その他"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/4本(25g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "卵",
+          "amount": "1個(50g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "鶏がらスープの素",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "500ml",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "ごま油",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "トマトと卵のスープ",
+      "role": "汁物",
+      "main": "卵",
+      "genre": "中",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 10,
+      "season": "夏",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "トマト",
+          "amount": "1個(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "卵",
+          "amount": "2個(100g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/4本(25g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "鶏がらスープの素",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "500ml",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "ごま油",
+          "amount": "小さじ1",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": false,
+      "cost": "安い"
+    },
+    {
+      "name": "きのこのスープ",
+      "role": "汁物",
+      "main": "野菜",
+      "genre": "洋",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 15,
+      "season": "秋",
+      "slots": "朝昼夕",
+      "buy": false,
+      "choice": "スープの具",
+      "ingredients": [
+        {
+          "name": "しめじ",
+          "amount": "1パック(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "マッシュルーム",
+          "amount": "4個(40g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "玉ねぎ",
+          "amount": "1/4個(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "バター",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "400ml",
+          "category": "調味料"
+        },
+        {
+          "name": "コンソメ",
+          "amount": "小さじ2",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "牛乳",
+          "amount": "100ml",
+          "category": "調味料"
+        },
+        {
+          "name": "パセリ",
+          "amount": "少々",
+          "category": "野菜・果物"
+        }
+      ],
+      "heaviness": "軽い",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "安い"
+    },
+    {
+      "name": "ポトフ",
+      "role": "汁物",
+      "main": "豚肉",
+      "genre": "洋",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 30,
+      "season": "冬",
+      "slots": "朝昼夕",
+      "buy": false,
+      "ingredients": [
+        {
+          "name": "豚バラ肉",
+          "amount": "200g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "キャベツ",
+          "amount": "1/4個(250g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "じゃがいも",
+          "amount": "2個(300g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1本(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "玉ねぎ",
+          "amount": "1個(200g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ウインナー",
+          "amount": "4本(80g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "水",
+          "amount": "800ml",
+          "category": "調味料"
+        },
+        {
+          "name": "コンソメ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "ローリエ",
+          "amount": "1枚",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "しっかり",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
+      "cost": "普通"
+    },
+    {
+      "name": "具だくさん野菜スープ",
+      "role": "汁物",
+      "main": "野菜",
+      "genre": "洋",
+      "method": "汁",
+      "staple": "どれでも",
+      "time": 20,
+      "season": "通年",
+      "slots": "朝昼夕",
+      "buy": false,
+      "choice": "スープの具",
+      "ingredients": [
+        {
+          "name": "キャベツ",
+          "amount": "1/4個(250g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1/2本(75g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "じゃがいも",
+          "amount": "1個(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "玉ねぎ",
+          "amount": "1/2個(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ベーコン",
+          "amount": "2枚(40g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "にんにく",
+          "amount": "1かけ(5g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "オリーブオイル",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "水",
+          "amount": "600ml",
+          "category": "調味料"
+        },
+        {
+          "name": "コンソメ",
+          "amount": "大さじ1",
+          "category": "調味料"
+        },
+        {
+          "name": "塩",
+          "amount": "少々",
+          "category": "調味料"
+        },
+        {
+          "name": "こしょう",
+          "amount": "少々",
+          "category": "調味料"
+        }
+      ],
+      "heaviness": "普通",
+      "kid_friendly": true,
+      "spicy": false,
+      "equipment": [
+        "鍋"
+      ],
+      "leftover_ok": true,
       "cost": "安い"
     }
   ],
-  "base_people": 2
+  "base_people": 2,
+  "choice_sets": {
+    "味噌汁の具": {
+      "label": "味噌汁の具",
+      "max": 2,
+      "options": [
+        {
+          "name": "豆腐",
+          "amount": "1/3丁(100g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "わかめ",
+          "amount": "大さじ1",
+          "category": "その他"
+        },
+        {
+          "name": "大根",
+          "amount": "100g",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "油揚げ",
+          "amount": "1/2枚(15g)",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "なめこ",
+          "amount": "1/2袋(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "じゃがいも",
+          "amount": "1個(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "玉ねぎ",
+          "amount": "1/2個(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "キャベツ",
+          "amount": "1/8個(120g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "なす",
+          "amount": "1本(80g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しめじ",
+          "amount": "1/2袋(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "長ねぎ",
+          "amount": "1/2本(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ほうれん草",
+          "amount": "1/4束(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "はくさい",
+          "amount": "1/8個(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "さつまいも",
+          "amount": "1/2本(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "あさり",
+          "amount": "150g",
+          "category": "肉・魚"
+        },
+        {
+          "name": "しじみ",
+          "amount": "100g",
+          "category": "肉・魚"
+        }
+      ]
+    },
+    "スープの具": {
+      "label": "スープの具",
+      "max": 3,
+      "options": [
+        {
+          "name": "玉ねぎ",
+          "amount": "1/2個(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "にんじん",
+          "amount": "1/3本(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "じゃがいも",
+          "amount": "1個(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "キャベツ",
+          "amount": "1/8個(120g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "ベーコン",
+          "amount": "2枚(30g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "ウインナー",
+          "amount": "2本(40g)",
+          "category": "肉・魚"
+        },
+        {
+          "name": "ブロッコリー",
+          "amount": "1/4個(60g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "コーン缶",
+          "amount": "1/2缶(60g)",
+          "category": "その他"
+        },
+        {
+          "name": "トマト",
+          "amount": "1個(150g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "しめじ",
+          "amount": "1/2袋(50g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "卵",
+          "amount": "1個",
+          "category": "卵・乳・豆腐"
+        },
+        {
+          "name": "わかめ",
+          "amount": "大さじ1",
+          "category": "その他"
+        },
+        {
+          "name": "チンゲン菜",
+          "amount": "1株(100g)",
+          "category": "野菜・果物"
+        },
+        {
+          "name": "春雨",
+          "amount": "20g",
+          "category": "主食・乾物"
+        }
+      ]
+    }
+  }
 }
