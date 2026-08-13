@@ -90,8 +90,8 @@
       background: none; border: none; cursor: pointer; padding: 0;
     }
 
-    label.field { display: block; }
-    label.field > span.t { display: block; font-size: .8rem; font-weight: 700; margin-bottom: 6px; color: #6f665c; }
+    .field { display: block; }
+    .field > span.t { display: block; font-size: .8rem; font-weight: 700; margin-bottom: 6px; color: #6f665c; }
     input, textarea, select {
       width: 100%; padding: 12px 14px; border: 1.5px solid var(--line);
       border-radius: 14px; font: inherit; background: #fdfaf6; color: var(--ink);
@@ -434,6 +434,12 @@
       border-radius: 999px; padding: 4px 8px; font: inherit; font-size: .72rem; font-weight: 700;
       cursor: pointer; flex: none; white-space: nowrap; }
     .grow .gchip.on { background: var(--orange); border-color: var(--orange); color: #fff; }
+    /* 主菜のように必ず付く項目。選択済みに見せつつ押せないことを示す */
+    .grow .gchip.fixed { opacity: .75; cursor: default; }
+    /* 条件のチップ行は、こだわりより少し大きめ（指で押しやすく） */
+    #timeChips .gchip, #stapleChips .gchip, #dishChips .gchip { font-size: .8rem; padding: 7px 14px; }
+    /* 条件は数が少ないので、横スクロールで隠さず折り返して全部見せる */
+    #timeChips, #stapleChips, #dishChips { flex-wrap: wrap; gap: 6px; margin-bottom: 12px; overflow: visible; }
     /* 主材料タグ（肉/魚/卵・豆腐/野菜） */
     .mtag { font-size: .64rem; font-weight: 800; border-radius: 5px; padding: 2px 6px; flex: none; letter-spacing: .02em; }
     .mtag.t-肉 { color: #b5504a; background: #fbe9e7; }
@@ -1209,36 +1215,17 @@
           <div class="dayrows" id="dayRows"></div>
         </div>
 
-        <div class="row2">
-          <label class="field"><span class="t">人数</span><input type="number" id="people" min="1" max="12" value="2" /></label>
-          <label class="field"><span class="t">調理時間の上限</span>
-            <select id="cookTime">
-              <option value="20">20分以内</option>
-              <option value="30" selected>30分以内</option>
-              <option value="45">45分以内</option>
-              <option value="">指定なし</option>
-            </select>
-          </label>
-        </div>
+        <label class="field" style="max-width:150px"><span class="t">人数</span><input type="number" id="people" min="1" max="12" value="2" /></label>
 
-        <div class="row2">
-          <label class="field"><span class="t">主食</span>
-            <select id="staple">
-              <option value="any" selected>おまかせ</option>
-              <option value="rice">ご飯</option>
-              <option value="noodle">麺類</option>
-              <option value="bread">パン</option>
-            </select>
-          </label>
-          <label class="field"><span class="t">品数</span>
-            <select id="dishCount">
-              <option value="main">主菜のみ</option>
-              <option value="main_side" selected>主菜＋副菜</option>
-              <option value="main_side_soup">主菜＋副菜＋汁物</option>
-            </select>
-          </label>
-        </div>
-        <p class="hint" style="margin:-4px 0 10px">「おまかせ」はご飯を中心に、麺・パンの日も時々混ぜます。「麺類」＋「主菜のみ」でラーメン一杯だけ、なども作れます。</p>
+        <!-- 条件はプルダウンをやめてタップ選択に。cookTime / dishCount は
+             既存の送信処理をそのまま使えるよう hidden に値を書き戻す -->
+        <div class="field"><span class="t">調理時間の上限</span><div class="grow" id="timeChips"></div></div>
+        <div class="field"><span class="t">主食（複数選べます）</span><div class="grow" id="stapleChips"></div></div>
+        <p class="hint" id="stapleHint" style="margin:-6px 0 10px"></p>
+        <div class="field"><span class="t">品数</span><div class="grow" id="dishChips"></div></div>
+        <p class="hint" style="margin:-6px 0 10px">主菜は必ず1品つきます。「主食＝麺」＋「主菜のみ」でラーメン一杯だけ、なども作れます。</p>
+        <input type="hidden" id="cookTime" value="30" />
+        <input type="hidden" id="dishCount" value="main_side" />
 
         <div id="guidedWrap" style="margin:0 0 12px">
           <span class="t" style="display:block;font-size:.8rem;font-weight:700;color:var(--muted);margin-bottom:6px">こだわり（任意・タップで選択）</span>
@@ -1264,7 +1251,7 @@
 
         <label class="toggle-field">
           <input type="checkbox" id="noSteps" />
-          <span><b>作り方は作らない（献立と材料だけ）</b><small>料理名と材料だけの一覧に。作り方は表示されません（後から鉛筆や「AIで変更」で追加できます）</small></span>
+          <span><b>作り方は作らない（献立と材料だけ）</b><small>料理名と材料だけの一覧に。作り方は表示されません（後から鉛筆や「1品だけ変更」で追加できます）</small></span>
         </label>
 
         <p id="error"></p>
@@ -1710,6 +1697,9 @@
       loadFridge().then(renderFridgeUseChips);
       guidedSel = emptyGuided(); // こだわりも毎回おまかせに戻す
       renderGuided();
+      cookTimeSel = "30"; stapleSel = new Set(); dishSel = { side: 1, soup: false };
+      $("cookTime").value = cookTimeSel;
+      renderCondChips();
       // 既定の期間（今日〜3日後）でカレンダーを初期化。日付を指定されたらそこを起点にする
       const base = typeof fromDate === "string" && parseDate(fromDate) && !isNaN(parseDate(fromDate)) ? parseDate(fromDate) : new Date();
       rangeStart = fmt(base);
@@ -2454,12 +2444,12 @@
     }
 
     // 作成画面：こだわり（誘導式チップ）。各行タップ選択・既定は「おまかせ」＝指定なし
+    // ジャンル（和食中心など）は「好み・要望」の自由入力＋テンプレ保存で足りるので廃止した。
     const GUIDED_QUESTIONS = [
       { key: "mains", label: "主菜", opts: ["肉多め", "魚多め", "肉と魚を半々"] },
-      { key: "genre", label: "ジャンル", opts: ["和食中心", "洋食中心", "中華中心"] },
       { key: "cooking", label: "調理", opts: ["揚げ物なし", "レンジ・時短中心"], multi: true },
     ];
-    const emptyGuided = () => ({ mains: "", genre: "", cooking: [] });
+    const emptyGuided = () => ({ mains: "", cooking: [] });
     let guidedSel = emptyGuided();
     const guidedOn = (q, v) => (q.multi ? (guidedSel[q.key] || []).includes(v) : guidedSel[q.key] === v);
     const guidedIsAuto = (q) => (q.multi ? !(guidedSel[q.key] || []).length : guidedSel[q.key] === "");
@@ -2486,6 +2476,65 @@
             renderGuided();
           }));
       });
+    }
+
+    // ---------- 作成画面：条件のタップ選択（調理時間・主食・品数） ----------
+    const TIME_OPTS = [["20", "20分以内"], ["30", "30分以内"], ["45", "45分以内"], ["", "指定なし"]];
+    const STAPLES = [["rice", "ご飯"], ["noodle", "麺"], ["bread", "パン"]];
+    // 主食は「使ってよいもの」を選ぶ方式。何も選ばなければ「おまかせ」＝全部あり。
+    // これなら「麺なし」＝ご飯＋パン、「ご飯なし」＝麺＋パン のように、
+    // 除外の言い方をしなくても全部の組み合わせが表せる。
+    let cookTimeSel = "30";
+    let stapleSel = new Set();
+    let dishSel = { side: 1, soup: false }; // 主菜は常に1品。side は 0/1/2
+
+    const stapleList = () => (stapleSel.size ? STAPLES.map(([v]) => v).filter((v) => stapleSel.has(v)) : []);
+    function dishCountValue() {
+      const s = dishSel.side === 2 ? "_side2" : dishSel.side === 1 ? "_side" : "";
+      return "main" + s + (dishSel.soup ? "_soup" : "");
+    }
+    function stapleHintText() {
+      const on = stapleList();
+      if (!on.length) return "おまかせ＝ご飯を中心に、麺・パンの日も時々混ぜます。";
+      const names = on.map((v) => (STAPLES.find(([k]) => k === v) || [])[1]);
+      const off = STAPLES.filter(([v]) => !stapleSel.has(v)).map(([, n]) => n);
+      return `${names.join("・")}の日だけ作ります。${off.length ? `（${off.join("・")}は出しません）` : ""}`;
+    }
+    const chip = (on, v, label) => `<button type="button" class="gchip ${on ? "on" : ""}" data-v="${esc(v)}">${esc(label)}</button>`;
+    function renderCondChips() {
+      const t = $("timeChips");
+      if (!t) return;
+      t.innerHTML = TIME_OPTS.map(([v, l]) => chip(cookTimeSel === v, v, l)).join("");
+      t.querySelectorAll(".gchip").forEach((b) =>
+        b.addEventListener("click", () => { cookTimeSel = b.dataset.v; $("cookTime").value = cookTimeSel; renderCondChips(); }));
+
+      const s = $("stapleChips");
+      s.innerHTML = chip(!stapleSel.size, "", "おまかせ") + STAPLES.map(([v, l]) => chip(stapleSel.has(v), v, l)).join("");
+      s.querySelectorAll(".gchip").forEach((b) =>
+        b.addEventListener("click", () => {
+          const v = b.dataset.v;
+          if (!v) stapleSel.clear();
+          else if (stapleSel.has(v)) stapleSel.delete(v);
+          else stapleSel.add(v);
+          renderCondChips();
+        }));
+      $("stapleHint").textContent = stapleHintText();
+
+      const d = $("dishChips");
+      d.innerHTML = `<button type="button" class="gchip on fixed" disabled>主菜</button>`
+        + chip(dishSel.side === 1, "side1", "副菜")
+        + chip(dishSel.side === 2, "side2", "副菜2品")
+        + chip(dishSel.soup, "soup", "汁物");
+      d.querySelectorAll(".gchip:not(.fixed)").forEach((b) =>
+        b.addEventListener("click", () => {
+          const v = b.dataset.v;
+          if (v === "soup") dishSel.soup = !dishSel.soup;
+          else if (v === "side1") dishSel.side = dishSel.side === 1 ? 0 : 1;
+          else dishSel.side = dishSel.side === 2 ? 0 : 2;
+          $("dishCount").value = dishCountValue();
+          renderCondChips();
+        }));
+      $("dishCount").value = dishCountValue();
     }
 
     // 作成画面：冷蔵庫の食材をタップで選んで「使い切り生成」
@@ -3244,7 +3293,7 @@
         people: $("people").value,
         maxCookMinutes: $("cookTime").value,
         dishCount: $("dishCount").value,
-        staple: $("staple").value,
+        staple: stapleList(), // 使ってよい主食の配列。空＝おまかせ
         preferences: $("preferences").value.trim(),
         includeSteps: !$("noSteps").checked,
         overwrite,

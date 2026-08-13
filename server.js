@@ -427,14 +427,28 @@ const DISH_COUNT_DIRECTIVE = {
   main: "各食事は主菜を1品だけ作る。",
   main_side: "各食事は主菜1品と副菜1品を作る。",
   main_side_soup: "各食事は主菜1品・副菜1品・汁物1品を作る。",
+  main_soup: "各食事は主菜1品と汁物1品を作る（副菜は作らない）。",
+  main_side2: "各食事は主菜1品と副菜2品を作る。副菜2品は食材・味付け・調理法が重ならないように組み合わせる。",
+  main_side2_soup: "各食事は主菜1品・副菜2品・汁物1品を作る。副菜2品は食材・味付け・調理法が重ならないように組み合わせる。",
 };
-// 主食タイプ。any=おまかせ（ご飯中心＋時々麺/パン）、rice/noodle/bread=固定。
-const STAPLE_DIRECTIVE = {
-  any: "主食は指定なし。基本はご飯だが、麺類・パン・丼ものの日も適度に混ぜて、毎日ご飯に偏らないようにする（マンネリ回避）。",
+// 使ってよい主食。画面からは配列（["rice","noodle"] 等）で来る。空＝おまかせ（全部あり）。
+const STAPLE_NAME = { rice: "ご飯", noodle: "麺類", bread: "パン" };
+const STAPLE_ONLY = {
   rice: "主食はご飯（白米）を前提にし、それに合う主菜（おかず）にする。",
   noodle: "主食は麺類にする。主菜は麺料理そのもの（ラーメン・うどん・そば・パスタ・焼きそば・冷やし中華 等）にする。品数が少ない場合は一皿で完結してよい。",
   bread: "主食はパン。ご飯前提の和風のおかず（生姜焼き・照り焼き・煮物・焼き魚など）は選ばず、パンに合う洋風の献立にする。主菜は、パンそのものを主役にした料理（サンドイッチ・ピザトースト・フレンチトースト・ホットドッグ・パングラタン等）か、パンに添える洋風料理（シチュー・ポトフ・スープ・オムレツ・ソーセージ・グラタン等）にする。パンやその材料も材料リストに含める。",
 };
+const STAPLE_ALL = "主食は指定なし。基本はご飯だが、麺類・パン・丼ものの日も適度に混ぜて、毎日ご飯に偏らないようにする（マンネリ回避）。";
+function stapleDirective(list) {
+  const on = (Array.isArray(list) ? list : []).filter((v) => STAPLE_NAME[v]);
+  if (!on.length || on.length === 3) return STAPLE_ALL;
+  if (on.length === 1) return STAPLE_ONLY[on[0]];
+  const off = Object.keys(STAPLE_NAME).filter((v) => !on.includes(v)).map((v) => STAPLE_NAME[v]);
+  return `主食は ${on.map((v) => STAPLE_NAME[v]).join("・")} のどれかにし、日によって変える。${off.join("・")}は使わない。`;
+}
+// 旧形式（"any" / "rice" のような文字列）で来ても動くようにしておく
+const normalizeStaple = (v) =>
+  Array.isArray(v) ? v.filter((x) => STAPLE_NAME[x]) : STAPLE_NAME[v] ? [v] : [];
 
 // ---------- 生成ロジック ----------
 function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
@@ -452,13 +466,12 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     "",
     `人数: ${people}人分（材料の分量は人数に合わせる）`,
     DISH_COUNT_DIRECTIVE[dishCount] || DISH_COUNT_DIRECTIVE.main_side,
-    STAPLE_DIRECTIVE[staple] || STAPLE_DIRECTIVE.any,
+    stapleDirective(staple),
     maxCookMinutes
       ? `各料理は調理時間の目安が ${maxCookMinutes} 分以内になるようにし、cook_minutes に目安（分）の数値を入れる。`
       : "各料理の cook_minutes に調理時間の目安（分）の数値を入れる。",
     preferences ? `好み・要望: ${preferences}` : "好み・要望: 特になし（栄養バランスよく、和洋中を織り交ぜる）",
     opts.guided?.mains ? `主菜のバランス指定: ${opts.guided.mains}（期間全体でこの配分を守る）` : "",
-    opts.guided?.genre ? `ジャンルの指定: ${opts.guided.genre}（大半をこのジャンルにする。単調にならない範囲で他ジャンルを少し混ぜるのは可）` : "",
     (opts.guided?.cooking || []).includes("揚げ物なし") ? "調理法の指定: 揚げ物は作らない（唐揚げ・フライ・天ぷら・揚げ焼きも避ける）。" : "",
     (opts.guided?.cooking || []).includes("レンジ・時短中心") ? "調理法の指定: 電子レンジ活用や炒め・和えものなどの時短調理を中心にし、洗い物が少なく済むようにする。" : "",
     avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
@@ -576,10 +589,15 @@ async function mapLimit(items, limit, fn) {
   await Promise.all(runners);
 }
 const SLOT_ORDER = { 朝食: 0, 昼食: 1, 夕食: 2 };
-const STYLE_ROTATION = ["和食", "洋食", "中華・エスニック", "麺類・丼もの", "魚介中心", "卵・豆腐など"];
-// ジャンル指定（和食中心等）のときの変化の種。ジャンルの代わりに調理法を回して
-// 同じ主材料の日が同じ料理に収束するのを防ぐ（例: 魚の日×2 → 塩焼きと煮付けに分かれる）。
-const COOK_STYLE_ROTATION = ["焼き物", "煮物", "炒め物", "蒸し物・和え物", "汁物・鍋もの"];
+// 「今回はこの方向で」という弱いヒント。食事ごとに1つ回して似た献立への収束を防ぐ。
+// 「卵・豆腐など」は入れない（夕食の主菜が軽くなりやすいため、別途ルールで抑えている）。
+const STYLE_ROTATION = ["和食", "洋食", "中華・エスニック", "麺類・丼もの", "魚介中心", "焼き物・炒め物", "煮物・煮込み"];
+// 使えない主食を指すヒントは外す（「麺なし」なのに「麺類・丼もの」を勧めない）
+function styleRotationFor(staple) {
+  const on = normalizeStaple(staple);
+  if (!on.length || on.includes("noodle")) return STYLE_ROTATION;
+  return STYLE_ROTATION.filter((s) => s !== "麺類・丼もの");
+}
 // 主材料（タンパク質）のローテーション。並列生成でも主材料が連続しないよう、各食事に1つ割り当てて
 // から生成する（同じ献立内で「豚肉→豚肉」等が続くのを防ぐ最重要ロジック）。bad=その主材料が
 // 避けたい食材に含まれるときは候補から外す用のキーワード。
@@ -890,7 +908,6 @@ async function generateDish(instruction, ctx) {
 // こだわり（誘導式チップ）の値を許可リストで検証する
 const GUIDED_ALLOW = {
   mains: ["肉多め", "魚多め", "肉と魚を半々"],
-  genre: ["和食中心", "洋食中心", "中華中心"],
   cooking: ["揚げ物なし", "レンジ・時短中心"],
 };
 const GUIDED_MULTI = ["cooking"]; // 複数選択できる項目（揚げ物なし＋時短 の併用など）
@@ -1756,7 +1773,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
       people: Number(people) > 0 ? Number(people) : 2,
       maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
       dishCount: dishCount || "main_side",
-      staple: staple || "any",
+      staple: normalizeStaple(staple),
       fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
       guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/ジャンル/調理法）
       preferences: (preferences || "").toString().trim(),
@@ -1809,7 +1826,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       people: Number(people) > 0 ? Number(people) : 2,
       maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
       dishCount: dishCount || "main_side",
-      staple: staple || "any",
+      staple: normalizeStaple(staple),
       fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
       guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/ジャンル/調理法）
       preferences: (preferences || "").toString().trim(),
@@ -1831,11 +1848,12 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
     // 主材料＋副菜カテゴリの割り当てを先に決める（要望の配分を反映＋被り/連続回避）。
     // 2食以上のときだけプランナーを使う。
     const avoidText = [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、");
-    const needSides = opts.dishCount !== "main";
+    const needSides = String(opts.dishCount || "").includes("side");
     const assign = units.length >= 2
       ? await planMealAssignments(units, opts, avoidText)
       : { mains: units.map(() => ""), sides: units.map(() => ""), fridgeDishes: units.map(() => "") };
 
+    const styles = styleRotationFor(opts.staple);
     const collected = new Map();
     const batchMains = new Set(); // このバッチで確定した主菜名（並列でも同名に収束しないよう照合する）
     const mainNameOf = (ds) => ((ds || []).find((d) => d.role === "主菜") || (ds || [])[0] || {}).name || "";
@@ -1847,7 +1865,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       const div = (attempt, avoid) => ({
         recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, fridgeDishHint,
         avoidDishes: avoid || [],
-        styleHint: opts.guided?.genre ? COOK_STYLE_ROTATION[(i + attempt) % COOK_STYLE_ROTATION.length] : STYLE_ROTATION[(i + attempt) % STYLE_ROTATION.length],
+        styleHint: styles[(i + attempt) % styles.length],
         storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy,
       });
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
