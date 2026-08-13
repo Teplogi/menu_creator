@@ -7,6 +7,7 @@ import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
 import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
+import { pickMainCandidates, candidateLine, catalogSize } from "./catalog.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -451,7 +452,7 @@ const normalizeStaple = (v) =>
   Array.isArray(v) ? v.filter((x) => STAPLE_NAME[x]) : STAPLE_NAME[v] ? [v] : [];
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], storeEasy = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], storeEasy = [], mainCandidates = [] } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -494,6 +495,17 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
       : "",
     mainHint
       ? `★主菜の主材料は必ず「${mainHint}」にすること（今回の主菜はこの主材料で作る。これは最優先の指定。副菜・汁物はこの限りではない）。`
+      : "",
+    // 条件（時間・主食・避けたい食材など）を満たす料理をこちらで絞り込んである。
+    // その中から要望に一番合うものを選んでもらう＝変な創作料理が出ず、約束も守られる。
+    mainCandidates && mainCandidates.length
+      ? [
+          "★主菜は、次の候補から1つ選ぶこと（すべて今回の条件を満たしています）:",
+          mainCandidates.join(" / "),
+          "- ユーザーの好み・要望に一番合うものを選ぶ。同じ条件でも毎回同じ料理に寄らないよう、候補の中から幅をもって選ぶ。",
+          "- 候補に合うものが無い場合（要望が具体的で、どれも当てはまらないときだけ）は、候補外の料理にしてよい。",
+          "- 料理名は候補のままにする。材料と作り方は、一般家庭の定番の作り方でこちらで書き起こすこと。",
+        ].join("\n")
       : "",
     sideHint
       ? `★副菜を作る場合は「${sideHint}」系にすること（主菜と食材・味付けが被らないように）。`
@@ -1854,6 +1866,22 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       : { mains: units.map(() => ""), sides: units.map(() => ""), fridgeDishes: units.map(() => "") };
 
     const styles = styleRotationFor(opts.staple);
+    // 候補出しで避ける料理名（最近作ったもの＋この画面で既に確定したもの）
+    const recentAll = [...new Set([...recentDishes, ...Object.values(recentBySlot).flat()])];
+    const mainCandidatesFor = (u, o, st, extraAvoid, mainHint) => {
+      const r = pickMainCandidates({
+        slot: u.slot,
+        date: u.date,
+        maxMinutes: o.maxCookMinutes,
+        staples: o.staple,
+        avoidText: [o.avoid, ...(st.avoid || [])].filter(Boolean).join("、"),
+        noFry: (o.guided?.cooking || []).includes("揚げ物なし"),
+        quick: (o.guided?.cooking || []).includes("レンジ・時短中心"),
+        mainHint,
+        excludeNames: [...recentAll, ...(extraAvoid || [])],
+      });
+      return r.dishes.map(candidateLine);
+    };
     const collected = new Map();
     const batchMains = new Set(); // このバッチで確定した主菜名（並列でも同名に収束しないよう照合する）
     const mainNameOf = (ds) => ((ds || []).find((d) => d.role === "主菜") || (ds || [])[0] || {}).name || "";
@@ -1867,6 +1895,8 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
         avoidDishes: avoid || [],
         styleHint: styles[(i + attempt) % styles.length],
         storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy,
+        // 冷蔵庫の使い切りで料理が決まっている食事は、候補を出さない（そちらが最優先のため）
+        mainCandidates: fridgeDishHint ? [] : mainCandidatesFor(u, opts, store, [...batchMains, ...(avoid || [])], mainHint),
       });
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
@@ -2056,6 +2086,16 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
         storeAvoid: store.avoid,
         storeSoft: store.soft,
         storeEasy: store.easy,
+        // 作り直しでもカタログから候補を出す（同じ条件で毎回同じ料理に戻らないよう、今の料理も除外）
+        mainCandidates: pickMainCandidates({
+          slot, date,
+          maxMinutes: opts.maxCookMinutes,
+          staples: opts.staple,
+          avoidText: [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、"),
+          noFry: (opts.guided?.cooking || []).includes("揚げ物なし"),
+          quick: (opts.guided?.cooking || []).includes("レンジ・時短中心"),
+          excludeNames: [...avoidDishes, ...recentDishes],
+        }).dishes.map(candidateLine),
       }, SINGLE_MODEL); // 1食作り直しは単発操作＝速い Haiku
       newDishes = regenerated.days?.[0]?.meals?.[0]?.dishes;
     }
