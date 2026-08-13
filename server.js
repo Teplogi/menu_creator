@@ -2210,6 +2210,44 @@ app.get("/api/plans/:id/nutrition", auth, async (req, res) => {
   }
 });
 
+// 世帯の栄養を「日付ごと」に計算する。
+// 昼と夕を別々に作ると献立が別プランになるので、プラン単位だと1日ぶんが揃わない
+// （「昼の分が出てこない」原因）。カレンダーと同じで、日付でまとめてから計算する。
+app.get("/api/households/:id/nutrition", auth, async (req, res) => {
+  try {
+    const household = await requireMember(req, res, req.params.id);
+    if (!household) return;
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || "") ? req.query.to : jstDateStr(jstNow());
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || "") ? req.query.from : jstAddDays(to, -6);
+    const rows = await all(
+      `SELECT people, data_json FROM meal_plans
+       WHERE household_id = $1 AND end_date >= $2 AND start_date <= $3 ORDER BY created_at ASC`,
+      [household.id, from, to]
+    );
+    // 同じ日付・同じ食事が複数のプランにあれば、後から作ったほうを採用する
+    const byDate = new Map();
+    let people = 2;
+    for (const r of rows) {
+      people = r.people || people;
+      let data; try { data = JSON.parse(r.data_json); } catch { continue; }
+      for (const d of data.days || []) {
+        if (d.date < from || d.date > to) continue;
+        if (!byDate.has(d.date)) byDate.set(d.date, new Map());
+        const meals = byDate.get(d.date);
+        for (const m of d.meals || []) if ((m.dishes || []).length) meals.set(m.slot, m);
+      }
+    }
+    const days = [...byDate.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([date, meals]) => ({
+        date,
+        meals: [...meals.values()].sort((a, b) => (SLOT_ORDER[a.slot] ?? 9) - (SLOT_ORDER[b.slot] ?? 9)),
+      }));
+    res.json({ ...analyzePlan({ days }, people), from, to });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // 献立の手動編集を保存（days をまるごと差し替え、任意で people 更新）
 app.post("/api/plans/:id", auth, async (req, res) => {
   try {

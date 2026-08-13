@@ -45,13 +45,19 @@ const NOT_EATEN = /(ゆで用|茹で用|下ゆで用|打ち粉|揚げ用|分量�
 
 // ---------- 材料名 → 食品 ----------
 const matchCache = new Map();
+// 1文字の別名（塩・油・酒・卵 など）を「どこかに含まれていればOK」で当てると、
+// 「塩こうじ」が食塩になって塩分が跳ね上がるような事故が起きる。
+// 日本語の食材名は「修飾＋本体」の並びなので、1文字のものは末尾（＝本体）のときだけ当てる。
+// 例: 粗塩・岩塩 ○ ／ 塩こうじ ×
+const matchesAlias = (key, alias) =>
+  alias.length >= 2 ? key.includes(alias) : key === alias || key.endsWith(alias);
 function findFood(name) {
   const key = norm(name);
   if (!key) return null;
   if (matchCache.has(key)) return matchCache.get(key);
   let hit = null;
   for (const [alias, id] of ALIASES) {
-    if (key.includes(alias)) { hit = FOODS.get(id) || null; break; }
+    if (matchesAlias(key, alias)) { hit = FOODS.get(id) || null; break; }
   }
   matchCache.set(key, hit);
   return hit;
