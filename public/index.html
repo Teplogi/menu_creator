@@ -1301,6 +1301,7 @@
           <button type="submit" class="btn-primary" id="authBtn">ログイン</button>
         </form>
         <p class="legal-note">登録・ログインすることで、<a href="/terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意したものとみなされます。</p>
+        <p class="legal-links" style="margin-top:10px"><a href="#" onclick="showLanding();return false;">← めにゅらく！について（できること・料金）</a></p>
       </div>
     </section>
 
@@ -2153,7 +2154,8 @@
       authToken = null; currentUser = null; household = null; households = [];
       billingStatus = null;
       localStorage.removeItem("authToken"); localStorage.removeItem("householdId");
-      showAuth();
+      plansCache = []; fridgeItems = []; favorites = []; pantryItems = [];
+      showLanding(); // ログアウトしたら紹介ページへ（そこから改めてログイン・登録できる）
     }
 
     // ---------- 課金（プラン / アップグレード） ----------
