@@ -778,6 +778,8 @@
     .additem-date > span { font-size: .8rem; font-weight: 700; color: var(--muted); flex: none; }
     .additem-date select { flex: 1; padding: 9px 36px 9px 12px; }
     .toggle-row { display: flex; align-items: center; gap: 10px; margin: 0 4px 14px; font-size: .85rem; color: #6f665c; font-weight: 700; }
+    .pro-badge { flex: none; font-size: .68rem; font-weight: 800; letter-spacing: .04em; color: #fff;
+      background: linear-gradient(135deg, #f5a623, var(--orange)); border-radius: 999px; padding: 3px 10px; }
     .switch { margin-left: auto; position: relative; width: 46px; height: 26px; flex: none; }
     .switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
     .switch .track { position: absolute; inset: 0; background: var(--line); border-radius: 999px; transition: .15s; }
@@ -1393,6 +1395,39 @@
         <div class="sec-head"><span class="label">プラン</span><span class="lead"></span></div>
         <div id="billingBody"></div>
       </div>
+      <!-- 毎週おまかせ作成（プレミアム） -->
+      <div class="card" id="autoCard">
+        <div class="sec-head"><span class="label">🗓 毎週おまかせ作成</span><span class="lead"></span>
+          <span class="pro-badge">プレミアム</span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">決めた曜日・時刻に、AIが翌週の献立を<b>自動で作って通知</b>します。買い物リストもできあがった状態になります。作成ボタンを押す必要はありません。</p>
+        <div id="autoLocked" class="hint" style="display:none">この機能はプレミアム限定です。<a href="#" onclick="startCheckout();return false;">プレミアムを見る</a></div>
+        <div id="autoBody" style="display:none">
+          <div class="toggle-row">毎週おまかせで作成する<label class="switch"><input type="checkbox" id="autoEnabled" /><span class="track"></span><span class="knob"></span></label></div>
+          <div id="autoDetail">
+            <div class="row2">
+              <label class="field"><span class="t">曜日</span><select id="autoWeekday"></select></label>
+              <label class="field"><span class="t">時刻（日本時間）</span><select id="autoHour"></select></label>
+            </div>
+            <div class="row2">
+              <label class="field"><span class="t">何日分</span><select id="autoDays"></select></label>
+              <label class="field"><span class="t">人数</span><input type="number" id="autoPeople" min="1" max="12" value="2" /></label>
+            </div>
+            <div class="field"><span class="t">作る食事</span><div class="grow" id="autoSlotChips"></div></div>
+            <div class="toggle-row">平日だけ作る（土日は作らない）<label class="switch"><input type="checkbox" id="autoWeekdaysOnly" /><span class="track"></span><span class="knob"></span></label></div>
+            <div class="row2">
+              <label class="field"><span class="t">調理時間の上限</span><select id="autoCookTime"></select></label>
+              <label class="field"><span class="t">品数</span><select id="autoDishCount"></select></label>
+            </div>
+            <label class="field"><span class="t">主食</span><select id="autoStaple"></select></label>
+            <label class="field"><span class="t">好み・要望</span>
+              <textarea id="autoPreferences" placeholder="例: 和食多めで、野菜をたっぷり。子どもも食べやすいもの。" maxlength="300"></textarea></label>
+            <p class="hint" id="autoNextHint" style="margin:2px 0 10px"></p>
+          </div>
+          <button class="btn-primary" id="autoSaveBtn" onclick="saveAutoPlan()">保存</button>
+          <p class="hint" id="autoHint"></p>
+        </div>
+      </div>
+
       <div class="card" id="notifCard">
         <div class="sec-head"><span class="label">通知（プッシュ）</span><span class="lead"></span></div>
         <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">ホーム画面に追加して通知をオンにすると、献立や買い物のお知らせが届きます。<b>種類ごとにON/OFF</b>できます。うるさくならないよう、まとめて1回だけ届きます。</p>
@@ -2185,6 +2220,112 @@
       loadStoreItems(); // 行きつけスーパーの食材
       loadBillingStatus().then(renderBillingCard); // プラン（課金）
       refreshNotifUI(); // 通知（プッシュ）の状態を反映
+      loadAutoPlan(); // 毎週おまかせ作成
+    }
+
+    // ---------- 毎週おまかせ作成（プレミアム） ----------
+    // 曜日・時刻はすべて日本時間で扱う（サーバも同じ）。端末のタイムゾーンは見ない。
+    const AUTO_DOW = ["日曜", "月曜", "火曜", "水曜", "木曜", "金曜", "土曜"];
+    const AUTO_STAPLE_OPTS = [
+      ["any", "おまかせ", []], ["rice", "ご飯のみ", ["rice"]],
+      ["nonoodle", "麺なし（ご飯・パン）", ["rice", "bread"]], ["nobread", "パンなし（ご飯・麺）", ["rice", "noodle"]],
+    ];
+    const AUTO_DISH_OPTS = [
+      ["main", "主菜のみ"], ["main_side", "主菜＋副菜"], ["main_soup", "主菜＋汁物"],
+      ["main_side_soup", "主菜＋副菜＋汁物"], ["main_side2", "主菜＋副菜2品"], ["main_side2_soup", "主菜＋副菜2品＋汁物"],
+    ];
+    let autoSlots = new Set(["夕食"]);
+    const opt = (v, l, sel) => `<option value="${esc(v)}" ${String(sel) === String(v) ? "selected" : ""}>${esc(l)}</option>`;
+
+    function renderAutoSlotChips() {
+      const w = $("autoSlotChips");
+      w.innerHTML = ["朝食", "昼食", "夕食"].map((s) =>
+        `<button type="button" class="gchip ${autoSlots.has(s) ? "on" : ""}" data-s="${s}">${s}</button>`).join("");
+      w.querySelectorAll(".gchip").forEach((b) =>
+        b.addEventListener("click", () => {
+          const s = b.dataset.s;
+          if (autoSlots.has(s)) { if (autoSlots.size > 1) autoSlots.delete(s); } else autoSlots.add(s);
+          renderAutoSlotChips(); updateAutoNextHint();
+        }));
+    }
+    // 「次はいつ作られるか」を日本時間で出す（設定が意図どおりか、その場で確かめられるように）
+    function updateAutoNextHint() {
+      const wd = Number($("autoWeekday").value), hh = Number($("autoHour").value), days = Number($("autoDays").value);
+      const jst = new Date(Date.now() + 9 * 3600 * 1000);
+      let add = (wd - jst.getUTCDay() + 7) % 7;
+      if (add === 0 && jst.getUTCHours() >= hh) add = 7; // 今日の時刻を過ぎていれば来週
+      const run = new Date(jst.getTime() + add * 86400000);
+      const md = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+      const from = new Date(run.getTime() + 86400000);
+      const to = new Date(run.getTime() + days * 86400000);
+      $("autoNextHint").innerHTML = `次回: <b>${md(run)}(${AUTO_DOW[run.getUTCDay()][0]}) ${hh}時ごろ</b>に、`
+        + `<b>${md(from)}〜${md(to)}</b> の${[...autoSlots].join("・")}を作ります。すでに献立がある日は作りません。`;
+    }
+    function wireAutoInputs() {
+      if ($("autoWeekday").dataset.wired) return;
+      $("autoWeekday").dataset.wired = "1";
+      ["autoWeekday", "autoHour", "autoDays"].forEach((id) => $(id).addEventListener("change", updateAutoNextHint));
+      $("autoEnabled").addEventListener("change", () => {
+        $("autoDetail").style.display = $("autoEnabled").checked ? "block" : "none";
+      });
+    }
+    async function loadAutoPlan() {
+      if (!household) return;
+      let a;
+      try { a = await apiOK(`/api/households/${household.id}/auto`); } catch { return; }
+      $("autoLocked").style.display = a.premium ? "none" : "block";
+      $("autoBody").style.display = a.premium ? "block" : "none";
+      if (!a.premium) return;
+      $("autoWeekday").innerHTML = AUTO_DOW.map((l, i) => opt(i, l, a.weekday)).join("");
+      $("autoHour").innerHTML = Array.from({ length: 24 }, (_, h) => opt(h, `${h}:00`, a.hour)).join("");
+      const dayOpts = [...new Set([3, 5, 7, 10, 14, a.days])].sort((x, y) => x - y); // 保存値が一覧に無くても消えないように
+      $("autoDays").innerHTML = dayOpts.map((d) => opt(d, `${d}日分`, a.days)).join("");
+      $("autoCookTime").innerHTML = [["", "指定なし"], ["20", "20分以内"], ["30", "30分以内"], ["45", "45分以内"]]
+        .map(([v, l]) => opt(v, l, a.opts.maxCookMinutes || "")).join("");
+      $("autoDishCount").innerHTML = AUTO_DISH_OPTS.map(([v, l]) => opt(v, l, a.opts.dishCount || "main_side")).join("");
+      const cur = (a.opts.staple || []).join(",");
+      const hit = AUTO_STAPLE_OPTS.find(([, , arr]) => arr.join(",") === cur) || AUTO_STAPLE_OPTS[0];
+      $("autoStaple").innerHTML = AUTO_STAPLE_OPTS.map(([v, l]) => opt(v, l, hit[0])).join("");
+      $("autoPeople").value = a.opts.people || 2;
+      $("autoPreferences").value = a.opts.preferences || "";
+      $("autoEnabled").checked = !!a.enabled;
+      $("autoWeekdaysOnly").checked = !!a.weekdaysOnly;
+      $("autoDetail").style.display = a.enabled ? "block" : "none";
+      autoSlots = new Set(a.slots.length ? a.slots : ["夕食"]);
+      renderAutoSlotChips();
+      wireAutoInputs();
+      updateAutoNextHint();
+      $("autoHint").textContent = a.lastRun
+        ? `最後の実行: ${a.lastRun}${a.lastStatus === "already_planned" ? "（すでに献立があったので作りませんでした）" : a.lastStatus === "error" ? "（失敗しました）" : ""}`
+        : "";
+    }
+    async function saveAutoPlan() {
+      const btn = $("autoSaveBtn");
+      btn.disabled = true;
+      $("autoHint").textContent = "";
+      const st = AUTO_STAPLE_OPTS.find(([v]) => v === $("autoStaple").value) || AUTO_STAPLE_OPTS[0];
+      try {
+        await apiOK(`/api/households/${household.id}/auto`, {
+          method: "POST",
+          body: {
+            enabled: $("autoEnabled").checked,
+            weekday: Number($("autoWeekday").value),
+            hour: Number($("autoHour").value),
+            days: Number($("autoDays").value),
+            slots: [...autoSlots],
+            weekdaysOnly: $("autoWeekdaysOnly").checked,
+            opts: {
+              people: Number($("autoPeople").value),
+              maxCookMinutes: $("autoCookTime").value || null,
+              dishCount: $("autoDishCount").value,
+              staple: st[2],
+              preferences: $("autoPreferences").value.trim(),
+            },
+          },
+        });
+        $("autoHint").textContent = $("autoEnabled").checked ? "保存しました。次回から自動で作られます。" : "保存しました（自動作成はオフです）。";
+      } catch (e) { $("autoHint").textContent = e.message; }
+      finally { btn.disabled = false; }
     }
 
     // ---------- べんり機能（近日公開） ----------

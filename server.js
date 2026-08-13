@@ -90,6 +90,8 @@ if (!billingEnabled()) {
 }
 
 const currentYM = () => new Date().toISOString().slice(0, 7); // "YYYY-MM"
+// プレミアム扱いか（課金未設定の環境では全員プレミアム扱い＝開発時に詰まらないように）
+const hasAi = async (userId) => (billingEnabled() ? await hasActiveEntitlement(userId) : true);
 async function hasActiveEntitlement(userId) {
   const e = await one("SELECT status, current_period_end FROM entitlements WHERE user_id = $1", [userId]);
   if (!e || e.status !== "active") return false;
@@ -288,6 +290,20 @@ const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS push_sent_log (
     user_id TEXT NOT NULL, kind TEXT NOT NULL, day TEXT NOT NULL,
     PRIMARY KEY (user_id, kind, day))`,
+  // 毎週おまかせ作成（プレミアム）。時刻・曜日はすべて日本時間で持つ。
+  `CREATE TABLE IF NOT EXISTS auto_plans (
+    household_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    enabled BOOLEAN NOT NULL DEFAULT false,
+    weekday INTEGER NOT NULL DEFAULT 0,
+    hour INTEGER NOT NULL DEFAULT 18,
+    days INTEGER NOT NULL DEFAULT 7,
+    slots TEXT NOT NULL DEFAULT '夕食',
+    weekdays_only BOOLEAN NOT NULL DEFAULT false,
+    opts_json TEXT,
+    last_run TEXT,
+    last_status TEXT,
+    updated_at TEXT NOT NULL)`,
 ];
 async function initDb() {
   for (const sql of SCHEMA_STATEMENTS) {
@@ -1832,36 +1848,13 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
   }
 });
 
-// 順次表示（progressive）: 食事ごとに生成し、完成したものから ndjson で流す。
-// 単発生成＝速い Haiku を使い、最初の1食を早く画面に出す。最後に組み立てて保存し done を返す。
-app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
-  const send = (obj) => { try { res.write(JSON.stringify(obj) + "\n"); } catch {} };
-  try {
-    const { householdId, targets, people, maxCookMinutes, dishCount, staple, preferences, avoid, includeSteps } =
-      req.body || {};
-    const household = await requireMember(req, res, householdId);
-    if (!household) return;
-    const vErr = validateTargets(targets);
-    if (vErr) return res.status(400).json({ error: vErr });
-
-    const opts = {
-      people: Number(people) > 0 ? Number(people) : 2,
-      maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
-      dishCount: dishCount || "main_side",
-      staple: normalizeStaple(staple),
-      fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
-      guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/ジャンル/調理法）
-      preferences: (preferences || "").toString().trim(),
-      avoid: (avoid || "").toString().trim(),
-      includeSteps: includeSteps !== false,
-    };
+// 献立を1食ずつAIで作り、まとまったら保存する。
+// 画面からの生成（順次表示）と、毎週の自動作成の両方がここを通る。
+// send は途中経過の通知先。自動作成では何もしない関数を渡す。
+async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     const recentDishes = await getRecentDishNames(household.id);
     const recentBySlot = await getRecentDishesBySlot(household.id); // 食事枠ごとの履歴（副菜含む・30日）
     const store = await getStoreItems(household.id);
-
-    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-transform");
-    res.setHeader("X-Accel-Buffering", "no"); // プロキシのバッファリング無効化
 
     const units = [];
     for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
@@ -1947,11 +1940,41 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
         meals: meals.sort((a, b) => (SLOT_ORDER[a.slot] ?? 9) - (SLOT_ORDER[b.slot] ?? 9)),
       }));
     const dates = targets.map((t) => t.date).sort();
-    const row = await one(INSERT_PLAN, [
+    return await one(INSERT_PLAN, [
       randomUUID(), household.id, dates[0], dates[dates.length - 1], opts.people, opts.maxCookMinutes,
       opts.dishCount, opts.preferences, opts.avoid,
       JSON.stringify({ targets, opts }), JSON.stringify({ days }), new Date().toISOString(),
     ]);
+}
+
+// 順次表示（progressive）: 食事ごとに生成し、完成したものから ndjson で流す。
+// 単発生成＝速い Haiku を使い、最初の1食を早く画面に出す。最後に組み立てて保存し done を返す。
+app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req.body?.targets)), async (req, res) => {
+  const send = (obj) => { try { res.write(JSON.stringify(obj) + "\n"); } catch {} };
+  try {
+    const { householdId, targets, people, maxCookMinutes, dishCount, staple, preferences, avoid, includeSteps } =
+      req.body || {};
+    const household = await requireMember(req, res, householdId);
+    if (!household) return;
+    const vErr = validateTargets(targets);
+    if (vErr) return res.status(400).json({ error: vErr });
+
+    const opts = {
+      people: Number(people) > 0 ? Number(people) : 2,
+      maxCookMinutes: Number(maxCookMinutes) > 0 ? Number(maxCookMinutes) : null,
+      dishCount: dishCount || "main_side",
+      staple: normalizeStaple(staple),
+      fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
+      guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/調理法/好み）
+      preferences: (preferences || "").toString().trim(),
+      avoid: (avoid || "").toString().trim(),
+      includeSteps: includeSteps !== false,
+    };
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no"); // プロキシのバッファリング無効化
+
+    const row = await generateAndSavePlan(household, opts, targets, send);
     if (!req.aiPaid) await incAiUsage(req.user.id, req.aiCost || 1, req.aiKind);
     if (req.body?.overwrite) await removeOverlappingMeals(household.id, row.id, targets); // 上書き=重複する既存の食事を除去
     notifyPlanCreated(household.id, req.user, row).catch(() => {}); // 世帯の他メンバーへ通知
@@ -1961,6 +1984,61 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
     if (res.headersSent) { send({ type: "fatal", error: (err && err.message) || "生成に失敗しました" }); res.end(); }
     else handleError(res, err);
   }
+});
+
+// ---------- 毎週おまかせ作成（プレミアム） ----------
+// 曜日・時刻はすべて日本時間。サーバのタイムゾーンには依存させない。
+const AUTO_SLOTS = ["朝食", "昼食", "夕食"];
+const clampInt = (v, lo, hi, def) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : def;
+};
+function autoToClient(r, householdId) {
+  if (!r) return { enabled: false, weekday: 0, hour: 18, days: 7, slots: ["夕食"], weekdaysOnly: false, opts: {}, householdId };
+  let opts = {};
+  try { opts = JSON.parse(r.opts_json || "{}"); } catch {}
+  return {
+    householdId, enabled: !!r.enabled, weekday: r.weekday, hour: r.hour, days: r.days,
+    slots: String(r.slots || "夕食").split(",").filter(Boolean),
+    weekdaysOnly: !!r.weekdays_only, opts, lastRun: r.last_run || null, lastStatus: r.last_status || null,
+  };
+}
+app.get("/api/households/:id/auto", auth, async (req, res) => {
+  try {
+    const household = await requireMember(req, res, req.params.id);
+    if (!household) return;
+    const r = await one("SELECT * FROM auto_plans WHERE household_id = $1", [household.id]);
+    res.json({ ...autoToClient(r, household.id), premium: await hasAi(req.user.id) });
+  } catch (err) { handleError(res, err); }
+});
+app.post("/api/households/:id/auto", auth, async (req, res) => {
+  try {
+    const household = await requireMember(req, res, req.params.id);
+    if (!household) return;
+    const b = req.body || {};
+    const slots = (Array.isArray(b.slots) ? b.slots : ["夕食"]).filter((s) => AUTO_SLOTS.includes(s));
+    const opts = {
+      people: clampInt(b.opts?.people, 1, 12, 2),
+      maxCookMinutes: b.opts?.maxCookMinutes ? clampInt(b.opts.maxCookMinutes, 5, 180, 30) : null,
+      dishCount: DISH_COUNT_DIRECTIVE[b.opts?.dishCount] ? b.opts.dishCount : "main_side",
+      staple: normalizeStaple(b.opts?.staple),
+      preferences: (b.opts?.preferences || "").toString().trim().slice(0, 300),
+      guided: sanitizeGuided(b.opts?.guided),
+    };
+    const now = new Date().toISOString();
+    await q(
+      `INSERT INTO auto_plans (household_id, user_id, enabled, weekday, hour, days, slots, weekdays_only, opts_json, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       ON CONFLICT (household_id) DO UPDATE SET
+         user_id = $2, enabled = $3, weekday = $4, hour = $5, days = $6, slots = $7,
+         weekdays_only = $8, opts_json = $9, updated_at = $10`,
+      [household.id, req.user.id, !!b.enabled, clampInt(b.weekday, 0, 6, 0), clampInt(b.hour, 0, 23, 18),
+       clampInt(b.days, 1, 14, 7), (slots.length ? slots : ["夕食"]).join(","), !!b.weekdaysOnly,
+       JSON.stringify(opts), now]
+    );
+    const r = await one("SELECT * FROM auto_plans WHERE household_id = $1", [household.id]);
+    res.json({ ...autoToClient(r, household.id), premium: await hasAi(req.user.id) });
+  } catch (err) { handleError(res, err); }
 });
 
 // AIを使わず空の献立を作る（手打ち入力用・APIキー不要）
@@ -2414,14 +2492,113 @@ async function sendPlanReminders() {
   }
 }
 
+// ---------- 毎週おまかせ作成の実行 ----------
+// 日付の計算もすべて日本時間で行う。UTCの日付を使うと、日本の 0:00〜9:00 が
+// 前日扱いになって「1日ずれる」ので、必ず jstNow() 基準で組み立てる。
+const jstDateStr = (d) => d.toISOString().slice(0, 10); // d は jstNow() 由来のものだけ渡す
+function jstAddDays(dateStr, n) {
+  const d = new Date(dateStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+const jstDow = (dateStr) => new Date(dateStr + "T00:00:00Z").getUTCDay();
+
+// すでに献立がある「日付|食事」の集合（自動作成では上書きせず、空いている枠だけ作る）
+async function existingSlotSet(householdId, from, to) {
+  const rows = await all(
+    "SELECT data_json FROM meal_plans WHERE household_id = $1 AND end_date >= $2 AND start_date <= $3",
+    [householdId, from, to]
+  );
+  const set = new Set();
+  for (const r of rows) {
+    try {
+      for (const d of JSON.parse(r.data_json).days || [])
+        for (const m of d.meals || []) if ((m.dishes || []).length) set.add(`${d.date}|${m.slot}`);
+    } catch {}
+  }
+  return set;
+}
+
+async function runAutoPlans() {
+  const now = jstNow();
+  const today = jstDateStr(now);
+  const dow = now.getUTCDay();   // jstNow() は+9時間ずらしてあるので getUTC* が日本時間になる
+  const hour = now.getUTCHours();
+  const rows = await all("SELECT * FROM auto_plans WHERE enabled = true");
+  for (const r of rows) {
+    if (r.weekday !== dow || hour < r.hour || r.last_run === today) continue;
+    // 先に「今日は実行済み」にしてから作る（失敗しても同じ日に何度も作らない）
+    await q("UPDATE auto_plans SET last_run = $1 WHERE household_id = $2", [today, r.household_id]);
+    try {
+      if (!(await hasAi(r.user_id))) { // 解約後は静かに止める
+        await q("UPDATE auto_plans SET last_status = $1 WHERE household_id = $2", ["premium_required", r.household_id]);
+        continue;
+      }
+      const household = await one("SELECT * FROM households WHERE id = $1", [r.household_id]);
+      if (!household) continue;
+      const slots = String(r.slots || "夕食").split(",").filter(Boolean);
+      const from = jstAddDays(today, 1); // 翌日から
+      const to = jstAddDays(today, r.days);
+      const busy = await existingSlotSet(r.household_id, from, to);
+      const targets = [];
+      for (let i = 1; i <= r.days; i++) {
+        const date = jstAddDays(today, i);
+        if (r.weekdays_only && [0, 6].includes(jstDow(date))) continue;
+        const open = slots.filter((s) => !busy.has(`${date}|${s}`));
+        if (open.length) targets.push({ date, slots: open });
+      }
+      if (!targets.length) {
+        await q("UPDATE auto_plans SET last_status = $1 WHERE household_id = $2", ["already_planned", r.household_id]);
+        continue;
+      }
+      let saved = {};
+      try { saved = JSON.parse(r.opts_json || "{}"); } catch {}
+      const store = await getStoreItems(r.household_id);
+      const opts = {
+        people: saved.people || 2,
+        maxCookMinutes: saved.maxCookMinutes || null,
+        dishCount: saved.dishCount || "main_side",
+        staple: normalizeStaple(saved.staple),
+        fridgeUse: [], // 自動作成では冷蔵庫の中身は当てにしない（古い情報で献立が歪むため）
+        guided: sanitizeGuided(saved.guided),
+        preferences: (saved.preferences || "").toString().trim(),
+        avoid: (store.avoid || []).join("、"),
+        includeSteps: true,
+      };
+      const row = await generateAndSavePlan(household, opts, targets);
+      await q("UPDATE auto_plans SET last_status = $1 WHERE household_id = $2", ["ok", r.household_id]);
+      // 世帯のメンバー全員に知らせる
+      const n = targets.reduce((a, t) => a + t.slots.length, 0);
+      const members = await all("SELECT user_id FROM memberships WHERE household_id = $1", [r.household_id]);
+      for (const m of members) {
+        if (!(await userHasPush(m.user_id))) continue;
+        if (!(await markSentOnce(m.user_id, "auto_plan", today))) continue;
+        await pushToUser(m.user_id, "auto_plan", {
+          title: "今週の献立ができました",
+          body: `${from.slice(5).replace("-", "/")} からの ${n}食分を用意しました。買い物リストもできています🛒`,
+          url: "/",
+          tag: "autoplan-" + today,
+        });
+      }
+      console.log(`[自動作成] ${household.name || r.household_id}: ${n}食 (${row.id})`);
+    } catch (e) {
+      await q("UPDATE auto_plans SET last_status = $1 WHERE household_id = $2", ["error", r.household_id]);
+      console.error("auto plan error:", (e && e.message) || e);
+    }
+  }
+}
+
 let schedulerBusy = false;
 async function schedulerTick() {
-  if (!pushEnabled() || schedulerBusy) return;
+  if (schedulerBusy) return;
   schedulerBusy = true;
   try {
     const h = jstNow().getUTCHours();
-    if (h >= 16 && h < 22) await sendDinnerReminders(); // 夕方〜夜
-    if (h >= 10 && h < 20) await sendPlanReminders(); // 日曜の日中（関数内で曜日判定）
+    if (pushEnabled()) {
+      if (h >= 16 && h < 22) await sendDinnerReminders(); // 夕方〜夜
+      if (h >= 10 && h < 20) await sendPlanReminders(); // 日曜の日中（関数内で曜日判定）
+    }
+    await runAutoPlans(); // 通知が未設定でも献立は作る（通知だけ飛ばない）
   } catch (e) {
     console.error("scheduler error:", (e && e.message) || e);
   } finally {
@@ -2435,10 +2612,9 @@ initDb()
     app.listen(PORT, () => {
       console.log(`めにゅらく！ 起動: http://localhost:${PORT}`);
     });
-    if (pushEnabled()) {
-      setInterval(schedulerTick, 15 * 60 * 1000); // 15分ごとに判定
-      setTimeout(schedulerTick, 20 * 1000); // 起動20秒後に一度
-    }
+    // 定期通知と、毎週おまかせ作成の判定
+    setInterval(schedulerTick, 15 * 60 * 1000); // 15分ごとに判定
+    setTimeout(schedulerTick, 20 * 1000); // 起動20秒後に一度
   })
   .catch((err) => {
     console.error("DB初期化に失敗しました:", err.message);
