@@ -281,6 +281,25 @@
       font-weight: 600; min-width: 0; color: var(--ink); overflow: hidden;
       display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
       overflow-wrap: anywhere; }
+    /* 日付をタップするとその日の献立が下から出てくる。
+       以前はカレンダーの下に並べていたが、スマホだと画面外で気づかれなかった。 */
+    .cal-hint { text-align: center; font-size: .8rem; color: var(--muted); margin: 12px 4px 0; }
+    .sheet-ov { position: fixed; inset: 0; background: rgba(0,0,0,.38); z-index: 210;
+      display: flex; align-items: flex-end; justify-content: center; opacity: 0; transition: opacity .18s ease; }
+    .sheet-ov.show { opacity: 1; }
+    .sheet { background: var(--card); width: 100%; max-width: 480px; border-radius: 20px 20px 0 0;
+      padding: 8px 16px calc(20px + env(safe-area-inset-bottom, 0px)); max-height: 78vh; overflow-y: auto;
+      box-shadow: 0 -10px 40px rgba(0,0,0,.22);
+      transform: translateY(100%); transition: transform .22s cubic-bezier(.2,.8,.25,1); }
+    .sheet-ov.show .sheet { transform: translateY(0); }
+    @media (prefers-reduced-motion: reduce) { .sheet, .sheet-ov { transition: none; } }
+    .sheet-grip { width: 40px; height: 4px; border-radius: 999px; background: var(--dot); margin: 4px auto 12px; }
+    .sheet-head { display: flex; align-items: baseline; gap: 7px; margin: 0 2px 12px; }
+    .sheet-head .date { font-weight: 800; font-size: 1.08rem; }
+    .sheet-head .dow { color: var(--muted); font-size: .85rem; }
+    .sheet-close { margin-left: auto; border: none; background: none; font-size: 1.35rem; line-height: 1;
+      color: var(--muted); cursor: pointer; padding: 2px 4px; align-self: center; }
+    .sheet-empty { color: var(--muted); font-size: .9rem; margin: 2px 2px 14px; line-height: 1.7; }
     .range-hint { margin: 10px 4px 0; font-size: .9rem; color: var(--ink); }
     .range-hint .muted { color: var(--muted); font-weight: 500; }
     .range-hint .warn { color: #d9534f; font-size: .8rem; font-weight: 700; }
@@ -309,8 +328,8 @@
     .buyback { flex: none; border: 1.5px solid var(--orange); background: #fff; color: var(--orange-dark);
       font-size: .72rem; font-weight: 700; border-radius: 999px; padding: 4px 9px; cursor: pointer; white-space: nowrap; }
     .buyback:hover { background: var(--orange-soft); }
-    #calDay { margin-top: 18px; }
-    #calDay .mealcard { cursor: pointer; }
+    #dsBody .mealcard { cursor: pointer; }
+    #dsBody .mealcard:last-child { margin-bottom: 0; }
 
     /* ---- Plan detail ---- */
     .day-head { display: flex; align-items: center; gap: 10px; margin: 26px 4px 12px; }
@@ -1623,6 +1642,7 @@
     // ---------- View 切替 ----------
     function showView(id, title, { back = false, tab = null } = {}) {
       moveSel = null; // 画面遷移で入れ替えモードは解除
+      closeDaySheet(); // カレンダーの日付シートが開いたまま残らないように
       document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
       $("view-" + id).classList.add("active");
       $("title").textContent = title;
@@ -1678,7 +1698,8 @@
       showView("home", household ? household.name : "めにゅらく！", { tab: "home" });
       if (homeMode === "list") setTimeout(scrollToToday, 60); // ビュー表示・レイアウト後に今日へ
     }
-    async function showCreate() {
+    // fromDate: カレンダーの空いている日から呼ばれたときの開始日
+    async function showCreate(fromDate) {
       backHandler = goHome;
       showView("create", "献立を作成", { back: true });
       $("aiQuotaHint").style.display = "none";
@@ -1689,11 +1710,11 @@
       loadFridge().then(renderFridgeUseChips);
       guidedSel = emptyGuided(); // こだわりも毎回おまかせに戻す
       renderGuided();
-      // 既定の期間（今日〜3日後）でカレンダーを初期化
-      const today = new Date();
-      rangeStart = fmt(today);
-      rangeEnd = fmt(new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3));
-      rpCursor = { y: today.getFullYear(), m: today.getMonth() };
+      // 既定の期間（今日〜3日後）でカレンダーを初期化。日付を指定されたらそこを起点にする
+      const base = typeof fromDate === "string" && parseDate(fromDate) && !isNaN(parseDate(fromDate)) ? parseDate(fromDate) : new Date();
+      rangeStart = fmt(base);
+      rangeEnd = fmt(new Date(base.getFullYear(), base.getMonth(), base.getDate() + 3));
+      rpCursor = { y: base.getFullYear(), m: base.getMonth() };
       rangeClamped = false;
       syncRangeInputs();   // hidden inputs + rebuildDays（キャッシュで即時）
       renderRangePicker();
@@ -3075,28 +3096,65 @@
           <button class="cal-nav" id="calNext" aria-label="次の月">›</button>
         </div>
         <div class="cal-grid">${head}${cells}</div>
-        <div id="calDay"></div>`;
+        <p class="cal-hint">日付をタップすると、その日の献立が見られます</p>`;
       $("calPrev").addEventListener("click", () => { calCursor = shiftMonth(y, m, -1); renderCalendar(); });
       $("calNext").addEventListener("click", () => { calCursor = shiftMonth(y, m, 1); renderCalendar(); });
-      $("calWrap").querySelectorAll(".cal-cell.has").forEach((c) =>
-        c.addEventListener("click", () => { calSelectedDate = c.dataset.date; renderCalendar(); }));
-      renderCalDay(map);
+      // 献立が無い日もタップできるようにする（反応が返るほうが「押せる」と分かる）
+      $("calWrap").querySelectorAll(".cal-cell:not(.blank)").forEach((c) =>
+        c.addEventListener("click", () => {
+          calSelectedDate = c.dataset.date;
+          renderCalendar();
+          openDaySheet(c.dataset.date, map);
+        }));
     }
 
-    function renderCalDay(map) {
-      const el = $("calDay");
-      const meals = calSelectedDate && map[calSelectedDate];
-      if (!meals || !meals.length) { el.innerHTML = ""; return; }
-      el.innerHTML = `<div class="day-head"><span class="bar"></span><span class="date">${esc(mdLabel(calSelectedDate))}</span><span class="dow">(${esc(dow(calSelectedDate))})</span></div>` +
-        meals.map((mm) =>
-          `<div class="mealcard" data-plan="${esc(mm.planId)}" data-slot="${esc(mm.slot)}">
-            <div class="mealcard-head"><span class="slot-chip">${esc(mm.slot)}</span>
-              <span class="seehint">作り方<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></div>
-            <ul class="dishlist">${mm.dishes.length ? mm.dishes.map((d) => `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${esc(d.name || "（無題）")}</span></li>`).join("") : `<li class="empty-dish">タップして料理を追加</li>`}</ul>
-          </div>`
-        ).join("");
-      el.querySelectorAll(".mealcard").forEach((c) =>
-        c.addEventListener("click", () => openRecipeFromList(c.dataset.plan, calSelectedDate, c.dataset.slot)));
+    // ---------- カレンダーの日付シート ----------
+    // 画面下に並べる形だとスマホでは見切れて気づかれないので、下から出るシートにする。
+    function ensureDaySheet() {
+      if ($("daySheet")) return;
+      const ov = document.createElement("div");
+      ov.id = "daySheet"; ov.className = "sheet-ov"; ov.style.display = "none";
+      ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="その日の献立">
+        <div class="sheet-grip"></div>
+        <div class="sheet-head"><span class="date" id="dsDate"></span><span class="dow" id="dsDow"></span>
+          <button class="sheet-close" id="dsClose" aria-label="閉じる">✕</button></div>
+        <div id="dsBody"></div>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.addEventListener("click", (e) => { if (e.target === ov) closeDaySheet(); });
+      $("dsClose").addEventListener("click", closeDaySheet);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDaySheet(); });
+    }
+    function closeDaySheet() {
+      const ov = $("daySheet");
+      if (!ov || ov.style.display === "none") return;
+      ov.classList.remove("show");
+      setTimeout(() => { ov.style.display = "none"; }, 200); // 閉じるアニメを見せてから消す
+    }
+    function openDaySheet(date, map) {
+      ensureDaySheet();
+      const meals = (map && map[date]) || [];
+      $("dsDate").textContent = mdLabel(date);
+      $("dsDow").textContent = `(${dow(date)})`;
+      const body = $("dsBody");
+      body.innerHTML = meals.length
+        ? meals.map((mm) =>
+            `<div class="mealcard" data-plan="${esc(mm.planId)}" data-slot="${esc(mm.slot)}">
+              <div class="mealcard-head"><span class="slot-chip">${esc(mm.slot)}</span>
+                <span class="seehint">作り方<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></div>
+              <ul class="dishlist">${mm.dishes.length ? mm.dishes.map((d) => `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${esc(d.name || "（無題）")}</span></li>`).join("") : `<li class="empty-dish">タップして料理を追加</li>`}</ul>
+            </div>`
+          ).join("")
+        : `<p class="sheet-empty">この日の献立はまだありません。</p>
+           <button class="btn-primary" id="dsCreate" style="width:100%">この日から献立を作る</button>`;
+      body.querySelectorAll(".mealcard").forEach((c) =>
+        c.addEventListener("click", () => { closeDaySheet(); openRecipeFromList(c.dataset.plan, date, c.dataset.slot); }));
+      const mk = $("dsCreate");
+      if (mk) mk.addEventListener("click", () => { closeDaySheet(); showCreate(date); });
+      const ov = $("daySheet");
+      ov.style.display = "flex";
+      void ov.offsetWidth; // 一度レイアウトさせてからクラスを付ける（同じフレームだとアニメが効かない）
+      ov.classList.add("show");
     }
 
     function openRecipeFromList(planId, date, slot) {
