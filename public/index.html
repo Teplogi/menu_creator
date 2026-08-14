@@ -1480,13 +1480,6 @@
           <button class="copybtn" onclick="addStoreItem('soft')">追加</button>
         </div>
         <div id="storeSoftList" class="pantrylist"></div>
-
-        <div class="store-sub" style="color:#2e8b63;margin-top:16px">🛒 買いやすい食材<span>（特別扱いせず、普通に使われます）</span></div>
-        <div class="urlbox">
-          <input type="text" id="storeEasyInput" placeholder="食材名（例: 鶏むね肉）" />
-          <button class="copybtn" onclick="addStoreItem('easy')">追加</button>
-        </div>
-        <div id="storeEasyList" class="pantrylist"></div>
       </div>
       <div class="card" id="billingCard" style="display:none">
         <div class="sec-head"><span class="label">プラン</span><span class="lead"></span></div>
@@ -3064,17 +3057,17 @@
       } catch (e) { alert(e.message); }
     }
 
-    // ---------- 行きつけスーパーの食材（買いやすい/買いにくい） ----------
+    // ---------- 食材の設定（使わない／控えめにする） ----------
     let storeItems = [];
     async function loadStoreItems() {
       try { storeItems = await apiOK(`/api/households/${household.id}/store-items`); }
       catch { storeItems = []; }
       renderStoreItems();
     }
-    const STORE_LIST_ID = { avoid: "storeAvoidList", soft: "storeSoftList", easy: "storeEasyList" };
-    const STORE_INPUT_ID = { avoid: "storeAvoidInput", soft: "storeSoftInput", easy: "storeEasyInput" };
+    const STORE_LIST_ID = { avoid: "storeAvoidList", soft: "storeSoftList" };
+    const STORE_INPUT_ID = { avoid: "storeAvoidInput", soft: "storeSoftInput" };
     function renderStoreItems() {
-      for (const kind of ["avoid", "soft", "easy"]) {
+      for (const kind of ["avoid", "soft"]) {
         const wrap = $(STORE_LIST_ID[kind]);
         if (!wrap) continue;
         // 旧仕様の 'hard' は「控えめ(soft)」として表示

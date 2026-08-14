@@ -256,7 +256,7 @@ const SCHEMA_STATEMENTS = [
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
     kind TEXT NOT NULL, amount TEXT, created_at TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_fridge_hh_kind_norm ON fridge_items (household_id, kind, name_norm)`,
-  // 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
+  // 食材の設定（kind: 'avoid'=使わない / 'soft'=控えめ。'easy'/'hard' は旧仕様）
   `CREATE TABLE IF NOT EXISTS store_items (
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
     kind TEXT NOT NULL, created_at TEXT NOT NULL)`,
@@ -470,7 +470,7 @@ const normalizeStaple = (v) =>
   Array.isArray(v) ? v.filter((x) => STAPLE_NAME[x]) : STAPLE_NAME[v] ? [v] : [];
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], storeEasy = [], mainCandidates = [], sameDayDishes = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], mainCandidates = [], sameDayDishes = [] } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -508,8 +508,6 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     storeSoft && storeSoft.length
       ? `次の食材は入手しにくいので、できるだけ使わないでください（基本は控える。他に適切な選択肢が無いときだけ、たまに使うのは可）: ${storeSoft.join("、")}`
       : "",
-    // 「買いやすい」は生成に反映しない（特別扱いすると1食ずつ生成する仕組み上どうしても偏るため、
-    //  “普通に使える＝特別扱いしない”＝バリエーション最優先とする。リストは管理用に保持）
     avoidDishes && avoidDishes.length
       ? `次の料理名とは重複させないこと: ${avoidDishes.join("、")}`
       : "",
@@ -1070,7 +1068,7 @@ async function getRecentDishesBySlot(householdId, { days = 30, planLimit = 15, c
   return bySlot;
 }
 
-// 世帯の食材設定を { avoid:[絶対NG], soft:[控えめ], easy:[買いやすい] } で返す
+// 世帯の食材設定を { avoid:[絶対NG], soft:[控えめ] } で返す
 async function getStoreItems(householdId) {
   const rows = await all(
     "SELECT name, kind FROM store_items WHERE household_id = $1 ORDER BY created_at",
@@ -1080,7 +1078,6 @@ async function getStoreItems(householdId) {
   return {
     avoid: pick("avoid"),
     soft: [...pick("soft"), ...pick("hard")], // hard は旧仕様（控えめ扱い）
-    easy: pick("easy"),
   };
 }
 
@@ -1569,7 +1566,7 @@ app.delete("/api/households/:id/fridge/:itemId", auth, async (req, res) => {
   }
 });
 
-// 行きつけスーパーの食材（kind: 'easy'=買いやすい / 'hard'=買いにくい）
+// 食材の設定（使わない／控えめにする）
 app.get("/api/households/:id/store-items", auth, async (req, res) => {
   try {
     if (!(await requireMember(req, res, req.params.id))) return;
@@ -1587,7 +1584,7 @@ app.post("/api/households/:id/store-items", auth, async (req, res) => {
   try {
     if (!(await requireMember(req, res, req.params.id))) return;
     const name = (req.body?.name || "").toString().trim().slice(0, 40);
-    const kind = ["avoid", "soft", "easy"].includes(req.body?.kind) ? req.body.kind : null;
+    const kind = ["avoid", "soft"].includes(req.body?.kind) ? req.body.kind : null;
     if (!name) return res.status(400).json({ error: "食材名を入力してください。" });
     if (!kind) return res.status(400).json({ error: "種類が正しくありません。" });
     const norm = normName(name);
@@ -1852,7 +1849,7 @@ app.post("/api/plans", auth, aiLimiter, requireAi((req) => aiCostFromTargets(req
 
     const recentDishes = await getRecentDishNames(household.id);
     const store = await getStoreItems(household.id);
-    const plan = await generate(targets, opts, { recentDishes, storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy });
+    const plan = await generate(targets, opts, { recentDishes, storeAvoid: store.avoid, storeSoft: store.soft });
     if (!opts.includeSteps) stripSteps(plan); // モデルが返しても作り方を確実に除去
 
     const dates = targets.map((t) => t.date).sort();
@@ -1933,7 +1930,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
         recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, fridgeDishHint,
         avoidDishes: avoid || [],
         styleHint: styles[(i + attempt) % styles.length],
-        storeAvoid: store.avoid, storeSoft: store.soft, storeEasy: store.easy,
+        storeAvoid: store.avoid, storeSoft: store.soft,
         // 冷蔵庫の使い切りで料理が決まっている食事は、候補を出さない（そちらが最優先のため）
         mainCandidates: fridgeDishHint ? [] : mainCandidatesFor(u, opts, store, [...batchMains, ...(avoid || [])], mainHint),
         sameDayDishes: sameDayOf(i),
@@ -2317,7 +2314,6 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
         recentSlotDishes: recentBySlot[slot] || [],
         storeAvoid: store.avoid,
         storeSoft: store.soft,
-        storeEasy: store.easy,
         // 作り直しでもカタログから候補を出す（同じ条件で毎回同じ料理に戻らないよう、今の料理も除外）
         mainCandidates: pickMainCandidates({
           slot, date,
