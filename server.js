@@ -428,9 +428,16 @@ const MEAL_PLAN_SCHEMA = {
               type: "object",
               properties: {
                 slot: { type: "string", description: "朝食 / 昼食 / 夕食" },
+                // dishes より先に書かせる。生成の途中でも料理名だけは早く画面に出せるようにするため
+                // （作り方まで書き終わるのを待たずに献立が見える）。中身は dishes と一致させる。
+                menu: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "この食事で作る料理名を、主菜→副菜→汁物の順に並べたもの。dishes の name と同じ名前・同じ数にすること。最初にこれを書いてから dishes を書く。",
+                },
                 dishes: { type: "array", items: DISH },
               },
-              required: ["slot", "dishes"],
+              required: ["slot", "menu", "dishes"],
               additionalProperties: false,
             },
           },
@@ -738,8 +745,13 @@ function breakSameDayDuplicates(units, arr) {
   return a;
 }
 
-async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
-  const stream = client.messages.stream({
+// 途中経過を出すのに必要。既定では「ツールの入力JSONが全部そろうまで」配信されないため、
+// 作り方を書き終わる直前まで画面が何も動かない（実測: 名前が届くのが 9.6秒 → 1.6秒）。
+const FINE_GRAINED = { headers: { "anthropic-beta": "fine-grained-tool-streaming-2025-05-14" } };
+
+// onPartial: 書きかけの JSON を受け取るコールバック。作り方まで待たずに料理名を画面へ出すのに使う。
+async function generate(targets, opts, diversity = {}, model = BULK_MODEL, onPartial = null) {
+  const body = {
     model,
     max_tokens: 32000,
     tools: [
@@ -751,13 +763,27 @@ async function generate(targets, opts, diversity = {}, model = BULK_MODEL) {
     ],
     tool_choice: { type: "tool", name: "save_meal_plan" },
     messages: [{ role: "user", content: buildPrompt(targets, opts, diversity) }],
-  });
-  const message = await stream.finalMessage();
-  const toolBlock = message.content.find(
-    (b) => b.type === "tool_use" && b.name === "save_meal_plan"
-  );
-  if (!toolBlock) throw new Error("EMPTY_RESPONSE");
-  return normalizePlanMainTypes(toolBlock.input); // { days: [...] }（main_type を4種に正規化）
+  };
+  const run = async (partial) => {
+    const stream = client.messages.stream(body, partial ? FINE_GRAINED : undefined);
+    // 途中経過。SDK が書きかけの JSON を解析したものをくれるので、そのまま渡す。
+    if (partial) stream.on("inputJson", (_delta, snapshot) => { try { partial(snapshot); } catch {} });
+    const message = await stream.finalMessage();
+    const toolBlock = message.content.find(
+      (b) => b.type === "tool_use" && b.name === "save_meal_plan"
+    );
+    if (!toolBlock) throw new Error("EMPTY_RESPONSE");
+    return normalizePlanMainTypes(toolBlock.input); // { days: [...] }（main_type を4種に正規化）
+  };
+  if (!onPartial) return await run(null);
+  try {
+    return await run(onPartial);
+  } catch (e) {
+    // 逐次配信は検証を挟まないぶん、まれに壊れたJSONが返る。そのときは通常のやり方で作り直す。
+    // 通信・レート制限のエラーはここで握らない（呼び出し側の再試行に任せる）。
+    if (e instanceof Anthropic.APIError) throw e;
+    return await run(null);
+  }
 }
 
 // 割り当て表を先に作る（プランナー）。各食事に「主菜の主材料」と「副菜のカテゴリ」を割り当て、
@@ -878,8 +904,10 @@ function normalizeDishMainType(dish) {
 }
 function normalizePlanMainTypes(plan) {
   for (const d of plan?.days || [])
-    for (const m of d.meals || [])
+    for (const m of d.meals || []) {
+      delete m.menu; // 途中経過の先出し用。保存はしない
       for (const dish of m.dishes || []) attachChoice(normalizeDishMainType(dish));
+    }
   return plan;
 }
 
@@ -1936,8 +1964,40 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     const sameDayOf = (i) => units
       .map((v, k) => (k !== i && v.date === units[i].date ? `${v.slot}: ${assign.mains[k] || "おまかせ"}` : null))
       .filter(Boolean);
+    // 生成の途中経過を画面へ流す。作り方を書き終わるまで20秒ほどかかるので、
+    // 先に決まる料理名と「いま何品目を書いているか」を送って、待っている側に進み具合が見えるようにする。
+    const strList = (a) => (Array.isArray(a) ? a : [])
+      .map((s) => (typeof s === "string" ? s.trim() : ""))
+      .filter(Boolean);
+    const ticker = (u) => {
+      let sent = "", nNames = 0, nWriting = 0, at = 0;
+      return (snap) => {
+        const meal = snap?.days?.[0]?.meals?.[0];
+        if (!meal) return;
+        const dishes = Array.isArray(meal.dishes) ? meal.dishes : [];
+        // menu を先に書かせているので普通はそちら。書かれなかったときは dishes 側から拾う。
+        const fromMenu = strList(meal.menu);
+        const fromDish = strList(dishes.map((d) => d && d.name));
+        const names = fromMenu.length >= fromDish.length ? fromMenu : fromDish;
+        const writing = dishes.length; // 何品目を書いている最中か
+        const cur = dishes[writing - 1] || {};
+        // 材料→作り方の順に書かれる。材料の数も送らないと、材料を書いている数秒間だけ
+        // 画面が止まって見える。
+        const ing = (cur.ingredients || []).length;
+        const steps = (cur.steps || []).length;
+        const sig = `${names.join("|")}#${writing}#${ing}#${steps}`;
+        if (sig === sent) return;
+        // 品数も執筆中の品も変わらない間（名前が1文字ずつ伸びる等）は間引く
+        const now = Date.now();
+        if (names.length === nNames && writing === nWriting && now - at < 150) return;
+        sent = sig; nNames = names.length; nWriting = writing; at = now;
+        send({ type: "tick", date: u.date, slot: u.slot, names, writing, ing, steps });
+      };
+    };
+
     await mapLimit(units, 4, async (u, i) => {
       let dishes = [];
+      const tick = ticker(u);
       const fridgeDishHint = (assign.fridgeDishes || [])[i] || ""; // 使い切りの一皿（例: 鶏と豆腐の水炊き）
       const mainHint = fridgeDishHint ? "" : (assign.mains[i] || ""); // 料理指定がある食事は主材料指定より優先
       const sideHint = needSides ? assign.sides[i] || "" : ""; // 副菜のカテゴリ（同上）
@@ -1953,12 +2013,12 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
         for (let attempt = 0; attempt < 3 && dishes.length === 0; attempt++) {
-          const r = await generate([{ date: u.date, slots: [u.slot] }], opts, div(attempt), SINGLE_MODEL);
+          const r = await generate([{ date: u.date, slots: [u.slot] }], opts, div(attempt), SINGLE_MODEL, tick);
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
         }
         // 主菜名がバッチ内で重複したら、その名前を避けて作り直す（最大2回。並列生成の盲点をコードで補正）
         for (let retry = 0; retry < 2 && mainNameOf(dishes) && batchMains.has(mainNameOf(dishes)); retry++) {
-          const r2 = await generate([{ date: u.date, slots: [u.slot] }], opts, div(retry + 1, [...batchMains]), SINGLE_MODEL);
+          const r2 = await generate([{ date: u.date, slots: [u.slot] }], opts, div(retry + 1, [...batchMains]), SINGLE_MODEL, tick);
           const nd = r2.days?.[0]?.meals?.[0]?.dishes || [];
           if (nd.length) dishes = nd;
         }

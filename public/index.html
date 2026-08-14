@@ -708,6 +708,56 @@
     .genbar-fill { height: 100%; width: 0%; background: #fff; border-radius: 999px; transition: width .4s ease; }
     .gen-pending { color: var(--orange-dark); font-weight: 600; animation: genPulse 1.1s ease-in-out infinite; }
     @keyframes genPulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+
+    /* ---- 生成中の献立カード ----
+       作り方まで書き終わるのに20秒ほどかかる。料理名は数秒で決まるので先に出し、
+       いま何品目を書いているかを見せる。待っている側に「進んでいる」ことが伝わるように。 */
+    .mealcard.gen { cursor: default; }
+    .gen-steam { display: inline-flex; align-items: flex-end; gap: 3px; height: 14px; margin-left: auto; }
+    .gen-steam i { width: 3.5px; height: 3.5px; border-radius: 50%; background: var(--orange);
+      animation: genSteam 1.2s ease-in-out infinite; }
+    .gen-steam i:nth-child(2) { animation-delay: .2s; }
+    .gen-steam i:nth-child(3) { animation-delay: .4s; }
+    @keyframes genSteam { 0%,100% { transform: translateY(0); opacity: .25; } 50% { transform: translateY(-7px); opacity: 1; } }
+    /* 料理名が決まるまでの仮の行 */
+    .gen-skel { list-style: none; display: flex; align-items: center; gap: 9px; padding: 6px 0; }
+    .gen-skel span { height: 11px; border-radius: 6px;
+      background: linear-gradient(90deg, #f3ebe2 25%, #fdf7f1 50%, #f3ebe2 75%);
+      background-size: 300% 100%; animation: genShine 1.3s linear infinite; }
+    .gen-skel .sk-a { width: 16px; height: 16px; border-radius: 50%; flex: none; }
+    .gen-skel .sk-b { flex: 1; max-width: 62%; }
+    .gen-skel:nth-child(2) .sk-b { max-width: 48%; }
+    .gen-skel:nth-child(3) .sk-b { max-width: 55%; }
+    @keyframes genShine { to { background-position: -300% 0; } }
+    /* 決まった料理名（待機→執筆中→完成） */
+    .gen-row { list-style: none; display: flex; align-items: center; gap: 9px; padding: 6px 0;
+      font-size: .93rem; animation: genIn .34s cubic-bezier(.2,.9,.3,1.35) both; }
+    @keyframes genIn { from { opacity: 0; transform: translateY(7px); } }
+    .gen-row.noanim { animation: none; }
+    .gen-mark { width: 16px; height: 16px; flex: none; border-radius: 50%; position: relative;
+      border: 2px solid var(--line); transition: border-color .25s, background .25s; }
+    .gen-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      color: var(--muted); transition: color .25s; }
+    .gen-row.now .gen-mark { border-color: var(--orange); border-right-color: transparent;
+      animation: genSpin .75s linear infinite; }
+    .gen-row.now .gen-name, .gen-row.done .gen-name { color: var(--ink); }
+    .gen-row.now .gen-name { font-weight: 700; }
+    @keyframes genSpin { to { transform: rotate(360deg); } }
+    .gen-row.done .gen-mark { border-color: var(--orange); background: var(--orange); }
+    .gen-row.done .gen-mark::after { content: ""; position: absolute; left: 4px; top: 1px;
+      width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0;
+      animation: genPop .32s cubic-bezier(.2,.9,.3,1.7) both; }
+    @keyframes genPop { from { transform: rotate(45deg) scale(0); } to { transform: rotate(45deg) scale(1); } }
+    .gen-foot { margin-top: 11px; }
+    .gen-bar { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
+    .gen-bar > i { display: block; height: 100%; width: 3%; border-radius: 999px;
+      background: linear-gradient(90deg, #f9b25c, var(--orange)); transition: width .6s ease; }
+    .gen-status { margin-top: 7px; font-size: .76rem; font-weight: 600; color: var(--muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (prefers-reduced-motion: reduce) {
+      .gen-steam i, .gen-skel span, .gen-row, .gen-row.now .gen-mark, .gen-row.done .gen-mark::after
+        { animation: none; }
+    }
     .move-panel .ef { display: block; margin-bottom: 12px; }
     .move-panel .ef > span { display: block; font-size: .78rem; font-weight: 700; color: #6f665c; margin-bottom: 6px; }
     .move-panel input { background: #fff; }
@@ -3882,7 +3932,10 @@
         days: payload.targets
           .slice()
           .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
-          .map((t) => ({ date: t.date, meals: t.slots.map((slot) => ({ slot, dishes: [], _pending: true })) })),
+          .map((t) => ({
+            date: t.date,
+            meals: t.slots.map((slot) => ({ slot, dishes: [], _pending: true, _expect: DISH_EXPECT[payload.dishCount] || 3 })),
+          })),
       };
       const total = skeleton.days.reduce((n, d) => n + d.meals.length, 0);
       streaming = true;
@@ -3919,7 +3972,9 @@
           const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
           if (!line) continue;
           let ev; try { ev = JSON.parse(line); } catch { continue; }
-          if (ev.type === "meal" || ev.type === "meal_error") {
+          if (ev.type === "tick") {
+            if (activeViewId() === "detail") applyTick(ev); // 途中経過（料理名・進み具合）
+          } else if (ev.type === "meal" || ev.type === "meal_error") {
             const m = findStreamMeal(ev.date, ev.slot);
             if (m) { m.dishes = ev.dishes || []; m._pending = false; if (ev.type === "meal_error") m._error = true; }
             done++;
@@ -3944,7 +3999,64 @@
       return v ? v.id.replace(/^view-/, "") : "";
     }
     function setStreamTitle(done, total) {
-      if (activeViewId() === "detail" && streaming) $("title").textContent = `作成中… ${done}/${total}食`;
+      if (activeViewId() === "detail" && streaming)
+        $("title").textContent = total > 1 ? `作成中… ${done}/${total}食` : "作成中…";
+    }
+
+    // ---------- 生成中カードの中身 ----------
+    // 作り方まで書き上がるのに20秒ほどかかる。料理名は数秒で決まるので、決まった分から出して
+    // 「いまこれを書いています」を見せる。待ち時間の体感を短くするための表示。
+    const GEN_FIRST_MSG = "好みと食材から候補をえらんでいます";
+    const DISH_EXPECT = { main: 1, main_side: 2, main_soup: 2, main_side_soup: 3, main_side2: 3, main_side2_soup: 4 };
+    const skelRows = (n) =>
+      Array.from({ length: Math.max(0, n) }, () => `<li class="gen-skel"><span class="sk-a"></span><span class="sk-b"></span></li>`).join("");
+
+    function paintPending(meal, card) {
+      const names = meal._names || [];
+      if (!names.length) return; // まだ料理名が来ていない＝仮の行のまま
+      const writing = meal._writing || 0, ing = meal._ing || 0, steps = meal._steps || 0;
+      const list = card.querySelector(".dishlist");
+      // 名前がまだ届いていないぶんは仮の行のまま残す（品数は条件から分かっている）
+      const rest = Math.max(0, (meal._expect || 0) - names.length);
+      // 行の構成が変わったときだけ作り直す（毎回だと入場アニメがやり直しになってちらつく）
+      if (list.children.length !== names.length + rest || list.querySelectorAll(".gen-row").length !== names.length) {
+        // 他の食事が完成して画面を描き直したときは、入場アニメをやり直さない（ちらつくため）
+        const anim = !meal._shown;
+        meal._shown = true;
+        list.innerHTML = names
+          .map((_, i) => `<li class="gen-row${anim ? "" : " noanim"}" style="animation-delay:${i * 90}ms"><span class="gen-mark"></span><span class="gen-name"></span></li>`)
+          .join("") + skelRows(rest);
+      }
+      names.forEach((name, i) => {
+        const li = list.children[i];
+        const nm = li.querySelector(".gen-name");
+        if (nm.textContent !== name) nm.textContent = name;
+        const st = i < writing - 1 ? "done" : i === writing - 1 ? "now" : "wait";
+        if (li.dataset.st !== st) {
+          li.dataset.st = st;
+          li.className = "gen-row " + st + (li.classList.contains("noanim") ? " noanim" : "");
+        }
+      });
+      // 進み具合＝書き終えた品数＋いま書いている品の進み（材料で4割、作り方で6割）
+      const total = Math.max(names.length, meal._expect || 0, 1);
+      const sub = Math.min(.4, (ing / 9) * .4) + Math.min(.6, (steps / 5) * .6);
+      const p = Math.max(.04, Math.min(.97, (Math.max(0, writing - 1) + sub) / total));
+      const bar = card.querySelector(".gen-bar > i");
+      if (bar) bar.style.width = (p * 100).toFixed(1) + "%";
+      const st = card.querySelector(".gen-status");
+      const now = writing > 0 ? names[writing - 1] : "";
+      const msg = !now ? "献立が決まりました"
+        : steps > 0 ? `${now} の作り方を書いています`
+        : `${now} の材料を書き出しています`;
+      if (st && st.textContent !== msg) st.textContent = msg;
+    }
+    function applyTick(ev) {
+      const m = findStreamMeal(ev.date, ev.slot);
+      if (!m || !m._pending) return;
+      m._names = ev.names || []; m._writing = ev.writing || 0;
+      m._ing = ev.ing || 0; m._steps = ev.steps || 0;
+      const card = document.querySelector(`.mealcard.gen[data-gen="${CSS.escape(ev.date + "|" + ev.slot)}"]`);
+      if (card) paintPending(m, card);
     }
 
     // ---------- 生成中のプログレス表示（旧・単発生成用。順次表示では未使用） ----------
@@ -4005,6 +4117,9 @@
       const plan = currentPlan;
       const body = $("detailBody");
       body.innerHTML = "";
+      // 生成中は買い物リスト・栄養は出さない（まだ中身が確定していないため）
+      document.querySelectorAll("#view-detail > .btn-shop")
+        .forEach((b) => { b.style.display = plan._streaming ? "none" : ""; });
 
       const pr = document.createElement("div");
       pr.className = "people-row";
@@ -4022,9 +4137,9 @@
         frag.appendChild(head);
         for (const meal of day.meals || []) {
           const card = document.createElement("div");
-          card.className = "mealcard";
+          card.className = meal._pending ? "mealcard gen" : "mealcard";
           let rows;
-          if (meal._pending) rows = `<li class="empty-dish gen-pending">作成中…</li>`;
+          if (meal._pending) rows = skelRows(meal._expect || 3);
           else if (meal._error) rows = `<li class="empty-dish">生成に失敗しました（後で作り直せます）</li>`;
           else if (meal.dishes && meal.dishes.length)
             rows = meal.dishes.map((d) =>
@@ -4033,9 +4148,15 @@
           else rows = `<li class="empty-dish">タップして料理を追加</li>`;
           card.innerHTML = `
             <div class="mealcard-head"><span class="slot-chip">${esc(meal.slot)}</span>
-              ${meal._pending ? "" : `<span class="seehint">作り方<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>`}</div>
-            <ul class="dishlist">${rows}</ul>`;
-          if (!meal._pending) card.addEventListener("click", () => openRecipe(day.date, meal.slot));
+              ${meal._pending
+                ? `<span class="gen-steam"><i></i><i></i><i></i></span>`
+                : `<span class="seehint">作り方<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>`}</div>
+            <ul class="dishlist">${rows}</ul>
+            ${meal._pending ? `<div class="gen-foot"><div class="gen-bar"><i></i></div><div class="gen-status">${esc(GEN_FIRST_MSG)}</div></div>` : ""}`;
+          if (meal._pending) {
+            card.dataset.gen = `${day.date}|${meal.slot}`;
+            paintPending(meal, card);
+          } else card.addEventListener("click", () => openRecipe(day.date, meal.slot));
           frag.appendChild(card);
         }
       }
