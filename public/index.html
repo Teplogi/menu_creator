@@ -894,6 +894,15 @@
     .adv .t { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: .92rem; }
     .adv.warn .t { color: #c0564f; } .adv.info .t { color: #a9713a; } .adv.good .t { color: #3f8a66; }
     .adv .b { margin: 5px 0 0; font-size: .85rem; line-height: 1.8; color: #6b5c4c; }
+    /* 「多いですよ」で終わらせず、その場でできる対策を並べる */
+    .adv-tips { list-style: none; padding: 0; margin: 9px 0 0; display: grid; gap: 5px; }
+    .adv-tips li { position: relative; padding-left: 17px; font-size: .83rem; line-height: 1.7; color: #6b5c4c; }
+    .adv-tips li::before { content: ""; position: absolute; left: 3px; top: .62em; width: 6px; height: 6px;
+      border-radius: 50%; background: currentColor; opacity: .4; }
+    .adv-col { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; margin-top: 11px;
+      background: rgba(255,255,255,.75); border: 1px solid rgba(0,0,0,.06); border-radius: 10px;
+      padding: 8px 11px; font: inherit; font-size: .82rem; font-weight: 700; color: var(--orange-dark); cursor: pointer; }
+    .adv-col .go { margin-left: auto; }
     .adv-lock { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
       background: var(--orange-soft); border: 1px solid #f3ddc2; border-radius: 14px;
       padding: 12px 14px; margin-bottom: 10px; font-size: .85rem; color: #6b5c4c; line-height: 1.7; }
@@ -962,6 +971,11 @@
     .col-body li { margin-bottom: 6px; line-height: 1.9; }
     .col-body img { max-width: 100%; height: auto; border-radius: 12px; margin: 6px 0 16px; }
     .col-body hr { border: none; border-top: 1px solid var(--line); margin: 22px 0; }
+    /* 記事中の表。狭い画面でははみ出さず、表だけ横スクロールする */
+    .col-body .col-table { width: 100%; border-collapse: collapse; margin: 0 0 16px; font-size: .86rem; display: block; overflow-x: auto; }
+    .col-body .col-table th, .col-body .col-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    .col-body .col-table th { background: var(--cream); font-size: .8rem; color: var(--orange-dark); font-weight: 800; }
+    .col-body .col-table td:last-child, .col-body .col-table th:last-child { text-align: right; }
     .col-body a { color: var(--orange-dark); font-weight: 700; }
     /* 引用（>）は「注意ボックス」として出す（「主治医にご相談を」等） */
     .col-note { background: #fdf6ee; border: 1px solid #f3e2cd; border-left: 4px solid var(--orange);
@@ -2633,6 +2647,7 @@
       backHandler = back || backToOverview;
       $("nutriBody").innerHTML = `<p class="empty">計算中…</p>`;
       showView("nutrition", "栄養", { back: true, tab: back ? "soon" : null });
+      await loadColumns(); // コメントから対策の記事へ飛ばすため
       let n;
       try {
         n = await apiOK(`/api/households/${household.id}/nutrition?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`);
@@ -2649,9 +2664,24 @@
             「塩分が多めです」「野菜が少なめです」など、数字の意味をひとことで。</div>
           <button class="btn-primary" onclick="startCheckout()">プレミアムを見る</button></div>`;
       }
-      return (n.advice.items || []).map((i) =>
-        `<div class="adv ${esc(i.level)}"><div class="t">${ADV_ICON[i.level] || "💬"} ${esc(i.title)}</div>
-          <p class="b">${esc(i.body)}</p></div>`).join("");
+      return (n.advice.items || []).map((i) => {
+        const col = columnForAdvice(i.kind);
+        return `<div class="adv ${esc(i.level)}"><div class="t">${ADV_ICON[i.level] || "💬"} ${esc(i.title)}</div>
+          <p class="b">${esc(i.body)}</p>
+          ${(i.tips || []).length ? `<ul class="adv-tips">${i.tips.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+          ${col ? `<button class="adv-col" data-col="${esc(col.slug)}">📖 ${esc(col.title)}<span class="go">›</span></button>` : ""}
+        </div>`;
+      }).join("");
+    }
+    // コメントの種類（salt / fiber …）に対応するコラムを探す
+    function columnForAdvice(kind) {
+      const slug = (columnsData?.byAdvice || {})[kind]?.[0];
+      return slug ? columnBySlug(slug) : null;
+    }
+    // 「📖 …」を押したら記事へ。戻ると元の画面に帰る。
+    function wireAdviceColumns(rootId, back) {
+      $(rootId)?.querySelectorAll(".adv-col[data-col]").forEach((b) =>
+        b.addEventListener("click", () => showColumnView(b.dataset.col, back)));
     }
 
     function renderNutrition(n) {
@@ -2713,6 +2743,9 @@
       html += `</p>`;
 
       $("nutriBody").innerHTML = html;
+      // コメントからコラムへ。戻ってきたら栄養画面に帰す。
+      const back = backHandler, range = { from: n.from, to: n.to };
+      wireAdviceColumns("nutriBody", () => showNutritionView(back, range));
     }
 
     // ---------- コラム（薬剤師・管理栄養士監修の読み物） ----------

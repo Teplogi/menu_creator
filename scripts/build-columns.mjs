@@ -48,6 +48,10 @@ function inline(s) {
     .replace(/`([^`]+)`/g, "<code>$1</code>");
 }
 
+const isTableRow = (s) => /^\s*\|.*\|\s*$/.test(s);
+const isTableSep = (s) => /^\s*\|[\s:|-]+\|\s*$/.test(s) && s.includes("-");
+const tableCells = (s) => s.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+
 function mdToHtml(md) {
   const lines = String(md || "").replace(/\r\n/g, "\n").split("\n");
   const out = [];
@@ -58,9 +62,21 @@ function mdToHtml(md) {
   const flushQuote = () => { if (quote.length) { out.push(`<div class="col-note">${inline(quote.join(" "))}</div>`); quote = []; } };
   const flushAll = () => { flushPara(); flushList(); flushQuote(); };
 
-  for (const raw of lines) {
-    const line = raw.trimEnd();
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trimEnd();
     if (!line.trim()) { flushAll(); continue; }
+    // 表（| 見出し | 見出し | の次の行が |---|---| になっているもの）
+    if (isTableRow(line) && isTableSep(lines[i + 1] || "")) {
+      flushAll();
+      const head = tableCells(line);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && isTableRow(lines[i])) rows.push(tableCells(lines[i++]));
+      i--; // 次のループで1つ進むぶんを戻す
+      out.push(`<table class="col-table"><thead><tr>${head.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead>`
+        + `<tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`);
+      continue;
+    }
     let m;
     if ((m = line.match(/^(#{2,4})\s+(.*)$/))) { flushAll(); const n = m[1].length; out.push(`<h${n}>${inline(m[2])}</h${n}>`); continue; }
     if (/^(---|\*\*\*)$/.test(line.trim())) { flushAll(); out.push("<hr>"); continue; }
@@ -104,6 +120,8 @@ for (const f of files) {
     hero: meta.hero || "",
     tags: meta.tags || [],
     relatedFoods: meta.related_foods || [],
+    // 栄養コメントから誘導するための印（salt / fiber / protein / fat など）
+    adviceTags: meta.advice_tags || [],
     html: mdToHtml(body),
   });
 }
@@ -112,7 +130,10 @@ columns.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // 新
 // 食材名 → 記事slug の索引。買い物リストや献立から「この食材のコラム」を出すのに使う。
 const byFood = {};
 for (const c of columns) for (const f of c.relatedFoods) (byFood[f] = byFood[f] || []).push(c.slug);
+// 栄養コメント（salt / fiber …）→ 記事slug の索引。「塩分が多め」から対策の記事へ飛ばす。
+const byAdvice = {};
+for (const c of columns) for (const t of c.adviceTags) (byAdvice[t] = byAdvice[t] || []).push(c.slug);
 
-fs.writeFileSync(OUT, JSON.stringify({ columns, byFood, builtFrom: files.length }, null, 1) + "\n", "utf8");
-console.log(`columns.json を書き出しました（${columns.length}記事 / 食材索引 ${Object.keys(byFood).length}語）`);
+fs.writeFileSync(OUT, JSON.stringify({ columns, byFood, byAdvice, builtFrom: files.length }, null, 1) + "\n", "utf8");
+console.log(`columns.json を書き出しました（${columns.length}記事 / 食材索引 ${Object.keys(byFood).length}語 / 栄養索引 ${Object.keys(byAdvice).length}件）`);
 if (problems.length) { console.log("\n■ 直したほうがよい点"); problems.forEach((p) => console.log("   " + p)); }

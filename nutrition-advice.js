@@ -82,6 +82,11 @@ export function buildAdvice(n) {
           : `作った献立ぶんで1日あたり約${round1(saltAdj)}g（この献立ぶんの目安は約${round1(T(7.5))}g）。`)
         + (src.length ? `${src.join("・")}あたりが効いています。` : "")
         + (worst && worst.salt >= THRESHOLDS.saltDayHigh && nd > 1 ? `とくに${mdLabel(worst.date)}が高めでした。` : ""),
+      tips: [
+        "汁物は1日1回までにするか、汁を半分残す",
+        "しょうゆは「かける」より「小皿につける」",
+        "酢・レモン・しょうが・ごま・青じそで、塩を足さずに味を立てる",
+      ],
     });
   }
 
@@ -92,6 +97,11 @@ export function buildAdvice(n) {
       kind: "soup", level: "info", weight: 70,
       title: `汁物が${soupDays}日続いています`,
       body: "1〜2日をサラダや和え物に替えると、塩分がぐっと下がります。",
+      tips: [
+        "汁物を出す日は、主菜の味付けを薄めにする",
+        "味噌を1割減らして、だしを濃いめにとる",
+        "具だくさんにすると、同じ塩分でも満足しやすい",
+      ],
     });
   }
 
@@ -100,7 +110,12 @@ export function buildAdvice(n) {
     found.push({
       kind: "fiber", level: "info", weight: 80,
       title: "野菜が少なめです",
-      body: `食物繊維が${unit}で約${round1(a.fiber || 0)}g。副菜をもう1品足すか、汁物の具を増やすと補えます。`,
+      body: `食物繊維が${unit}で約${round1(a.fiber || 0)}g。`,
+      tips: [
+        "作成画面の「品数」で副菜をもう1品増やす",
+        "汁物の具に、きのこ・わかめ・根菜を足す",
+        "同じ野菜が続かないよう、色の違うものを混ぜる",
+      ],
     });
   }
 
@@ -109,7 +124,11 @@ export function buildAdvice(n) {
     found.push({
       kind: "protein", level: "info", weight: 60,
       title: "たんぱく質が控えめです",
-      body: `${unit}で約${round1(a.p || 0)}g。肉・魚・卵・豆腐のどれかを、もう一皿ぶん増やせると安心です。`,
+      body: `${unit}で約${round1(a.p || 0)}g。`,
+      tips: [
+        "卵・豆腐・納豆を副菜に足す（手間をかけずに増やせます）",
+        "汁物を豚汁やけんちん汁のような具だくさんにする",
+      ],
     });
   }
 
@@ -118,7 +137,12 @@ export function buildAdvice(n) {
     found.push({
       kind: "fat", level: "info", weight: 50,
       title: "揚げ物・炒め物が続いています",
-      body: `脂質がエネルギーの${a.pfc.f}%を占めています。焼く・蒸す・煮るの日を挟むと軽くなります。`,
+      body: `脂質がエネルギーの${a.pfc.f}%を占めています。`,
+      tips: [
+        "こだわりの「揚げ物なし」を選ぶと、揚げ物を外して作れます",
+        "焼く・蒸す・煮るの日を挟む",
+        "炒め物の油を大さじ1から小さじ1に減らす",
+      ],
     });
   }
 
@@ -127,7 +151,8 @@ export function buildAdvice(n) {
     found.push({
       kind: "kcal", level: "info", weight: 40,
       title: "1日のカロリーが少なめです",
-      body: `${unit}で約${a.kcal}kcal。ご飯やパンを材料に入れていない献立は低く出ます。`,
+      body: `${unit}で約${a.kcal}kcal。ご飯やパンを材料に入れていない献立は低く出るので、実際はもう少し多いはずです。`,
+      tips: ["気になるときは、主食のぶん（ご飯1杯で約230kcal）を足して考えてください"],
     });
   } else if ((a.kcal || 0) > T(THRESHOLDS.kcalHigh)) {
     found.push({
