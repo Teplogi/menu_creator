@@ -886,6 +886,27 @@
     .nu-guide .g-k { font-weight: 800; color: var(--muted); }
     .nu-guide .g-n { flex: none; width: 5.5em; color: var(--muted); font-weight: 700; }
     .nu-guide .g-v { flex: 1; color: var(--ink); }
+    /* 栄養のひとことコメント（プレミアム） */
+    .adv { border-radius: 14px; padding: 13px 15px; margin-bottom: 10px; border: 1px solid var(--line); background: #fff; }
+    .adv.warn { background: #fdeceb; border-color: #f6dcd9; }
+    .adv.info { background: #fdf6ee; border-color: #f3e2cd; }
+    .adv.good { background: #eef6f1; border-color: #dcebe2; }
+    .adv .t { display: flex; align-items: center; gap: 7px; font-weight: 800; font-size: .92rem; }
+    .adv.warn .t { color: #c0564f; } .adv.info .t { color: #a9713a; } .adv.good .t { color: #3f8a66; }
+    .adv .b { margin: 5px 0 0; font-size: .85rem; line-height: 1.8; color: #6b5c4c; }
+    .adv-lock { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      background: var(--orange-soft); border: 1px solid #f3ddc2; border-radius: 14px;
+      padding: 12px 14px; margin-bottom: 10px; font-size: .85rem; color: #6b5c4c; line-height: 1.7; }
+    .adv-lock .btn-primary { width: auto; margin: 0; padding: 8px 14px; font-size: .82rem; flex: none; }
+    /* ホームに出す1行版 */
+    .adv-bar { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+      border-radius: 14px; padding: 11px 14px; margin: 0 0 14px; font: inherit; cursor: pointer;
+      border: 1px solid #f3e2cd; background: #fdf6ee; }
+    .adv-bar.warn { background: #fdeceb; border-color: #f6dcd9; }
+    .adv-bar.good { background: #eef6f1; border-color: #dcebe2; }
+    .adv-bar .tt { flex: 1; min-width: 0; font-size: .85rem; font-weight: 700; color: #6b5c4c;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .adv-bar .go { flex: none; color: var(--orange-dark); font-weight: 800; }
     .nu-bar { display: flex; align-items: center; gap: 8px; padding: 7px 2px; }
     .nu-bar .d { width: 66px; flex: none; font-size: .76rem; font-weight: 700; color: var(--muted); }
     .nu-bar .track { flex: 1; height: 16px; background: var(--cream); border-radius: 999px; overflow: hidden; display: flex; }
@@ -1321,6 +1342,7 @@
         <button class="seg" id="homeSegList" onclick="setHomeMode('list')">一覧</button>
         <button class="seg" id="homeSegCal" onclick="setHomeMode('calendar')">カレンダー</button>
       </div>
+      <div id="homeAdvice"></div>
       <div id="histList"></div>
       <div id="calWrap" style="display:none"></div>
       <button id="todayFab" class="today-fab" style="display:none" onclick="scrollToToday()">
@@ -2618,13 +2640,27 @@
       if (!n.days.length) { $("nutriBody").innerHTML = `<p class="empty">この期間に献立がありません。</p>`; return; }
       renderNutrition(n);
     }
+    const ADV_ICON = { warn: "⚠️", info: "💬", good: "🙆" };
+    // ひとことコメント。プレミアムのときだけ中身が来る（無料は何が見られるかだけ出す）
+    function adviceHtml(n) {
+      if (!n.advice) {
+        return `<div class="adv-lock"><span>🔒</span>
+          <div style="flex:1;min-width:150px"><b>今週の傾向をコメントでお知らせ</b><br>
+            「塩分が多めです」「野菜が少なめです」など、数字の意味をひとことで。</div>
+          <button class="btn-primary" onclick="startCheckout()">プレミアムを見る</button></div>`;
+      }
+      return (n.advice.items || []).map((i) =>
+        `<div class="adv ${esc(i.level)}"><div class="t">${ADV_ICON[i.level] || "💬"} ${esc(i.title)}</div>
+          <p class="b">${esc(i.body)}</p></div>`).join("");
+    }
+
     function renderNutrition(n) {
       const a = n.average;
       const legend = ["p", "f", "c"].map((k) =>
         `<span class="nu-leg"><i style="background:${PFC_COLORS[k]}"></i>${PFC_LABEL[k]}
           <b>${a.pfc[k]}%</b><span class="g">${a[k]}g</span></span>`).join("");
 
-      let html = `<div class="card">
+      let html = adviceHtml(n) + `<div class="card">
         <div class="nu-hero">
           <div class="nu-kcal">${a.kcal}<small>kcal</small></div>
           <p class="nu-sub">1人あたり・1日平均（${esc(mdLabel(n.days[0].date))}〜${esc(mdLabel(n.days[n.days.length - 1].date))}の${n.days.length}日分／${n.people}人分の献立から）<br>
@@ -3201,12 +3237,43 @@
       renderHome();
     }
     function setHomeMode(mode) { homeMode = mode; localStorage.setItem("homeMode", mode); renderHome(); }
+
+    // ホームに出す1行のコメント。栄養画面を開かない人にも気づいてもらうため、
+    // いちばん伝えたい1件だけを出す。押すと栄養画面へ。
+    let homeAdviceRange = null;
+    async function loadHomeAdvice() {
+      const el = $("homeAdvice");
+      if (!el || !household) return;
+      // 今日を含む直近1週間に献立があるときだけ出す
+      const today = fmt(new Date());
+      const from = addDays(today, -6);
+      const has = (plansCache || []).some((p) => p.endDate >= from && p.startDate <= today);
+      if (!has) { el.innerHTML = ""; return; }
+      if (homeAdviceRange === from + today) return; // 同じ期間なら出し直さない
+      let n;
+      try { n = await apiOK(`/api/households/${household.id}/nutrition?from=${from}&to=${today}`); }
+      catch { el.innerHTML = ""; return; }
+      homeAdviceRange = from + today;
+      const range = { from, to: today };
+      if (!n.days.length) { el.innerHTML = ""; return; }
+      if (!n.advice) {
+        el.innerHTML = `<button class="adv-bar" id="advBar"><span>🔒</span>
+          <span class="tt">今週の傾向をコメントで見る</span><span class="go">›</span></button>`;
+      } else {
+        const top = (n.advice.items || [])[0];
+        if (!top) { el.innerHTML = ""; return; }
+        el.innerHTML = `<button class="adv-bar ${esc(top.level)}" id="advBar"><span>${ADV_ICON[top.level] || "💬"}</span>
+          <span class="tt">${esc(top.title)}</span><span class="go">›</span></button>`;
+      }
+      $("advBar").addEventListener("click", () => showNutritionView(goHome, range));
+    }
     function renderHome() {
       moveSel = null; // ホーム再描画で入れ替えモードは解除
       $("homeSegList").classList.toggle("on", homeMode === "list");
       $("homeSegCal").classList.toggle("on", homeMode === "calendar");
       $("histList").style.display = homeMode === "list" ? "block" : "none";
       $("calWrap").style.display = homeMode === "calendar" ? "block" : "none";
+      loadHomeAdvice();
       if (homeMode === "list") { renderHistList(); scrollToToday(); }
       else { renderCalendar(); updateTodayFab(); }
     }

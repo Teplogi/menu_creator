@@ -206,6 +206,20 @@ export function attachChoice(dish) {
 }
 export const choiceSets = () => CHOICE_SETS;
 
+// 「食べる汁の割合」。鍋・おでん・漬け込みは煮汁を残すので、
+// 材料を全部食べる前提の計算だと塩分が高く出る。その補正に使う。
+// カタログにない料理名（AIが作った名前）は、名前から見当をつける。
+export function brothRatioOf(name) {
+  const hit = BY_NAME.get(name);
+  if (hit && typeof hit.broth_ratio === "number") return hit.broth_ratio;
+  const n = String(name || "");
+  if (/おでん|鍋|しゃぶしゃぶ|すき焼き|水炊き/.test(n)) return 0.4;
+  if (/浅漬|ピクルス|マリネ|味付け卵|南蛮漬け|漬け丼/.test(n)) return 0.5;
+  if (/(味噌汁|みそ汁|スープ|吸い物|汁)$/.test(n)) return 1;
+  if (/煮|煮込み|煮物/.test(n)) return 0.75;
+  return 1;
+}
+
 // ---------- 分量の人数換算 ----------
 // カタログは2人分で持っているので、人数が違うときは掛け算して書き直す。
 const BASE_PEOPLE = DOC.base_people || 2;

@@ -8,6 +8,7 @@ import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
 import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
 import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlanFromCatalog } from "./catalog.js";
+import { buildAdvice } from "./nutrition-advice.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -2239,7 +2240,10 @@ app.get("/api/households/:id/nutrition", auth, async (req, res) => {
         date,
         meals: [...meals.values()].sort((a, b) => (SLOT_ORDER[a.slot] ?? 9) - (SLOT_ORDER[b.slot] ?? 9)),
       }));
-    res.json({ ...analyzePlan({ days }, people), from, to });
+    const n = analyzePlan({ days }, people);
+    // ひとことコメント（プレミアム限定。無料でも「何があるか」は分かるよう鍵付きで返す）
+    const premium = await hasAi(req.user.id);
+    res.json({ ...n, from, to, premium, advice: premium ? buildAdvice(n) : null });
   } catch (err) {
     handleError(res, err);
   }

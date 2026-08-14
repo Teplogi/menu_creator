@@ -57,7 +57,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "照り焼きチキン",
@@ -109,7 +110,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "チキン南蛮",
@@ -191,7 +193,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏の竜田揚げ",
@@ -248,7 +251,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏むね肉のピカタ",
@@ -305,7 +309,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "チキンステーキ",
@@ -362,7 +367,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "タンドリーチキン",
@@ -424,7 +430,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏肉のトマト煮込み",
@@ -491,7 +498,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "クリームシチュー",
@@ -573,7 +581,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "鶏のクリーム煮",
@@ -655,7 +664,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "筑前煮",
@@ -742,7 +752,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "鶏と大根の煮物",
@@ -804,7 +815,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "鶏じゃが",
@@ -881,7 +893,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "手羽先の甘辛焼き",
@@ -943,7 +956,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "手羽元のさっぱり煮",
@@ -1010,7 +1024,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "蒸し鶏のねぎソース",
@@ -1077,7 +1092,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "よだれ鶏",
@@ -1159,7 +1175,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "バンバンジー",
@@ -1241,7 +1258,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "カオマンガイ",
@@ -1329,7 +1347,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏とキャベツの味噌炒め",
@@ -1396,7 +1415,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "鶏肉と野菜の甘酢炒め",
@@ -1478,7 +1498,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏肉とブロッコリーのガーリック炒め",
@@ -1535,7 +1556,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏むね肉の梅しそ焼き",
@@ -1592,7 +1614,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏の西京焼き",
@@ -1639,7 +1662,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "塩麹チキン",
@@ -1691,7 +1715,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏肉のホイル焼き",
@@ -1758,7 +1783,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏団子と白菜の鍋",
@@ -1835,7 +1861,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.4
     },
     {
       "name": "水炊き",
@@ -1902,7 +1929,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.4
     },
     {
       "name": "親子丼",
@@ -1969,7 +1997,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "チキンカレー",
@@ -2041,7 +2070,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "チキンドリア",
@@ -2124,7 +2154,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鶏の唐揚げ甘酢あんかけ",
@@ -2221,7 +2252,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "豚の生姜焼き",
@@ -2293,7 +2325,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "とんかつ",
@@ -2360,7 +2393,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ポークソテー",
@@ -2432,7 +2466,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "とんてき",
@@ -2509,7 +2544,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "回鍋肉",
@@ -2591,7 +2627,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.4
     },
     {
       "name": "豚キムチ炒め",
@@ -2653,7 +2690,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "肉野菜炒め",
@@ -2735,7 +2773,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "豚こまの甘辛炒め",
@@ -2802,7 +2841,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "豚肉となすの味噌炒め",
@@ -2879,7 +2919,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "豚ニラ玉炒め",
@@ -2951,7 +2992,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "豚バラともやしのレンジ蒸し",
@@ -3013,7 +3055,8 @@
         "電子レンジ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "豚バラ大根",
@@ -3080,7 +3123,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "豚の角煮",
@@ -3147,7 +3191,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "煮豚",
@@ -3219,7 +3264,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "冷しゃぶサラダ",
@@ -3281,7 +3327,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "アスパラの豚肉巻き",
@@ -3353,7 +3400,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "野菜の肉巻き",
@@ -3425,7 +3473,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "豚肉の梅しそ巻き",
@@ -3487,7 +3536,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "酢豚",
@@ -3599,7 +3649,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "八宝菜",
@@ -3716,7 +3767,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "豚丼",
@@ -3788,7 +3840,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "カツ丼",
@@ -3885,7 +3938,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "ポークカレー",
@@ -3957,7 +4011,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "豚肉と白菜のミルフィーユ鍋",
@@ -4024,7 +4079,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.4
     },
     {
       "name": "ゴーヤチャンプルー",
@@ -4091,7 +4147,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "スペアリブの甘辛煮",
@@ -4163,7 +4220,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 0.75
     },
     {
       "name": "お好み焼き",
@@ -4240,7 +4298,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "豚平焼き",
@@ -4312,7 +4371,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "肉じゃが",
@@ -4389,7 +4449,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "牛丼",
@@ -4461,7 +4522,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "ビーフカレー",
@@ -4533,7 +4595,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "ビーフシチュー",
@@ -4610,7 +4673,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 0.75
     },
     {
       "name": "ハヤシライス",
@@ -4702,7 +4766,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "チンジャオロース",
@@ -4784,7 +4849,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "プルコギ",
@@ -4866,7 +4932,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ビーフステーキ",
@@ -4928,7 +4995,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "すき焼き",
@@ -5020,7 +5088,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 0.4
     },
     {
       "name": "牛肉のしぐれ煮",
@@ -5077,7 +5146,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "牛肉とごぼうの甘辛煮",
@@ -5149,7 +5219,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "牛肉ともやしのオイスター炒め",
@@ -5221,7 +5292,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ローストビーフ",
@@ -5288,7 +5360,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "ビビンバ",
@@ -5380,7 +5453,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ハンバーグ",
@@ -5462,7 +5536,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "和風おろしハンバーグ",
@@ -5554,7 +5629,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "煮込みハンバーグ",
@@ -5651,7 +5727,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "麻婆なす",
@@ -5743,7 +5820,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "餃子",
@@ -5830,7 +5908,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "水餃子",
@@ -5922,7 +6001,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "シュウマイ",
@@ -6004,7 +6084,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "肉団子の甘酢あん",
@@ -6106,7 +6187,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ミートボールのトマト煮",
@@ -6203,7 +6285,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "キーマカレー",
@@ -6300,7 +6383,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "ドライカレー",
@@ -6387,7 +6471,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ガパオライス",
@@ -6474,7 +6559,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "タコライス",
@@ -6566,7 +6652,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "三色そぼろ丼",
@@ -6648,7 +6735,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ロールキャベツ",
@@ -6725,7 +6813,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "ピーマンの肉詰め",
@@ -6812,7 +6901,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "れんこんのはさみ焼き",
@@ -6894,7 +6984,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "メンチカツ",
@@ -6971,7 +7062,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "コロッケ",
@@ -7048,7 +7140,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "つくねの照り焼き",
@@ -7125,7 +7218,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "麻婆春雨",
@@ -7212,7 +7306,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "油揚げの肉詰め煮",
@@ -7289,7 +7384,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "鮭の塩焼き",
@@ -7331,7 +7427,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鮭のムニエル",
@@ -7393,7 +7490,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鮭のホイル焼き",
@@ -7465,7 +7563,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鮭のちゃんちゃん焼き",
@@ -7552,7 +7651,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "鮭の南蛮漬け",
@@ -7639,7 +7739,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.5
     },
     {
       "name": "ぶりの照り焼き",
@@ -7701,7 +7802,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ぶり大根",
@@ -7763,7 +7865,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "さばの味噌煮",
@@ -7830,7 +7933,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "さばの塩焼き",
@@ -7877,7 +7981,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "さんまの塩焼き",
@@ -7924,7 +8029,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "あじの塩焼き",
@@ -7971,7 +8077,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "あじフライ",
@@ -8043,7 +8150,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "あじの南蛮漬け",
@@ -8130,7 +8238,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.5
     },
     {
       "name": "いわしの梅煮",
@@ -8192,7 +8301,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "いわしの蒲焼き",
@@ -8259,7 +8369,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "たらの煮付け",
@@ -8316,7 +8427,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "たらのムニエル",
@@ -8378,7 +8490,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "かれいの煮付け",
@@ -8435,7 +8548,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "金目鯛の煮付け",
@@ -8492,7 +8606,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 0.75
     },
     {
       "name": "白身魚のフライ",
@@ -8564,7 +8679,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "白身魚の甘酢あんかけ",
@@ -8661,7 +8777,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "かじきのバター醤油焼き",
@@ -8718,7 +8835,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "えびフライ",
@@ -8790,7 +8908,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "えびチリ",
@@ -8887,7 +9006,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "えびマヨ",
@@ -8964,7 +9084,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "えびとブロッコリーの塩炒め",
@@ -9031,7 +9152,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "いかと里芋の煮物",
@@ -9088,7 +9210,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "いかの塩焼き",
@@ -9130,7 +9253,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "かきフライ",
@@ -9202,7 +9326,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "シーフードグラタン",
@@ -9275,7 +9400,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "シーフードカレー",
@@ -9357,7 +9483,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 0.75
     },
     {
       "name": "まぐろの漬け丼",
@@ -9419,7 +9546,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 0.5
     },
     {
       "name": "海鮮丼",
@@ -9501,7 +9629,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "サーモンのカルパッチョ",
@@ -9563,7 +9692,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "うな丼",
@@ -9625,7 +9755,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "オムライス",
@@ -9707,7 +9838,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "プレーンオムレツ",
@@ -9759,7 +9891,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "スパニッシュオムレツ",
@@ -9831,7 +9964,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ニラ玉",
@@ -9893,7 +10027,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "かに玉",
@@ -9980,7 +10115,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "天津飯",
@@ -10067,7 +10203,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "卵とじ丼",
@@ -10129,7 +10266,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "麻婆豆腐",
@@ -10216,7 +10354,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "豆腐ハンバーグ",
@@ -10293,7 +10432,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "豆腐ステーキ",
@@ -10350,7 +10490,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "揚げ出し豆腐",
@@ -10412,7 +10553,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "肉豆腐",
@@ -10474,7 +10616,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "炒り豆腐",
@@ -10551,7 +10694,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "厚揚げと野菜の味噌炒め",
@@ -10628,7 +10772,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "厚揚げのそぼろあんかけ",
@@ -10700,7 +10845,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "高野豆腐の含め煮",
@@ -10762,7 +10908,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "湯豆腐",
@@ -10829,7 +10976,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.4
     },
     {
       "name": "豆腐チャンプルー",
@@ -10901,7 +11049,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "おでん",
@@ -10978,7 +11127,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.4
     },
     {
       "name": "野菜炒め",
@@ -11050,7 +11200,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ラタトゥイユ",
@@ -11127,7 +11278,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "夏野菜の揚げ浸し",
@@ -11199,7 +11351,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "なすの田楽",
@@ -11256,7 +11409,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "野菜のかき揚げ",
@@ -11323,7 +11477,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ベジタブルカレー",
@@ -11400,7 +11555,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "きのこと野菜のホイル焼き",
@@ -11467,7 +11623,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ソース焼きそば",
@@ -11549,7 +11706,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "塩焼きそば",
@@ -11631,7 +11789,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "焼きうどん",
@@ -11708,7 +11867,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ナポリタン",
@@ -11781,7 +11941,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ミートソーススパゲティ",
@@ -11869,7 +12030,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "カルボナーラ",
@@ -11942,7 +12104,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ペペロンチーノ",
@@ -12000,7 +12163,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "たらこスパゲティ",
@@ -12058,7 +12222,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "和風きのこパスタ",
@@ -12131,7 +12296,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ボンゴレビアンコ",
@@ -12199,7 +12365,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "ツナと大葉の和風パスタ",
@@ -12267,7 +12434,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "醤油ラーメン",
@@ -12354,7 +12522,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "味噌ラーメン",
@@ -12442,7 +12611,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "かけうどん",
@@ -12509,7 +12679,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "肉うどん",
@@ -12581,7 +12752,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "カレーうどん",
@@ -12658,7 +12830,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "きつねうどん",
@@ -12725,7 +12898,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "釜玉うどん",
@@ -12777,7 +12951,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ざるそば",
@@ -12839,7 +13014,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "冷やし中華",
@@ -12917,7 +13093,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "そうめん",
@@ -12974,7 +13151,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "ちゃんぽん",
@@ -13071,7 +13249,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 0.75
     },
     {
       "name": "担々麺",
@@ -13169,7 +13348,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "ジャージャー麺",
@@ -13262,7 +13442,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "チャーハン",
@@ -13329,7 +13510,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "天丼",
@@ -13411,7 +13593,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "高め"
+      "cost": "高め",
+      "broth_ratio": 1
     },
     {
       "name": "中華丼",
@@ -13523,7 +13706,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ロコモコ丼",
@@ -13616,7 +13800,8 @@
         "炊飯器"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "エビピラフ",
@@ -13693,7 +13878,8 @@
         "炊飯器"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "チキンライス",
@@ -13765,7 +13951,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "雑炊",
@@ -13822,7 +14009,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "ミックスサンドイッチ",
@@ -13894,7 +14082,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "たまごサンド",
@@ -13952,7 +14141,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "BLTサンド",
@@ -14014,7 +14204,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ホットサンド",
@@ -14061,7 +14252,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ピザトースト",
@@ -14118,7 +14310,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "フレンチトースト",
@@ -14170,7 +14363,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ホットドッグ",
@@ -14232,7 +14426,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "クロックムッシュ",
@@ -14300,7 +14495,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "パングラタン",
@@ -14378,7 +14574,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "照り焼きチキンバーガー",
@@ -14455,7 +14652,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ほうれん草のおひたし",
@@ -14498,7 +14696,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "小松菜と油揚げのおひたし",
@@ -14541,7 +14740,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ほうれん草の胡麻和え",
@@ -14588,7 +14788,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "いんげんの胡麻和え",
@@ -14635,7 +14836,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ブロッコリーの胡麻和え",
@@ -14682,7 +14884,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "春菊の胡麻和え",
@@ -14729,7 +14932,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "白和え",
@@ -14801,7 +15005,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "きんぴらごぼう",
@@ -14863,7 +15068,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ピーマンのきんぴら",
@@ -14915,7 +15121,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "れんこんのきんぴら",
@@ -14972,7 +15179,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ひじきの煮物",
@@ -15039,7 +15247,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "切り干し大根の煮物",
@@ -15101,7 +15310,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "かぼちゃの煮物",
@@ -15148,7 +15358,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "里芋の煮っころがし",
@@ -15195,7 +15406,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "大根と油揚げの煮物",
@@ -15247,7 +15459,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "ふろふき大根",
@@ -15299,7 +15512,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "なすの煮浸し",
@@ -15351,7 +15565,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "蒸しなすのポン酢がけ",
@@ -15393,7 +15608,8 @@
         "電子レンジ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "卯の花",
@@ -15465,7 +15681,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "大豆とひじきの煮物",
@@ -15532,7 +15749,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "ポテトサラダ",
@@ -15599,7 +15817,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "マカロニサラダ",
@@ -15661,7 +15880,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "コールスロー",
@@ -15723,7 +15943,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "シーザーサラダ",
@@ -15780,7 +16001,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "グリーンサラダ",
@@ -15827,7 +16049,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "トマトサラダ",
@@ -15879,7 +16102,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "カプレーゼ",
@@ -15931,7 +16155,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "大根サラダ",
@@ -15988,7 +16213,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ごぼうサラダ",
@@ -16045,7 +16271,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "春雨サラダ",
@@ -16112,7 +16339,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "かぼちゃサラダ",
@@ -16164,7 +16392,8 @@
         "電子レンジ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "アボカドとトマトのサラダ",
@@ -16216,7 +16445,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ブロッコリーとゆで卵のサラダ",
@@ -16263,7 +16493,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "かにかまときゅうりのサラダ",
@@ -16315,7 +16546,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "パスタサラダ",
@@ -16377,7 +16609,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "もやしのナムル",
@@ -16429,7 +16662,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ほうれん草のナムル",
@@ -16481,7 +16715,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "にんじんのナムル",
@@ -16533,7 +16768,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "もやしの中華和え",
@@ -16595,7 +16831,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "きゅうりの酢の物",
@@ -16652,7 +16889,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "たこときゅうりの酢の物",
@@ -16709,7 +16947,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "わかめときゅうりの酢の物",
@@ -16766,7 +17005,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "オクラのおかか和え",
@@ -16808,7 +17048,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "たたききゅうり",
@@ -16870,7 +17111,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "長芋の梅肉和え",
@@ -16917,7 +17159,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "冷奴",
@@ -16964,7 +17207,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "枝豆",
@@ -17001,7 +17245,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "にんじんしりしり",
@@ -17058,7 +17303,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "にんじんグラッセ",
@@ -17105,7 +17351,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "キャロットラペ",
@@ -17162,7 +17409,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "無限ピーマン",
@@ -17219,7 +17467,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ジャーマンポテト",
@@ -17281,7 +17530,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "じゃがバター",
@@ -17323,7 +17573,8 @@
         "電子レンジ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "さつまいものレモン煮",
@@ -17370,7 +17621,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "大学芋",
@@ -17422,7 +17674,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "きのこのマリネ",
@@ -17484,7 +17737,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.5
     },
     {
       "name": "ミニトマトのマリネ",
@@ -17541,7 +17795,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.5
     },
     {
       "name": "ピクルス",
@@ -17603,7 +17858,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.5
     },
     {
       "name": "きのこのバター醤油炒め",
@@ -17660,7 +17916,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "アスパラのバターソテー",
@@ -17707,7 +17964,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ズッキーニのソテー",
@@ -17754,7 +18012,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "白菜の浅漬け",
@@ -17796,7 +18055,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.5
     },
     {
       "name": "きゅうりの浅漬け",
@@ -17838,7 +18098,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.5
     },
     {
       "name": "揚げ出しなす",
@@ -17900,7 +18161,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "茶碗蒸し",
@@ -17967,7 +18229,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "だし巻き卵",
@@ -18024,7 +18287,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "厚焼き玉子",
@@ -18076,7 +18340,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "味付け卵",
@@ -18123,7 +18388,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.5
     },
     {
       "name": "豆腐とわかめの味噌汁",
@@ -18171,7 +18437,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "味噌汁の具"
+      "choice": "味噌汁の具",
+      "broth_ratio": 1
     },
     {
       "name": "大根と油揚げの味噌汁",
@@ -18219,7 +18486,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "味噌汁の具"
+      "choice": "味噌汁の具",
+      "broth_ratio": 1
     },
     {
       "name": "なめこの味噌汁",
@@ -18267,7 +18535,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "味噌汁の具"
+      "choice": "味噌汁の具",
+      "broth_ratio": 1
     },
     {
       "name": "じゃがいもと玉ねぎの味噌汁",
@@ -18315,7 +18584,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "味噌汁の具"
+      "choice": "味噌汁の具",
+      "broth_ratio": 1
     },
     {
       "name": "豚汁",
@@ -18387,7 +18657,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "けんちん汁",
@@ -18464,7 +18735,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "かき玉汁",
@@ -18521,7 +18793,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "お吸い物",
@@ -18568,7 +18841,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "あら汁",
@@ -18635,7 +18909,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "冷や汁",
@@ -18702,7 +18977,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "粕汁",
@@ -18774,7 +19050,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "わかめスープ",
@@ -18837,7 +19114,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "スープの具"
+      "choice": "スープの具",
+      "broth_ratio": 1
     },
     {
       "name": "卵スープ",
@@ -18905,7 +19183,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "スープの具"
+      "choice": "スープの具",
+      "broth_ratio": 1
     },
     {
       "name": "中華コーンスープ",
@@ -18972,7 +19251,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "春雨スープ",
@@ -19050,7 +19330,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "スープの具"
+      "choice": "スープの具",
+      "broth_ratio": 1
     },
     {
       "name": "ワンタンスープ",
@@ -19132,7 +19413,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "サンラータン",
@@ -19219,7 +19501,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "キムチスープ",
@@ -19291,7 +19574,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "コンソメスープ",
@@ -19354,7 +19638,8 @@
       ],
       "leftover_ok": true,
       "cost": "安い",
-      "choice": "スープの具"
+      "choice": "スープの具",
+      "broth_ratio": 1
     },
     {
       "name": "オニオンスープ",
@@ -19416,7 +19701,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ミネストローネ",
@@ -19498,7 +19784,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "コーンポタージュ",
@@ -19560,7 +19847,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "かぼちゃのポタージュ",
@@ -19622,7 +19910,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "じゃがいものポタージュ",
@@ -19684,7 +19973,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "クラムチャウダー",
@@ -19766,7 +20056,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "トマトスープ",
@@ -19834,7 +20125,8 @@
       ],
       "leftover_ok": true,
       "cost": "安い",
-      "choice": "スープの具"
+      "choice": "スープの具",
+      "broth_ratio": 1
     },
     {
       "name": "野菜スープ",
@@ -19902,7 +20194,8 @@
       ],
       "leftover_ok": true,
       "cost": "安い",
-      "choice": "スープの具"
+      "choice": "スープの具",
+      "broth_ratio": 1
     },
     {
       "name": "豆乳味噌スープ",
@@ -19955,7 +20248,8 @@
       ],
       "leftover_ok": false,
       "cost": "安い",
-      "choice": "味噌汁の具"
+      "choice": "味噌汁の具",
+      "broth_ratio": 1
     },
     {
       "name": "春菊のおひたし",
@@ -20002,7 +20296,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "もやしとにらのおひたし",
@@ -20049,7 +20344,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "オクラの梅和え",
@@ -20096,7 +20392,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "きゅうりとちくわの和え物",
@@ -20153,7 +20450,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "納豆と長芋のねばねば和え",
@@ -20195,7 +20493,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "かぶの浅漬け",
@@ -20237,7 +20536,8 @@
         "包丁のみ"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.5
     },
     {
       "name": "小松菜のナムル",
@@ -20289,7 +20589,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "きゅうりとささみの和え物",
@@ -20351,7 +20652,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "なすとピーマンの味噌炒め",
@@ -20413,7 +20715,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "れんこんの甘酢炒め",
@@ -20470,7 +20773,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "かぼちゃのそぼろ煮",
@@ -20532,7 +20836,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "たけのこの土佐煮",
@@ -20589,7 +20894,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "なめたけ",
@@ -20631,7 +20937,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "厚揚げの煮物",
@@ -20688,7 +20995,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "高野豆腐の卵とじ",
@@ -20745,7 +21053,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 0.75
     },
     {
       "name": "スナップえんどうの塩ゆで",
@@ -20777,7 +21086,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.75
     },
     {
       "name": "焼きなす",
@@ -20819,7 +21129,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "きのこのホイル焼き",
@@ -20866,7 +21177,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "エリンギのバター醤油焼き",
@@ -20908,7 +21220,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "はんぺんのチーズ焼き",
@@ -20955,7 +21268,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ちくわの磯辺揚げ",
@@ -21002,7 +21316,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ごぼうの唐揚げ",
@@ -21054,7 +21369,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "豆苗とベーコンの炒め物",
@@ -21106,7 +21422,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "チンゲン菜のオイスター炒め",
@@ -21153,7 +21470,8 @@
         "フライパン"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "白菜の中華炒め",
@@ -21235,7 +21553,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "トマトと卵の炒め物",
@@ -21297,7 +21616,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "春雨の中華炒め",
@@ -21374,7 +21694,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "水菜とツナのサラダ",
@@ -21436,7 +21757,8 @@
         "包丁のみ"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "アスパラのベーコン巻き",
@@ -21483,7 +21805,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "ブロッコリーのペペロンチーノ",
@@ -21535,7 +21858,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "かぼちゃのチーズ焼き",
@@ -21587,7 +21911,8 @@
         "オーブン・トースター"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "じゃがいものガレット",
@@ -21639,7 +21964,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "さつまいものサラダ",
@@ -21696,7 +22022,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "焼きねぎのマリネ",
@@ -21748,7 +22075,8 @@
         "フライパン"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 0.5
     },
     {
       "name": "具だくさん味噌汁",
@@ -21806,7 +22134,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "あさりの味噌汁",
@@ -21854,7 +22183,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "しじみの味噌汁",
@@ -21902,7 +22232,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "白菜と鶏団子のスープ",
@@ -21979,7 +22310,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "もずくスープ",
@@ -22036,7 +22368,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "トマトと卵のスープ",
@@ -22098,7 +22431,8 @@
         "鍋"
       ],
       "leftover_ok": false,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "きのこのスープ",
@@ -22176,7 +22510,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     },
     {
       "name": "ポトフ",
@@ -22258,7 +22593,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "普通"
+      "cost": "普通",
+      "broth_ratio": 1
     },
     {
       "name": "具だくさん野菜スープ",
@@ -22336,7 +22672,8 @@
         "鍋"
       ],
       "leftover_ok": true,
-      "cost": "安い"
+      "cost": "安い",
+      "broth_ratio": 1
     }
   ],
   "base_people": 2,
