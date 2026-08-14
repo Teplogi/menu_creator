@@ -307,19 +307,16 @@
     .range-hint { margin: 10px 4px 0; font-size: .9rem; color: var(--ink); }
     .range-hint .muted { color: var(--muted); font-weight: 500; }
     .range-hint .warn { color: #d9534f; font-size: .8rem; font-weight: 700; }
-    /* べんり機能（近日公開） */
+    /* べんり機能 */
     .soon-hero { text-align: center; padding: 24px 16px 20px; }
-    .soon-badge { display: inline-block; background: var(--orange); color: #fff; font-size: .72rem; font-weight: 800;
-      border-radius: 999px; padding: 4px 14px; margin-bottom: 12px; letter-spacing: .04em; }
     .soon-hero h2 { margin: 0 0 6px; font-size: 1.3rem; }
     .soon-hero p { margin: 0; color: var(--muted); font-size: .9rem; }
     .soon-card { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 16px;
-      box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 12px; opacity: .82; }
+      box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 12px; }
     .soon-ic { width: 34px; height: 34px; object-fit: contain; flex: none; }
     .soon-tx { flex: 1; min-width: 0; }
     .soon-nm { font-weight: 800; font-size: .96rem; }
     .soon-ds { color: var(--muted); font-size: .82rem; line-height: 1.4; }
-    .soon-lock { width: 20px; height: 20px; object-fit: contain; flex: none; opacity: .45; }
     /* 常備品リスト（設定画面のチップ） */
     .store-sub { font-size: .84rem; font-weight: 800; margin: 0 0 6px; }
     .store-sub span { font-weight: 600; color: var(--muted); font-size: .78rem; }
@@ -395,7 +392,7 @@
     .fav-detail { background: var(--cream); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px; font-size: .86rem; }
     .fav-detail ul, .fav-detail ol { margin: 4px 0; padding-left: 20px; }
     .soon-card.live { cursor: pointer; border: 1.5px solid var(--orange); }
-    .soon-card.live .soon-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.2rem; }
+    .soon-card .soon-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.2rem; }
     /* 差し替えの「1つ前に戻す」 */
     .undo-btn { border: 1px dashed var(--dot); background: var(--cream); color: var(--muted);
       font-size: .78rem; font-weight: 700; border-radius: 999px; padding: 5px 12px; cursor: pointer;
@@ -841,7 +838,7 @@
     .dtags { display: inline-flex; gap: 4px; flex-wrap: wrap; }
     .dtag { font-size: .66rem; font-weight: 700; color: var(--orange); background: var(--orange-soft); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
     /* 短いラベルは途中で割らない（「たっぷ／り」「半／分」のような改行を防ぐ） */
-    .seg, .chip, .role-chip, .mtag, .preset-chip, .fish-btn, .soon-badge,
+    .seg, .chip, .role-chip, .mtag, .preset-chip, .fish-btn,
     .plan-badge, .frole, .ftag, .cal-dow, .wk-label, .slot-chip { white-space: nowrap; }
     /* 曜日ごとの色（日=太陽・月=月・火=炎・水=水・木=葉・金=金色・土=土） */
     .dtag.d0 { color: #c0334a; background: #fdeaee; }
@@ -1584,12 +1581,11 @@
       </div>
     </section>
 
-    <!-- 便利機能（近日公開） -->
+    <!-- べんり機能 -->
     <section class="view" id="view-soon">
       <div class="soon-hero">
-        <div class="soon-badge">近日公開</div>
         <h2>べんり機能</h2>
-        <p>毎日の献立をもっとラクにする機能を準備中です。</p>
+        <p>毎日の献立をもっとラクにする機能です。</p>
       </div>
       <div id="soonList"></div>
     </section>
@@ -2470,10 +2466,7 @@
       finally { btn.disabled = false; }
     }
 
-    // ---------- べんり機能（近日公開） ----------
-    const SOON_FEATURES = [
-      { icon: "/img/ic-cart.png", name: "ネットスーパー連携", desc: "買い物リストをそのまま注文につなげる" },
-    ];
+    // ---------- べんり機能 ----------
     function showSoonView() {
       backHandler = goHome;
       $("soonList").innerHTML =
@@ -2488,12 +2481,7 @@
           <span class="soon-go">›</span></div>` +
         `<div class="soon-card live" id="colOpenCard"><img class="soon-ic" src="/img/ic-book.png" alt="">
           <div class="soon-tx"><div class="soon-nm">コラム</div><div class="soon-ds">食べ物とお薬・栄養のはなし。薬剤師・管理栄養士が書いています</div></div>
-          <span class="soon-go">›</span></div>` +
-        SOON_FEATURES.map((f) =>
-        `<div class="soon-card"><img class="soon-ic" src="${esc(f.icon)}" alt="">
-          <div class="soon-tx"><div class="soon-nm">${esc(f.name)}</div><div class="soon-ds">${esc(f.desc)}</div></div>
-          <img class="soon-lock" src="/img/ic-lock.png" alt="準備中"></div>`
-      ).join("");
+          <span class="soon-go">›</span></div>`;
       $("favOpenCard").addEventListener("click", showFavoritesView);
       $("frOpenCard").addEventListener("click", showFridgeView);
       $("nuOpenCard").addEventListener("click", openNutritionFromTab);
