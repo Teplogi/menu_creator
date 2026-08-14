@@ -9,6 +9,7 @@ import { OAuth2Client } from "google-auth-library";
 import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
 import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlanFromCatalog } from "./catalog.js";
 import { buildAdvice } from "./nutrition-advice.js";
+import { readColumns } from "./columns.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -1165,6 +1166,19 @@ app.get("/api/food-aliases", (req, res) => {
   if (!FOOD_ALIAS_CACHE) FOOD_ALIAS_CACHE = { aliases: foodAliasMap(), ...foodUnitTables() };
   res.set("Cache-Control", "public, max-age=86400");
   res.json(FOOD_ALIAS_CACHE);
+});
+
+// コラム（content/columns/*.md）。起動時に一度読んで配る。
+// .md を直して再デプロイすれば反映される（書き出しのコマンドは不要）。
+let COLUMNS_CACHE = null;
+app.get("/api/columns", (req, res) => {
+  if (!COLUMNS_CACHE) {
+    const r = readColumns();
+    if (r.problems?.length) console.log("（コラムの注意: " + r.problems.join(" / ") + "）");
+    COLUMNS_CACHE = { columns: r.columns, byFood: r.byFood, byAdvice: r.byAdvice };
+  }
+  res.set("Cache-Control", "public, max-age=300"); // 5分。デプロイ後すぐ新しい記事が出る
+  res.json(COLUMNS_CACHE);
 });
 
 app.get("/api/auth/config", (req, res) => {

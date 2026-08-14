@@ -2749,11 +2749,11 @@
     }
 
     // ---------- コラム（薬剤師・管理栄養士監修の読み物） ----------
-    // 記事は content/columns/*.md を npm run columns で public/columns.json にしたもの。
+    // 記事は content/columns/*.md。サーバが起動時に読み込んで /api/columns で配る。
     let columnsData = null;
     async function loadColumns() {
       if (columnsData) return columnsData;
-      try { columnsData = await (await fetch("/columns.json")).json(); }
+      try { columnsData = await (await fetch("/api/columns")).json(); }
       catch { columnsData = { columns: [], byFood: {} }; }
       return columnsData;
     }
