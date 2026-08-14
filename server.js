@@ -495,6 +495,11 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     `人数: ${people}人分（材料の分量は人数に合わせる）`,
     DISH_COUNT_DIRECTIVE[dishCount] || DISH_COUNT_DIRECTIVE.main_side,
     stapleDirective(staple),
+    // 主食にパンを許すと夕食にサンドイッチが出ることがある。夕食の主菜としては軽すぎるので止める。
+    // stapleDirective のあとに置いて、パン指定より優先させる。
+    targets.some((t) => (t.slots || []).includes("夕食"))
+      ? "夕食では、サンドイッチ・トースト・ホットドッグ・ハンバーガーなど、パンにはさむ軽食を主菜にしないこと（これらは朝食・昼食向け）。夕食で主食をパンにする場合は、シチュー・ポトフ・グラタン・煮込みなど、パンに添える温かい料理を主菜にする。"
+      : "",
     maxCookMinutes
       ? `各料理は調理時間の目安が ${maxCookMinutes} 分以内になるようにし、cook_minutes に目安（分）の数値を入れる。`
       : "各料理の cook_minutes に調理時間の目安（分）の数値を入れる。",
@@ -929,7 +934,7 @@ const SINGLE_DISH_SCHEMA = {
 };
 
 function buildDishPrompt(instruction, ctx) {
-  const { people, maxCookMinutes, preferences, avoid, current, others } = ctx;
+  const { people, maxCookMinutes, preferences, avoid, current, others, slot } = ctx;
   const ingLine = (d) =>
     (d.ingredients || []).map((i) => `${i.name}${i.amount ? `(${i.amount})` : ""}`).join("、");
   return [
@@ -971,6 +976,10 @@ function buildDishPrompt(instruction, ctx) {
     "- 材料は name（食材名）・amount（分量）・category（分類）に分ける。category は 野菜・果物 / 肉・魚 / 卵・乳・豆腐 / 主食・乾物 / 調味料 / その他 から選び、常備調味料と水・お湯は必ず「調味料」にする。",
     "- 分量表記: 野菜・果物・豆腐など数えられる食材は「1/2個(100g)」のように個数(目安の重量g)で書く（単位は個・本・枚・袋・束・株・丁・かけ等、数は整数かきれいな分数。gだけの表記は野菜に使わない）。肉・魚は「200g」「2切れ(160g)」など重量基本、調味料は大さじ・小さじ・少々。",
     "- にんにく・しょうがは必ず「かけ」で書く（「片」「小さじ」は使わない）。食材名はひらがな・カタカナ・漢字を混ぜず、○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ　× ニンニク／人参／生姜／タマネギ に揃える。",
+    // サンドイッチ類は夕食の主菜としては軽すぎる（朝・昼向け）
+    slot === "夕食"
+      ? "- これは夕食。サンドイッチ・トースト・ホットドッグ・ハンバーガーなど、パンにはさむ軽食は主菜にしない（ユーザーが名指しで指示した場合だけ従う）。"
+      : "",
     "- 手順は簡潔な箇条書き。すべて日本語。",
     "- 料理は1品だけ、save_dish ツールで返す。",
   ]
@@ -2454,6 +2463,7 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1, "edi
         avoid: opts?.avoid,
         current,
         others,
+        slot,
       });
     }
     if (!newDish || !newDish.name) throw new Error("EMPTY_RESPONSE");

@@ -14153,7 +14153,7 @@
       "staple": "パン",
       "time": 15,
       "season": "通年",
-      "slots": "昼夕",
+      "slots": "朝昼",
       "buy": false,
       "ingredients": [
         {
@@ -14586,7 +14586,7 @@
       "staple": "パン",
       "time": 25,
       "season": "通年",
-      "slots": "昼夕",
+      "slots": "昼",
       "buy": false,
       "ingredients": [
         {
