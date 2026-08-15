@@ -317,6 +317,66 @@
     .soon-tx { flex: 1; min-width: 0; }
     .soon-nm { font-weight: 800; font-size: .96rem; }
     .soon-ds { color: var(--muted); font-size: .82rem; line-height: 1.4; }
+    /* ---- はじめかた（初回のみホームに出るチェックリスト） ----
+       アンケートで「欲しい」と言われた機能の多くがすでにあり、
+       気づかれていないだけだった。ひと通り触ってもらうための案内。 */
+    .sg-card { background: var(--card); border-radius: 18px; box-shadow: var(--shadow);
+      padding: 15px 16px 8px; margin: 2px 0 14px; position: relative;
+      animation: sgIn .4s cubic-bezier(.2,.9,.3,1.2) both; }
+    @keyframes sgIn { from { opacity: 0; transform: translateY(-6px); } }
+    .sg-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; padding-right: 26px; }
+    .sg-head b { font-size: .98rem; }
+    .sg-head .n { font-size: .74rem; font-weight: 800; color: var(--orange-dark); }
+    .sg-sub { margin: 0 0 10px; font-size: .8rem; color: var(--muted); line-height: 1.5; }
+    .sg-x { position: absolute; top: 9px; right: 8px; width: 28px; height: 28px; border: none;
+      background: none; color: var(--muted); font-size: 1.1rem; cursor: pointer; border-radius: 8px; }
+    .sg-x:hover { background: #f6f1ea; }
+    .sg-bar { height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; margin-bottom: 4px; }
+    .sg-bar > i { display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #f9b25c, var(--orange)); transition: width .5s ease; }
+    .sg-step { display: flex; align-items: center; gap: 11px; width: 100%; border: none; background: none;
+      padding: 10px 2px; text-align: left; font: inherit; color: var(--ink); cursor: pointer;
+      border-top: 1px solid var(--line); }
+    .sg-step:first-of-type { border-top: none; }
+    .sg-step:active { opacity: .6; }
+    .sg-mark { width: 21px; height: 21px; flex: none; border-radius: 50%; border: 2px solid var(--dot);
+      position: relative; transition: background .3s, border-color .3s; }
+    .sg-step.ok .sg-mark { background: var(--orange); border-color: var(--orange); }
+    .sg-step.ok .sg-mark::after { content: ""; position: absolute; left: 6px; top: 2.5px;
+      width: 5px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0;
+      transform: rotate(45deg); animation: genPop .3s cubic-bezier(.2,.9,.3,1.6) both; }
+    .sg-tx { flex: 1; min-width: 0; }
+    .sg-nm { font-weight: 700; font-size: .9rem; }
+    .sg-ds { font-size: .76rem; color: var(--muted); line-height: 1.4; }
+    .sg-step.ok .sg-nm { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1px; }
+    .sg-step.ok .sg-ds { display: none; }
+    .sg-go { flex: none; color: var(--orange); font-weight: 800; }
+    .sg-step.ok .sg-go { visibility: hidden; }
+    .sg-done { text-align: center; padding: 4px 0 12px; font-size: .86rem; font-weight: 700; color: var(--orange-dark); }
+    /* 献立が1つも無いときのホーム。何ができるアプリなのかをここで伝える */
+    .empty-start { text-align: center; padding: 18px 18px 26px; }
+    .empty-start .es-il { width: 148px; height: auto; max-width: 55%; border-radius: 20px; margin-bottom: 12px; }
+    .empty-start .es-ttl { font-weight: 800; font-size: 1.02rem; margin-bottom: 6px; }
+    .empty-start .es-sub { margin: 0 0 16px; font-size: .86rem; color: var(--muted); line-height: 1.6; }
+    .empty-start .es-go { max-width: 280px; margin: 0 auto; }
+    .empty-start .es-list { list-style: none; margin: 20px auto 0; padding: 0; max-width: 300px;
+      text-align: left; font-size: .84rem; color: var(--ink); }
+    .empty-start .es-list li { position: relative; padding: 7px 0 7px 22px; line-height: 1.5; }
+    .empty-start .es-list li::before { content: ""; position: absolute; left: 4px; top: 13px;
+      width: 5px; height: 9px; border: solid var(--orange); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+    /* 案内から飛んできたカードを一度だけ光らせる */
+    .card.flash { animation: sgFlash 1.8s ease-out; }
+    @keyframes sgFlash {
+      0%, 100% { box-shadow: var(--shadow); }
+      15%, 60% { box-shadow: 0 0 0 3px var(--orange), var(--shadow); }
+    }
+    /* タブの未読ドット（「べんり」に何が入っているか気づいてもらうため） */
+    .tab { position: relative; }
+    .tab .dot { position: absolute; top: 6px; right: 50%; margin-right: -18px; width: 8px; height: 8px;
+      border-radius: 50%; background: #e5484d; box-shadow: 0 0 0 2px var(--card);
+      animation: sgPulse 1.8s ease-in-out infinite; }
+    @keyframes sgPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+    @media (prefers-reduced-motion: reduce) { .sg-card, .tab .dot, .sg-step.ok .sg-mark::after { animation: none; } }
     /* 常備品リスト（設定画面のチップ） */
     .store-sub { font-size: .84rem; font-weight: 800; margin: 0 0 6px; }
     .store-sub span { font-weight: 600; color: var(--muted); font-size: .78rem; }
@@ -1406,6 +1466,7 @@
         <button class="seg" id="homeSegList" onclick="setHomeMode('list')">一覧</button>
         <button class="seg" id="homeSegCal" onclick="setHomeMode('calendar')">カレンダー</button>
       </div>
+      <div id="startGuide"></div>
       <div id="homeAdvice"></div>
       <div id="histList"></div>
       <div id="calWrap" style="display:none"></div>
@@ -2400,11 +2461,23 @@
     }
 
     // ---------- 設定 ----------
-    function showSettingsView() {
+    // focus: "auto" を渡すと「毎週おまかせ作成」までスクロールして光らせる
+    function showSettingsView(focus) {
       if (!household) return showSetup();
       backHandler = goHome;
       renderSettings();
       showView("settings", "設定", { back: true, tab: "settings" });
+      if (focus === "auto") setTimeout(() => {
+        const c = $("autoCard");
+        if (!c) return;
+        // スムーススクロールは端末・設定によって効かないことがあるので、位置を自分で出して飛ぶ。
+        // 上に固定のアプリバーがあるぶんだけ余白を取る。
+        const bar = $("appbar");
+        const off = (bar && !bar.classList.contains("hidden") ? bar.getBoundingClientRect().height : 0) + 10;
+        window.scrollTo(0, Math.max(0, c.getBoundingClientRect().top + window.scrollY - off));
+        c.classList.add("flash");
+        setTimeout(() => c.classList.remove("flash"), 1800);
+      }, 120);
     }
     function renderSettings() {
       $("meName").textContent = currentUser ? currentUser.username : "";
@@ -2548,6 +2621,7 @@
     // ---------- べんり機能 ----------
     function showSoonView() {
       backHandler = goHome;
+      guideSet("soon"); // タブの赤ドットを消す
       $("soonList").innerHTML =
         `<div class="soon-card live" id="favOpenCard"><img class="soon-ic" src="/img/ic-star.png" alt="">
           <div class="soon-tx"><div class="soon-nm">お気に入りレシピ</div><div class="soon-ds">気に入った料理を保存して、次の献立にすぐ追加</div></div>
@@ -2560,11 +2634,17 @@
           <span class="soon-go">›</span></div>` +
         `<div class="soon-card live" id="colOpenCard"><img class="soon-ic" src="/img/ic-book.png" alt="">
           <div class="soon-tx"><div class="soon-nm">コラム</div><div class="soon-ds">食べ物とお薬・栄養のはなし。薬剤師・管理栄養士が書いています</div></div>
+          <span class="soon-go">›</span></div>` +
+        // 設定の奥にあると気づかれないので、ここからも開けるようにする
+        `<div class="soon-card live" id="autoOpenCard"><img class="soon-ic" src="/img/ic-calendar.png" alt="">
+          <div class="soon-tx"><div class="soon-nm">毎週おまかせ作成<span class="pro-tag">プレミアム</span></div>
+          <div class="soon-ds">決めた曜日・時刻に、AIが翌週の献立を自動で作って通知</div></div>
           <span class="soon-go">›</span></div>`;
       $("favOpenCard").addEventListener("click", showFavoritesView);
       $("frOpenCard").addEventListener("click", showFridgeView);
       $("nuOpenCard").addEventListener("click", openNutritionFromTab);
       $("colOpenCard").addEventListener("click", () => showColumnsView(showSoonView));
+      $("autoOpenCard").addEventListener("click", () => showSettingsView("auto"));
       showView("soon", "べんり機能", { back: true, tab: "soon" });
     }
 
@@ -2682,6 +2762,7 @@
     // べんり機能タブから開くときは、今日に一番近い献立の期間を対象にする
     async function openNutritionFromTab() {
       if (!household) return showSetup();
+      guideSet("nutrition");
       try { plansCache = await apiOK("/api/plans?householdId=" + encodeURIComponent(household.id)); } catch {}
       if (!(plansCache || []).length) { alert("先に献立を作成してください。"); return; }
       const today = fmt(new Date());
@@ -2692,6 +2773,7 @@
     // 栄養は「日付ごと」に見る。昼と夕を別々に作ると献立が別プランになるので、
     // プラン単位だと1日ぶんが揃わない。期間を渡して世帯全体からまとめて計算する。
     async function showNutritionView(back, range) {
+      guideSet("nutrition");
       const r = range || (currentPlan?.id ? { from: currentPlan.startDate, to: currentPlan.endDate } : null);
       if (!r || !household) return;
       backHandler = back || backToOverview;
@@ -3317,6 +3399,8 @@
         plansCache = [];
         $("histList").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
       }
+      // 「はじめかた」の達成判定に使う（⭐で保存したかどうか）
+      if (!guideLoad().closed) await loadFavorites().catch(() => {});
       renderHome();
     }
     function setHomeMode(mode) { homeMode = mode; localStorage.setItem("homeMode", mode); renderHome(); }
@@ -3350,8 +3434,85 @@
       }
       $("advBar").addEventListener("click", () => showNutritionView(goHome, range));
     }
+    // ---------- はじめかた（初回ガイド） ----------
+    // アンケートで「欲しい」と挙がった機能（カロリー表示・お気に入り・使い切り）は
+    // すでに入っていて、気づかれていないだけだった。ひと通り触ってもらうための案内。
+    // 全部済むか「×」で消える。端末ごとの記録で十分なので localStorage に持つ。
+    const GUIDE_KEY = "startGuide";
+    let guideState = null;
+    function guideLoad() {
+      if (!guideState) { try { guideState = JSON.parse(localStorage.getItem(GUIDE_KEY) || "{}"); } catch { guideState = {}; } }
+      return guideState;
+    }
+    function guideSet(key) {
+      const g = guideLoad();
+      if (g[key]) return;
+      g[key] = 1;
+      try { localStorage.setItem(GUIDE_KEY, JSON.stringify(g)); } catch {}
+      updateSoonDot();
+    }
+    const GUIDE_STEPS = [
+      { k: "plan", nm: "献立をつくる", ds: "下の ＋ から。3品でも15秒ほどでできます",
+        done: () => (plansCache || []).length > 0, go: () => showCreate() },
+      { k: "shop", nm: "買い物リストを見る", ds: "材料が自動でまとまります。買えたものはチェック",
+        done: (g) => !!g.shop, go: () => openShoppingTab() },
+      { k: "fav", nm: "気に入った料理を ⭐ で保存", ds: "作り方の画面から。次の献立にすぐ呼び出せます",
+        done: () => (favorites || []).length > 0, go: () => showFavoritesView() },
+      { k: "nutrition", nm: "カロリー・栄養を見る", ds: "1日ぶんの塩分・カロリーと、ひとことコメント",
+        done: (g) => !!g.nutrition, go: () => openNutritionFromTab() },
+    ];
+    function renderStartGuide() {
+      const el = $("startGuide");
+      if (!el) return;
+      const g = guideLoad();
+      if (g.closed) { el.innerHTML = ""; return; }
+      // 献立がまだ1つも無いときは、下の案内（empty-start）が同じことを言うので出さない
+      if (!(plansCache || []).length) { el.innerHTML = ""; return; }
+      const states = GUIDE_STEPS.map((s) => !!s.done(g));
+      const n = states.filter(Boolean).length;
+      if (n === GUIDE_STEPS.length && g.graduated) { el.innerHTML = ""; return; }
+      const rows = GUIDE_STEPS.map((s, i) =>
+        `<button class="sg-step${states[i] ? " ok" : ""}" data-i="${i}">
+           <span class="sg-mark"></span>
+           <span class="sg-tx"><span class="sg-nm">${esc(s.nm)}</span><span class="sg-ds">${esc(s.ds)}</span></span>
+           <span class="sg-go">›</span>
+         </button>`).join("");
+      // 4つ終わったら、いちばん知られていない「毎週おまかせ作成」へ送って卒業
+      const foot = n === GUIDE_STEPS.length
+        ? `<div class="sg-done">ひと通り見ていただけました 🎉</div>
+           <button class="sg-step" data-i="auto"><span class="sg-mark" style="border-style:dashed"></span>
+             <span class="sg-tx"><span class="sg-nm">毎週おまかせ作成を見る</span>
+             <span class="sg-ds">決めた曜日・時刻に、AIが翌週の献立を自動で作って通知します</span></span>
+             <span class="sg-go">›</span></button>`
+        : "";
+      el.innerHTML =
+        `<div class="sg-card">
+           <button class="sg-x" id="sgClose" aria-label="閉じる">×</button>
+           <div class="sg-head"><b>はじめかた</b><span class="n">${n}/${GUIDE_STEPS.length}</span></div>
+           <p class="sg-sub">この4つで、めにゅらく！のだいたいが分かります。</p>
+           <div class="sg-bar"><i style="width:${(n / GUIDE_STEPS.length * 100).toFixed(0)}%"></i></div>
+           ${rows}${foot}
+         </div>`;
+      $("sgClose").addEventListener("click", () => { guideSet("closed"); renderStartGuide(); });
+      el.querySelectorAll(".sg-step").forEach((b) => b.addEventListener("click", () => {
+        if (b.dataset.i === "auto") { guideSet("graduated"); return showSettingsView("auto"); }
+        GUIDE_STEPS[Number(b.dataset.i)].go();
+      }));
+    }
+    // 「べんり」に何が入っているか気づいてもらうための赤ドット（1度開いたら消える）
+    function updateSoonDot() {
+      const tab = $("tab-soon");
+      if (!tab) return;
+      const want = !guideLoad().soon;
+      const has = tab.querySelector(".dot");
+      if (want && !has) tab.insertAdjacentHTML("beforeend", '<span class="dot"></span>');
+      if (!want && has) has.remove();
+    }
+
     function renderHome() {
       moveSel = null; // ホーム再描画で入れ替えモードは解除
+      renderStartGuide();
+      updateSoonDot();
       $("homeSegList").classList.toggle("on", homeMode === "list");
       $("homeSegCal").classList.toggle("on", homeMode === "calendar");
       $("histList").style.display = homeMode === "list" ? "block" : "none";
@@ -3374,7 +3535,21 @@
       const map = buildDateMap();
       const planned = Object.keys(map).sort();
       if (!planned.length) {
-        list.innerHTML = `<div class="empty"><div class="big">🗓️</div>まだ献立がありません。<br>下の ＋ ボタンから作成しましょう。</div>`;
+        // 何ができるのか分からないまま止まってしまわないよう、空のときこそ中身を見せる
+        list.innerHTML =
+          `<div class="empty-start">
+             <img src="/img/il-cooking.jpg" alt="" class="es-il" width="512" height="512">
+             <div class="es-ttl">まだ献立がありません</div>
+             <p class="es-sub">下の <b>＋</b> から、条件を選ぶだけ。<br>3品の献立が15秒ほどでできます。</p>
+             <button class="btn-primary es-go" id="esGo">献立をつくってみる</button>
+             <ul class="es-list">
+               <li>材料は<b>買い物リスト</b>に自動でまとまります</li>
+               <li><b>カロリー・塩分</b>も1日ぶんで見られます</li>
+               <li>気に入った料理は <b>⭐</b> で保存して呼び出せます</li>
+             </ul>
+           </div>`;
+        const go = $("esGo");
+        if (go) go.addEventListener("click", () => showCreate());
         return;
       }
       // 表示範囲：既定で「1週間前〜2週間先（献立の最終日まで）」を連続表示（空の日も枠を出す）。
@@ -5207,6 +5382,7 @@
     // プラン詳細の「買い物リスト」→ その献立の分が見える起点で開く
     // （先の献立ならその開始日から。今日を含む献立なら今日から）
     function openShopping() {
+      guideSet("shop");
       const today = fmt(new Date());
       const s = currentPlan?.startDate || today;
       openShoppingWeek(s > today ? s : today, false);
@@ -5214,6 +5390,7 @@
     // 下タブ「買い物」→ 今日に近い週を開く
     async function openShoppingTab() {
       if (!household) return showSetup();
+      guideSet("shop");
       try { plansCache = await apiOK("/api/plans?householdId=" + encodeURIComponent(household.id)); } catch { plansCache = plansCache || []; }
       await openShoppingWeek(fmt(new Date()), true); // 下タブからは常に「今日」起点
     }
