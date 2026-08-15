@@ -1139,6 +1139,64 @@
     .tab.center { background: var(--orange); color: #fff; width: 52px; height: 52px; border-radius: 50%;
       justify-content: center; margin-top: -22px; box-shadow: 0 8px 16px rgba(245, 131, 31, .35); gap: 0; }
     .tab.center svg { width: 26px; height: 26px; }
+
+    /* ---- 使い方ツアー（スポットライト式のコーチマーク） ----
+       周りを暗くして1か所だけ明るく残し、そこ以外は押せなくする。
+       穴の位置は step ごとに動かすだけ（transition で滑らかにつながる）。 */
+    /* 器そのものは触れないようにする（穴の中まで塞いでしまうため）。
+       クリックを止めるのは .tour-block、受けるのは .tour-tip だけ。 */
+    #tour { position: fixed; inset: 0; z-index: 900; display: none; pointer-events: none; }
+    #tour.on { display: block; }
+    /* 穴。box-shadow を極端に広げて、穴の外だけを暗くする（穴の中は素通し） */
+    .tour-hole { position: fixed; pointer-events: none; border-radius: 14px;
+      box-shadow: 0 0 0 9999px rgba(28, 20, 12, 0); z-index: 901;
+      transition: top .42s cubic-bezier(.4,0,.2,1), left .42s cubic-bezier(.4,0,.2,1),
+                  width .42s cubic-bezier(.4,0,.2,1), height .42s cubic-bezier(.4,0,.2,1),
+                  border-radius .42s ease, box-shadow .32s ease; }
+    #tour.lit .tour-hole { box-shadow: 0 0 0 9999px rgba(28, 20, 12, .70); }
+    /* 穴のふち。細いリングを呼吸させて視線を止める */
+    .tour-ring { position: fixed; pointer-events: none; z-index: 902; border-radius: 14px;
+      border: 2px solid rgba(255, 255, 255, .9);
+      transition: top .42s cubic-bezier(.4,0,.2,1), left .42s cubic-bezier(.4,0,.2,1),
+                  width .42s cubic-bezier(.4,0,.2,1), height .42s cubic-bezier(.4,0,.2,1),
+                  border-radius .42s ease, opacity .3s ease; }
+    .tour-ring::after { content: ""; position: absolute; inset: -6px; border-radius: inherit;
+      border: 2px solid rgba(245, 131, 31, .75); animation: tourPulse 2s ease-out infinite; }
+    @keyframes tourPulse {
+      0%   { transform: scale(1);    opacity: .85; }
+      70%  { transform: scale(1.14); opacity: 0; }
+      100% { transform: scale(1.14); opacity: 0; }
+    }
+    /* 穴の外を塞ぐ4枚（見た目は透明。暗さは穴の box-shadow が担当） */
+    .tour-block { position: fixed; z-index: 903; background: transparent; pointer-events: auto; }
+    /* 吹き出し */
+    .tour-tip { position: fixed; z-index: 905; pointer-events: auto; width: min(320px, calc(100vw - 32px));
+      background: var(--card); color: var(--ink); border-radius: 18px; padding: 16px 18px 14px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.28); opacity: 0; transform: translateY(6px);
+      transition: opacity .26s ease, transform .26s cubic-bezier(.2,.9,.3,1.2); }
+    .tour-tip.in { opacity: 1; transform: translateY(0); }
+    .tour-tip .arw { position: absolute; width: 14px; height: 14px; background: var(--card);
+      transform: rotate(45deg); border-radius: 3px; }
+    .tour-tip.above .arw { bottom: -6px; }
+    .tour-tip.below .arw { top: -6px; }
+    .tour-t { font-weight: 800; font-size: 1rem; margin-bottom: 5px; }
+    .tour-d { font-size: .85rem; line-height: 1.65; color: #6f665c; margin: 0 0 14px; }
+    .tour-foot { display: flex; align-items: center; gap: 10px; }
+    .tour-dots { display: flex; gap: 5px; flex: 1; }
+    .tour-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--dot); transition: all .3s ease; }
+    .tour-dots i.on { width: 16px; border-radius: 3px; background: var(--orange); }
+    .tour-skip { border: none; background: none; color: var(--muted); font: inherit; font-size: .8rem;
+      font-weight: 700; cursor: pointer; padding: 6px 4px; }
+    .tour-next { border: none; background: var(--orange); color: #fff; font: inherit; font-size: .86rem;
+      font-weight: 800; padding: 9px 18px; border-radius: 999px; cursor: pointer;
+      box-shadow: 0 4px 12px rgba(245,131,31,.35); }
+    .tour-next:active { transform: scale(.97); }
+    /* 対象の上に印を重ねるとアイコンが隠れてしまうので、
+       「ここ」を示すのは穴のふちのパルス（.tour-ring::after）だけにしている。 */
+    @media (prefers-reduced-motion: reduce) {
+      .tour-hole, .tour-ring { transition: none; }
+      .tour-ring::after { animation: none; }
+    }
   </style>
 </head>
 <body>
@@ -1713,6 +1771,11 @@
         <p class="hint" id="displayNameHint"></p>
       </div>
       <div class="card">
+        <div class="sec-head"><span class="label">使い方</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">画面のどこに何があるかを、順番に案内します。</p>
+        <button class="btn-ghost" onclick="goHome().then(() => startTour(true))">使い方をもう一度見る</button>
+      </div>
+      <div class="card">
         <div class="sec-head"><span class="label">アカウント</span><span class="lead"></span></div>
         <p style="font-size:.9rem;margin:0 0 4px">ログイン用ユーザー名: <b id="meName"></b></p>
         <p style="font-size:.8rem;color:var(--muted);margin:0 0 12px">これはログインに使うIDです（変更できません）。</p>
@@ -1794,6 +1857,24 @@
 
     <p id="status"></p>
   </main>
+
+  <!-- 使い方ツアー（スポットライト） -->
+  <div id="tour" aria-live="polite">
+    <div class="tour-hole" id="tourHole"></div>
+    <div class="tour-ring" id="tourRing"></div>
+    <div class="tour-block" id="tourB0"></div><div class="tour-block" id="tourB1"></div>
+    <div class="tour-block" id="tourB2"></div><div class="tour-block" id="tourB3"></div>
+    <div class="tour-tip" id="tourTip">
+      <span class="arw" id="tourArw"></span>
+      <div class="tour-t" id="tourT"></div>
+      <p class="tour-d" id="tourD"></p>
+      <div class="tour-foot">
+        <div class="tour-dots" id="tourDots"></div>
+        <button class="tour-skip" id="tourSkip">スキップ</button>
+        <button class="tour-next" id="tourNext">次へ</button>
+      </div>
+    </div>
+  </div>
 
   <nav class="tabbar" id="tabbar">
     <button class="tab" id="tab-home" onclick="goHome()">
@@ -2020,6 +2101,7 @@
       await loadHome();
       showView("home", household ? household.name : "めにゅらく！", { tab: "home" });
       if (homeMode === "list") setTimeout(scrollToToday, 60); // ビュー表示・レイアウト後に今日へ
+      if (household) setTimeout(() => startTour(), 700); // 初回だけ。2回目以降は中で弾く
     }
     // fromDate: カレンダーの空いている日から呼ばれたときの開始日
     async function showCreate(fromDate) {
@@ -3499,6 +3581,123 @@
         GUIDE_STEPS[Number(b.dataset.i)].go();
       }));
     }
+    // ---------- 使い方ツアー（スポットライト） ----------
+    // どこに何があるかを1度だけ案内する。ホームのチェックリストは自分で見つけないと
+    // 目に入らないので、初回はこちらから声をかける。
+    const TOUR_KEY = "tourDone";
+    const TOUR_STEPS = [
+      { sel: "#tab-home", t: "ホーム", d: "作った献立の予定表です。今日なにを作るかが、ひと目で分かります。" },
+      { sel: "#tab-shop", t: "買い物リスト", d: "献立の材料が自動でまとまります。買えたものはチェックしていけます。" },
+      { sel: "#tab-soon", t: "べんり機能", d: "お気に入り・冷蔵庫の使い切り・カロリー計算・コラム・毎週おまかせ作成は、ここに入っています。" },
+      { sel: "#tab-settings", t: "設定", d: "人数・苦手な食材・通知の設定はこちら。この案内も、ここからもう一度見られます。" },
+      { sel: ".tab.center", t: "献立をつくる", d: "条件を選ぶだけ。3品の献立が15秒ほどでできます。まずは1回、作ってみましょう。",
+        round: true, cta: "作ってみる", act: () => showCreate() },
+    ];
+    let tourAt = -1;
+
+    function tourGeom() {
+      const s = TOUR_STEPS[tourAt];
+      const el = s && document.querySelector(s.sel);
+      if (!el || !el.offsetParent) return null; // 隠れている要素は飛ばす
+      const r = el.getBoundingClientRect();
+      const pad = s.round ? 7 : 9;
+      return { el, s, x: r.left - pad, y: r.top - pad, w: r.width + pad * 2, h: r.height + pad * 2,
+        cx: r.left + r.width / 2, cy: r.top + r.height / 2, rad: s.round ? "50%" : "14px" };
+    }
+    function tourPlaceHole(g) {
+      for (const id of ["tourHole", "tourRing"]) {
+        const e = $(id).style;
+        e.left = g.x + "px"; e.top = g.y + "px"; e.width = g.w + "px"; e.height = g.h + "px";
+        e.borderRadius = g.rad;
+      }
+      // 穴の外を塞ぐ4枚。暗さは穴の box-shadow が出すので、ここは透明でよい
+      const vw = innerWidth, vh = innerHeight;
+      const set = (id, l, t, w, h) => {
+        const e = $(id).style;
+        e.left = l + "px"; e.top = t + "px"; e.width = Math.max(0, w) + "px"; e.height = Math.max(0, h) + "px";
+      };
+      set("tourB0", 0, 0, vw, g.y);
+      set("tourB1", 0, g.y + g.h, vw, vh - (g.y + g.h));
+      set("tourB2", 0, g.y, g.x, g.h);
+      set("tourB3", g.x + g.w, g.y, vw - (g.x + g.w), g.h);
+    }
+    function tourPlaceTip(g) {
+      const tip = $("tourTip"), arw = $("tourArw");
+      const vw = innerWidth, vh = innerHeight;
+      const above = g.cy > vh / 2; // 対象が下半分なら吹き出しは上に出す
+      tip.classList.toggle("above", above);
+      tip.classList.toggle("below", !above);
+      const tw = tip.offsetWidth, th = tip.offsetHeight;
+      const left = Math.min(Math.max(12, g.cx - tw / 2), vw - tw - 12);
+      const top = above ? g.y - th - 14 : g.y + g.h + 14;
+      tip.style.left = left + "px";
+      tip.style.top = Math.min(Math.max(12, top), vh - th - 12) + "px";
+      arw.style.left = Math.min(Math.max(16, g.cx - left - 7), tw - 30) + "px";
+    }
+    function tourGoto(i) {
+      if (i >= TOUR_STEPS.length) return tourEnd();
+      tourAt = i;
+      const g = tourGeom();
+      if (!g) return tourGoto(i + 1); // 出せない対象は飛ばす
+      $("tourT").textContent = g.s.t;
+      $("tourD").textContent = g.s.d;
+      $("tourNext").textContent = g.s.cta || "次へ";
+      $("tourDots").innerHTML = TOUR_STEPS.map((_, k) => `<i class="${k === i ? "on" : ""}"></i>`).join("");
+      const tip = $("tourTip");
+      tip.classList.remove("in");
+      tourPlaceHole(g); // 穴はすぐ動かし、吹き出しは少し遅らせて追いつかせる
+      setTimeout(() => {
+        const g2 = tourGeom();
+        if (!g2) return;
+        tourPlaceTip(g2);
+        tip.classList.add("in");
+      }, i === 0 ? 30 : 190);
+    }
+    function tourAdvance() {
+      const s = TOUR_STEPS[tourAt];
+      if (s && s.act) return tourEnd(s.act); // 最後だけは実際にその操作をする
+      tourGoto(tourAt + 1);
+    }
+    function tourReflow() {
+      const g = tourGeom();
+      if (g) { tourPlaceHole(g); tourPlaceTip(g); }
+    }
+    function tourClick(e) {
+      if (tourAt < 0) return;
+      if ($("tourTip").contains(e.target)) return; // 吹き出しの操作はそのまま通す
+      e.preventDefault();
+      e.stopPropagation();
+      const g = tourGeom();
+      if (g && (g.el === e.target || g.el.contains(e.target))) tourAdvance(); // 光っている所を押した
+    }
+    function tourKey(e) { if (e.key === "Escape") tourEnd(); }
+    function startTour(force) {
+      if (tourAt >= 0) return;
+      if (!force && localStorage.getItem(TOUR_KEY)) return;
+      if (activeViewId() !== "home") return;
+      $("tour").classList.add("on");
+      document.body.style.overflow = "hidden"; // 穴とページがずれないように固定
+      document.addEventListener("click", tourClick, true);
+      document.addEventListener("keydown", tourKey);
+      addEventListener("resize", tourReflow);
+      tourGoto(0);
+      requestAnimationFrame(() => $("tour").classList.add("lit"));
+    }
+    function tourEnd(run) {
+      tourAt = -1;
+      $("tour").classList.remove("lit");
+      $("tourTip").classList.remove("in");
+      document.removeEventListener("click", tourClick, true);
+      document.removeEventListener("keydown", tourKey);
+      removeEventListener("resize", tourReflow);
+      document.body.style.overflow = "";
+      setTimeout(() => $("tour").classList.remove("on"), 340);
+      try { localStorage.setItem(TOUR_KEY, "1"); } catch {}
+      if (run) setTimeout(run, 240); // 暗転が消えてから画面を移す
+    }
+    $("tourNext").addEventListener("click", tourAdvance);
+    $("tourSkip").addEventListener("click", () => tourEnd());
+
     // 「べんり」に何が入っているか気づいてもらうための赤ドット（1度開いたら消える）
     function updateSoonDot() {
       const tab = $("tab-soon");
