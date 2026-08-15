@@ -353,6 +353,17 @@
     .sg-go { flex: none; color: var(--orange); font-weight: 800; }
     .sg-step.ok .sg-go { visibility: hidden; }
     .sg-done { text-align: center; padding: 4px 0 12px; font-size: .86rem; font-weight: 700; color: var(--orange-dark); }
+    /* 設定の「使い方」。閉じたあとでも呼び戻せる入口 */
+    .howto-btn { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+      background: #fdfaf6; border: 1.5px solid var(--line); border-radius: 14px;
+      padding: 12px 14px; margin-bottom: 8px; font: inherit; color: var(--ink); cursor: pointer; }
+    .howto-btn:last-of-type { margin-bottom: 0; }
+    .howto-btn:hover { border-color: var(--orange); background: #fff; }
+    .howto-btn:active { transform: scale(.99); }
+    .howto-btn .ht-tx { flex: 1; min-width: 0; display: block; }
+    .howto-btn .ht-tx b { display: block; font-size: .9rem; font-weight: 700; }
+    .howto-btn .ht-tx span { display: block; font-size: .78rem; color: var(--muted); line-height: 1.45; margin-top: 2px; }
+    .howto-btn .ht-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.15rem; }
     /* 献立が1つも無いときのホーム。何ができるアプリなのかをここで伝える */
     .empty-start { text-align: center; padding: 18px 18px 26px; }
     .empty-start .es-il { width: 148px; height: auto; max-width: 55%; border-radius: 20px; margin-bottom: 12px; }
@@ -1770,10 +1781,17 @@
         </div>
         <p class="hint" id="displayNameHint"></p>
       </div>
-      <div class="card">
-        <div class="sec-head"><span class="label">使い方</span><span class="lead"></span></div>
-        <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">画面のどこに何があるかを、順番に案内します。</p>
-        <button class="btn-ghost" onclick="goHome().then(() => startTour(true))">使い方をもう一度見る</button>
+      <div class="card" id="howtoCard">
+        <div class="sec-head"><img class="sec-ic" src="/img/ic-book.png" alt=""><span class="label">使い方</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 12px">一度消したあとでも、ここから何度でも見られます。</p>
+        <button class="howto-btn" onclick="replayTour()">
+          <span class="ht-tx"><b>使い方ツアーを見る</b><span>画面のどこに何があるかを、順番に案内します</span></span>
+          <span class="ht-go">›</span>
+        </button>
+        <button class="howto-btn" onclick="replayStartGuide()">
+          <span class="ht-tx"><b>「はじめかた」を表示する</b><span>ホームに4つのチェックリストを出します</span></span>
+          <span class="ht-go">›</span>
+        </button>
       </div>
       <div class="card">
         <div class="sec-head"><span class="label">アカウント</span><span class="lead"></span></div>
@@ -3697,6 +3715,24 @@
     }
     $("tourNext").addEventListener("click", tourAdvance);
     $("tourSkip").addEventListener("click", () => tourEnd());
+
+    // 設定からの呼び戻し。どちらも一度消したあとで、また出せるようにしておく。
+    async function replayTour() {
+      await goHome();
+      setTimeout(() => startTour(true), 260); // ホームが描き終わってから（穴の位置がずれないように）
+    }
+    async function replayStartGuide() {
+      const g = guideLoad();
+      delete g.closed;
+      delete g.graduated;
+      try { localStorage.setItem(GUIDE_KEY, JSON.stringify(g)); } catch {}
+      await goHome();
+      // 献立がまだ無いときは、代わりに大きな案内が出ているのでそちらを見てもらう
+      const el = $("startGuide");
+      if (el && el.firstElementChild) {
+        el.firstElementChild.scrollIntoView({ block: "nearest" });
+      }
+    }
 
     // 「べんり」に何が入っているか気づいてもらうための赤ドット（1度開いたら消える）
     function updateSoonDot() {
