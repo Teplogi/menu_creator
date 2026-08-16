@@ -183,6 +183,7 @@ export function analyzePlan(plan, people) {
   const totalAll = ZERO();
   let unknownTotal = 0;
   const missingAll = new Map();
+  const noIngredients = []; // 材料が未登録の料理（名前だけのお気に入りなど）
 
   for (const day of plan?.days || []) {
     const dayTotal = ZERO();
@@ -191,6 +192,7 @@ export function analyzePlan(plan, people) {
       const mealTotal = ZERO();
       const dishes = [];
       for (const dish of meal.dishes || []) {
+        if (dish?.name && !(dish.ingredients || []).length) noIngredients.push(dish.name);
         const n = dishNutrition(dish, people);
         dishes.push({ name: dish.name, role: dish.role || "", ...n });
         addInto(mealTotal, n);
@@ -215,6 +217,7 @@ export function analyzePlan(plan, people) {
     average: { ...roundAll(avg), pfc: pfcRatio(avg) },
     total: { ...roundAll(totalAll), pfc: pfcRatio(totalAll) },
     unknownCount: unknownTotal,
+    noIngredients: [...new Set(noIngredients)].slice(0, 12),
     missing: [...missingAll.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(([name]) => name),
   };
 }
@@ -232,3 +235,34 @@ export function foodUnitTables() {
 }
 
 export const _internals = { norm, findFood, toGrams, pfcRatio };
+
+// 材料が栄養計算に乗るかを1つずつ調べる。編集画面で「この行は計算に入りません」を
+// その場で出すために使う。黙って抜け落ちるのがいちばん困るので、必ず理由まで返す。
+export function checkIngredients(list, people = 2) {
+  return (list || []).map((i) => {
+    const name = String(i?.name || "").trim();
+    const amount = String(i?.amount || "").trim();
+    if (!name) return { name, amount, ok: false, reason: "食材名がありません" };
+    // 水・ゆで塩・揚げ油などは、そもそも食べない前提で計算対象外にしている
+    if (NOT_EATEN.test(name) || isIgnored(norm(name))) return { name, amount, ok: true, skipped: true };
+    const food = findFood(name);
+    if (!food) return { name, amount, ok: false, reason: "この食材名では成分表に見つかりません", suggest: suggestNames(name) };
+    if (!amount) return { name, amount, ok: false, reason: "分量が書かれていません" };
+    const { grams } = toGrams(amount, name);
+    if (!grams) return { name, amount, ok: false, reason: "分量が読めません（「適量」「お好みで」は数量に）" };
+    return { name, amount, ok: true, grams: Math.round(grams / Math.max(1, Number(people) || 1) * Math.max(1, Number(people) || 1)) };
+  });
+}
+
+// 似た名前の候補を出す（部分一致 → 前方一致の順）。直せば計算に乗るようにするため。
+function suggestNames(name, cap = 3) {
+  const key = norm(name);
+  if (!key) return [];
+  const hits = [];
+  for (const [alias] of ALIASES) {
+    if (alias.length < 2) continue;
+    if (key.includes(alias) || alias.includes(key)) hits.push(alias);
+    if (hits.length >= cap * 4) break;
+  }
+  return [...new Set(hits)].sort((a, b) => Math.abs(a.length - key.length) - Math.abs(b.length - key.length)).slice(0, cap);
+}

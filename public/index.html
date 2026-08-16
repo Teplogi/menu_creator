@@ -371,6 +371,9 @@
     .veg-note span { flex: 1; min-width: 0; font-size: .88rem; line-height: 1.55; color: var(--ink); }
     .veg-note b { display: block; font-size: .74rem; font-weight: 800; color: #2f8a55; letter-spacing: .02em; }
     .veg-note i { display: block; font-style: normal; font-size: .74rem; color: #6f8a72; margin-top: 3px; }
+    .veg-note.fav { background: #fff7ec; border-color: #f4dcb8; }
+    .veg-note.fav b { color: var(--orange-dark); }
+    .veg-note.fav i { color: #8a7355; }
     /* 献立が1つも無いときのホーム。何ができるアプリなのかをここで伝える */
     .empty-start { text-align: center; padding: 18px 18px 26px; }
     .empty-start .es-il { width: 148px; height: auto; max-width: 55%; border-radius: 20px; margin-bottom: 12px; }
@@ -469,6 +472,49 @@
     .fav-row .fdel svg { width: 17px; height: 17px; }
     .fav-detail { background: var(--cream); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px; font-size: .86rem; }
     .fav-detail ul, .fav-detail ol { margin: 4px 0; padding-left: 20px; }
+    /* 順番待ちの状態（まだ出ていない / 最後に出した日）。「登録したのに出ない」を見えるようにする */
+    .fav-row .fwait { font-size: .66rem; font-weight: 700; color: #2f8a55; background: #eef7ee;
+      border-radius: 5px; padding: 1px 6px; }
+    .fav-row .fwait.old { color: var(--muted); background: var(--cream); }
+    .fav-row .fops { display: flex; align-items: center; gap: 2px; flex: none; }
+    /* 「次に出す」ピン */
+    .fpin { border: none; background: none; cursor: pointer; padding: 4px 5px; font-size: .95rem;
+      filter: grayscale(1); opacity: .35; }
+    .fpin.on { filter: none; opacity: 1; }
+    /* 「生成に混ぜる」の小さなスイッチ */
+    .fmix { display: inline-flex; align-items: center; gap: 5px; font-size: .68rem; font-weight: 700;
+      color: var(--muted); cursor: pointer; flex: none; }
+    .fmix input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .fmix .bar { width: 30px; height: 17px; border-radius: 999px; background: var(--dot); position: relative;
+      transition: background .2s; }
+    .fmix .bar::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+      border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+    .fmix input:checked + .bar { background: var(--orange); }
+    .fmix input:checked + .bar::after { transform: translateX(13px); }
+    /* 材料の編集。栄養計算に乗るかを行ごとに出す */
+    .fi-row { display: flex; align-items: center; gap: 6px; padding: 3px 0; }
+    .fi-row input { flex: 1; min-width: 0; padding: 6px 8px; border: 1.5px solid var(--line);
+      border-radius: 9px; font: inherit; font-size: .84rem; background: #fff; }
+    .fi-row input.am { flex: 0 0 92px; }
+    .fi-row .fi-x { border: none; background: none; color: var(--muted); cursor: pointer; padding: 2px 4px; flex: none; }
+    .fi-mark { flex: none; width: 18px; text-align: center; font-size: .8rem; }
+    .fi-mark.ng { color: #c0392b; }
+    .fi-mark.ok { color: #2f8a55; }
+    .fi-why { font-size: .74rem; color: #c0392b; margin: 0 0 4px 24px; line-height: 1.5; }
+    .fi-why b { color: var(--ink); }
+    .fi-sum { font-size: .78rem; margin: 8px 0 0; padding: 8px 10px; border-radius: 9px; line-height: 1.55; }
+    .fi-sum.ok { color: #2f6b45; background: #eef7ee; }
+    .fi-sum.ng { color: #8a4b12; background: #fdf1e3; }
+    /* 栄養画面: 計算に入らなかった材料の注意（下に小さく書くと気づかれないのでカードで） */
+    .nu-miss { background: #fdf1e3; border: 1.5px solid #f2d7b0; border-radius: 14px;
+      padding: 12px 14px; margin: 0 0 14px; font-size: .85rem; color: #8a4b12; line-height: 1.6; }
+    .nu-miss b { display: block; font-size: .92rem; }
+    .nu-miss span { display: block; margin-top: 3px; font-weight: 700; }
+    .nu-miss i { display: block; margin-top: 5px; font-style: normal; font-size: .77rem; opacity: .9; }
+    .fav-noing { background: #fdf1e3; border-radius: 10px; padding: 11px 13px; margin: 0 0 8px; font-size: .82rem;
+      color: #8a4b12; line-height: 1.6; }
+    .fav-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
+    .fav-acts button { flex: 1; min-width: 130px; }
     .soon-card.live { cursor: pointer; border: 1.5px solid var(--orange); }
     .soon-card .soon-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.2rem; }
     /* 差し替えの「1つ前に戻す」 */
@@ -1607,6 +1653,14 @@
           <div id="guidedRows"></div>
         </div>
 
+        <!-- お気に入りが1件以上あるときだけ出す -->
+        <div class="reuse-row" id="mixFavWrap" style="display:none">
+          <label class="toggle-row">お気に入りを混ぜる
+            <label class="switch"><input type="checkbox" id="mixFavorites" checked /><span class="track"></span><span class="knob"></span></label>
+          </label>
+          <p class="hint" id="mixFavHint" style="margin:2px 0 0"></p>
+        </div>
+
         <!-- 3食以上のときだけ出す。1〜2食では使い回す余地がない -->
         <div class="reuse-row" id="reuseVegWrap" style="display:none">
           <label class="toggle-row">買い物を減らす（野菜を使い回す）
@@ -2171,6 +2225,7 @@
       loadBillingStatus().then(updateAiQuotaHint); // 無料枠の残数を先出し
       loadPresets(); // 要望テンプレを読み込み
       loadCreateAvoidReminder(); // 設定の「使わない食材」を除外リマインダーに表示
+      loadFavorites().then(syncReuseVeg); // 「お気に入りを混ぜる」の出し分けに使う
       fridgeUseSel = new Set(); // 冷蔵庫の使い切り選択は毎回リセット（明示的に選ぶ）
       loadFridge().then(renderFridgeUseChips);
       guidedSel = emptyGuided(); // こだわりも毎回おまかせに戻す
@@ -2839,27 +2894,168 @@
         wrap.innerHTML = '<p class="empty" style="padding:10px 0">まだ登録がありません。献立の料理の ⭐ からも保存できます。</p>';
         return;
       }
+      const today = fmt(new Date());
+      const waitTag = (f) => {
+        if (!f.lastUsed) return `<span class="fwait">まだ出ていません</span>`;
+        const d = Math.round((parseDate(today) - parseDate(f.lastUsed)) / 86400000);
+        return `<span class="fwait old">${esc(mdLabel(f.lastUsed))}に登場${d > 0 ? `（${d}日前）` : ""}</span>`;
+      };
       wrap.innerHTML = favorites.map((f) => {
         const row = `<div class="fav-row" data-id="${esc(f.id)}">
-          <span class="fmain"><span class="fnm" title="タップでレシピを表示">${esc(f.name)}</span>
+          <span class="fmain"><span class="fnm" title="タップで中身を見る">${esc(f.name)}</span>
             ${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
-            <span class="ftag">${f.dish ? "レシピあり" : "名前のみ"}</span></span>
-          <button class="fdel" data-id="${esc(f.id)}" aria-label="削除">${TRASH_SVG}</button></div>`;
-        const detail = (favExpandedId === f.id && f.dish)
-          ? `<div class="fav-detail">
-              ${f.dish.description ? `<p style="margin:2px 0">${esc(f.dish.description)}</p>` : ""}
-              <b>材料</b><ul>${(f.dish.ingredients || []).map((i) => `<li>${esc(i.name)}${i.amount ? ` ${esc(i.amount)}` : ""}</li>`).join("")}</ul>
-              ${(f.dish.steps || []).length ? `<b>作り方</b><ol>${f.dish.steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
-            </div>` : "";
-        return row + detail;
+            <span class="ftag">${f.dish && (f.dish.ingredients || []).length ? "材料あり" : "名前のみ"}</span>
+            ${waitTag(f)}</span>
+          <span class="fops">
+            <label class="fmix" title="献立の作成に混ぜる">
+              <input type="checkbox" class="fmixcb" data-id="${esc(f.id)}" ${f.autoMix ? "checked" : ""}><span class="bar"></span></label>
+            <button class="fpin ${f.pinned ? "on" : ""}" data-id="${esc(f.id)}" title="次の献立に必ず入れる">📌</button>
+            <button class="fdel" data-id="${esc(f.id)}" aria-label="削除">${TRASH_SVG}</button>
+          </span></div>`;
+        return row + (favExpandedId === f.id ? favDetailHtml(f) : "");
       }).join("");
+
       wrap.querySelectorAll(".fav-row .fnm").forEach((el) => el.addEventListener("click", () => {
         const id = el.closest(".fav-row").dataset.id;
         favExpandedId = favExpandedId === id ? null : id;
+        favEdit = null; favCheck = null;
         renderFavorites();
       }));
       wrap.querySelectorAll(".fdel").forEach((b) => b.addEventListener("click", () => deleteFavorite(b.dataset.id)));
+      wrap.querySelectorAll(".fmixcb").forEach((c) =>
+        c.addEventListener("change", () => patchFavorite(c.dataset.id, { autoMix: c.checked })));
+      wrap.querySelectorAll(".fpin").forEach((b) =>
+        b.addEventListener("click", () => {
+          const f = favorites.find((x) => x.id === b.dataset.id);
+          patchFavorite(b.dataset.id, { pinned: !(f && f.pinned) });
+        }));
+      wireFavDetail();
     }
+
+    // 展開したときの中身。材料はその場で直せて、行ごとに栄養計算に乗るかを出す。
+    // 「編集すると栄養がずれる」のではなく、書いたとおりに計算される。困るのは
+    // 成分表にない書き方をしたときに黙って抜けることなので、そこを見えるようにする。
+    let favEdit = null;   // 編集中の材料 [{name, amount, category}]
+    let favCheck = null;  // 栄養計算に乗るかの判定
+    function favDetailHtml(f) {
+      const has = f.dish && (f.dish.ingredients || []).length;
+      if (!has && !favEdit) {
+        return `<div class="fav-noing">
+            <b>材料が登録されていません。</b><br>
+            買い物リストには「${esc(f.name)}（材料は自分で）」とだけ出ます。栄養計算にも入りません。
+            <div class="fav-acts">
+              <button class="btn-primary" id="favAiIng">材料を書いてもらう</button>
+              <button class="btn-ghost" id="favManualIng">自分で入力する</button>
+            </div>
+            <p class="hint" id="favIngHint" style="margin:8px 0 0"></p>
+          </div>`;
+      }
+      const list = favEdit || (f.dish.ingredients || []);
+      const rows = list.map((i, k) => {
+        const c = favCheck ? favCheck[k] : null;
+        const mark = !c ? `<span class="fi-mark"></span>`
+          : c.skipped ? `<span class="fi-mark">－</span>`
+          : c.ok ? `<span class="fi-mark ok">✓</span>` : `<span class="fi-mark ng">⚠</span>`;
+        const why = c && !c.ok && !c.skipped
+          ? `<p class="fi-why">${esc(c.reason)}${c.suggest && c.suggest.length ? ` → 例: <b>${esc(c.suggest.join("、"))}</b>` : ""}</p>` : "";
+        return `<div class="fi-row">${mark}
+            <input class="nm" data-k="${k}" value="${esc(i.name || "")}" placeholder="食材名">
+            <input class="am" data-k="${k}" value="${esc(i.amount || "")}" placeholder="分量">
+            <button class="fi-x" data-k="${k}" aria-label="削除">×</button></div>${why}`;
+      }).join("");
+      const ngN = favCheck ? favCheck.filter((c) => !c.ok).length : 0;
+      const okN = favCheck ? favCheck.filter((c) => c.ok && !c.skipped).length : 0;
+      const sum = !favCheck ? ""
+        : ngN
+          ? `<p class="fi-sum ng"><b>${ngN}品が栄養計算に入りません。</b>その分は差し引かれずに表示されます。<br>
+             登録にない食材はそのままで構いません（入っていないと分かれば十分です）。</p>`
+          : `<p class="fi-sum ok">${okN}品すべて栄養計算に入ります ✓</p>`;
+      return `<div class="fav-detail">
+          ${f.dish && f.dish.description ? `<p style="margin:2px 0">${esc(f.dish.description)}</p>` : ""}
+          <b>材料${f.dish && f.dish.people ? `（${esc(f.dish.people)}人分）` : ""}</b>
+          <div id="favIngList">${rows}</div>
+          ${sum}
+          <div class="fav-acts">
+            <button class="btn-ghost" id="favAddIng">＋ 材料を追加</button>
+            <button class="btn-ghost" id="favCheckIng">計算に入るか見る</button>
+            <button class="btn-primary" id="favSaveIng">保存</button>
+          </div>
+          <p class="hint" id="favIngHint" style="margin:8px 0 0"></p>
+          ${f.dish && (f.dish.steps || []).length ? `<b style="display:block;margin-top:10px">作り方</b><ol>${f.dish.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
+        </div>`;
+    }
+    function wireFavDetail() {
+      const f = favorites.find((x) => x.id === favExpandedId);
+      if (!f) return;
+      const on = (id, fn) => { const e = $(id); if (e) e.addEventListener("click", fn); };
+      on("favAiIng", () => aiWriteIngredients(f.id));
+      on("favManualIng", () => { favEdit = [{ name: "", amount: "", category: "" }]; favCheck = null; renderFavorites(); });
+      on("favAddIng", () => { favEdit = [...readFavEdit(f), { name: "", amount: "", category: "" }]; favCheck = null; renderFavorites(); });
+      on("favCheckIng", () => checkFavIngredients(f));
+      on("favSaveIng", () => saveFavIngredients(f));
+      document.querySelectorAll("#favIngList .fi-x").forEach((b) =>
+        b.addEventListener("click", () => {
+          favEdit = readFavEdit(f).filter((_, k) => k !== Number(b.dataset.k));
+          favCheck = null; renderFavorites();
+        }));
+    }
+    // 画面の入力欄から今の材料を読む（描き直しで打ちかけの内容が消えないように）
+    function readFavEdit(f) {
+      const wrap = $("favIngList");
+      const base = favEdit || (f.dish && f.dish.ingredients) || [];
+      if (!wrap) return base.map((i) => ({ ...i }));
+      return [...wrap.querySelectorAll(".fi-row")].map((r, k) => ({
+        ...(base[k] || {}),
+        name: r.querySelector(".nm").value.trim(),
+        amount: r.querySelector(".am").value.trim(),
+      }));
+    }
+    async function checkFavIngredients(f) {
+      favEdit = readFavEdit(f);
+      try {
+        const r = await apiOK("/api/nutrition/check", {
+          method: "POST", body: { ingredients: favEdit, people: (f.dish && f.dish.people) || 2 },
+        });
+        favCheck = r.items;
+        renderFavorites();
+      } catch (e) { const h = $("favIngHint"); if (h) h.textContent = e.message; }
+    }
+    async function saveFavIngredients(f) {
+      const list = readFavEdit(f).filter((i) => i.name);
+      const d = f.dish || {};
+      const dish = {
+        ...d, name: f.name, role: f.role || d.role || "主菜",
+        description: d.description || "", cook_minutes: d.cook_minutes || 0,
+        ingredients: list, steps: d.steps || [], people: d.people || 2,
+      };
+      try {
+        await apiOK(`/api/households/${household.id}/favorites/${f.id}`, { method: "PATCH", body: { dish } });
+        favEdit = null; favCheck = null;
+        await loadFavorites(); renderFavorites();
+        const h = $("favHint"); if (h) h.textContent = "保存しました ✓";
+      } catch (e) { const h = $("favIngHint"); if (h) h.textContent = e.message; }
+    }
+    async function aiWriteIngredients(id) {
+      const hint = $("favIngHint");
+      if (hint) hint.textContent = "書いています…";
+      try {
+        await apiOK(`/api/households/${household.id}/favorites/${id}/ingredients`, { method: "POST", body: { people: 2 } });
+        favEdit = null; favCheck = null;
+        await loadFavorites(); renderFavorites();
+        const f = favorites.find((x) => x.id === id);
+        if (f) await checkFavIngredients(f); // 書けたら、そのまま計算に乗るかも見せる
+      } catch (e) {
+        if (e.upgrade) return; // 無料枠切れはペイウォールが出る
+        const h = $("favIngHint"); if (h) h.textContent = e.message;
+      }
+    }
+    async function patchFavorite(id, body) {
+      try {
+        await apiOK(`/api/households/${household.id}/favorites/${id}`, { method: "PATCH", body });
+        await loadFavorites(); renderFavorites();
+      } catch (e) { const h = $("favHint"); if (h) h.textContent = e.message; }
+    }
+
     async function addFavoriteManual() {
       const name = $("favNameInput").value.trim();
       if (!name) { $("favNameInput").focus(); return; }
@@ -3011,10 +3207,19 @@
             <span class="sub">${x.kcal}kcal</span></div>`).join("")}`).join("")}
       </div>`).join("");
 
+      // 計算に入らなかった材料は、下に小さく書くと気づかれない。カードで先に出す。
+      const noIng = n.noIngredients || [];
+      if (n.unknownCount || noIng.length) {
+        const lines = [];
+        if (noIng.length) lines.push(`<span>材料が未登録の料理: ${esc(noIng.join("、"))}</span>`);
+        if (n.unknownCount) lines.push(`<span>読めなかった材料: ${esc(n.missing.join("、"))}</span>`);
+        html += `<div class="nu-miss"><b>${n.unknownCount + noIng.length}品が計算に入っていません</b>
+          ${lines.join("")}
+          <i>成分表にない食材名や、「適量」のように読めない分量、材料が未登録の料理です。
+          その分は差し引かれずに表示されています。${noIng.length ? "お気に入りの材料は「べんり→お気に入り」から書けます。" : ""}</i></div>`;
+      }
       html += `<p class="nu-note">出典: ${esc(n.source)}。材料名と分量から自動で計算した<b>目安</b>です（個数の分量や調味料は概算。実際の量・銘柄で変わります）。`
-        + `<br>汁物・鍋・煮物は、煮汁や漬け汁も全部食べる計算になるため、塩分が実際より高めに出ます。`;
-      if (n.unknownCount) html += `<br>計算できなかった材料が ${n.unknownCount} 件あります${n.missing.length ? `（${esc(n.missing.join("、"))}）` : ""}。その分は含まれていません。`;
-      html += `</p>`;
+        + `<br>汁物・鍋・煮物は、煮汁や漬け汁も全部食べる計算になるため、塩分が実際より高めに出ます。</p>`;
 
       $("nutriBody").innerHTML = html;
       // コメントからコラムへ。戻ってきたら栄養画面に帰す。
@@ -4296,6 +4501,15 @@
     function syncReuseVeg() {
       const n = collectTargets().reduce((a, t) => a + t.slots.length, 0);
       $("reuseVegWrap").style.display = n >= 3 ? "block" : "none";
+      // お気に入り: 何品くらい入るかを先に見せる（ピン留めは食数に関わらず入る）
+      const usable = (favorites || []).filter((f) => f.autoMix);
+      const pinned = usable.filter((f) => f.pinned).length;
+      const auto = n >= 3 ? Math.min(Math.ceil(n / 3), Math.ceil(usable.length / 4)) : 0;
+      const k = Math.min(usable.length, n, Math.max(pinned, auto));
+      $("mixFavWrap").style.display = usable.length ? "block" : "none";
+      $("mixFavHint").textContent = !usable.length ? ""
+        : k ? `今回は ${k}品 が入ります${pinned ? `（📌の${pinned}品を含む）` : ""}。混ぜたくないものは、べんり→お気に入りで個別に切れます。`
+            : "この食数では自動では入りません（📌を付けたものは必ず入ります）。";
     }
     function syncCreateMode() {
       const quick = $("noSteps").checked;
@@ -4348,6 +4562,7 @@
           .map((x) => ({ name: x.name, amount: x.amount || "" })),
         guided: { ...guidedSel },
         reuseVeg: $("reuseVeg").checked, // 野菜の使い回し
+        mixFavorites: $("mixFavorites").checked, // お気に入りを混ぜる
       };
 
       $("submitBtn").disabled = true;
@@ -4441,6 +4656,9 @@
           let ev; try { ev = JSON.parse(line); } catch { continue; }
           if (ev.type === "veggies") {
             currentPlan._veggies = ev.names || []; // 今週使い回す野菜
+            if (activeViewId() === "detail") renderOverview();
+          } else if (ev.type === "favorites") {
+            currentPlan._favs = ev.names || []; // 今回混ぜたお気に入り
             if (activeViewId() === "detail") renderOverview();
           } else if (ev.type === "tick") {
             if (activeViewId() === "detail") applyTick(ev); // 途中経過（料理名・進み具合）
@@ -4601,6 +4819,15 @@
         body.appendChild(v);
       }
 
+      const fv = plan._favs || plan.mixedFavorites || [];
+      if (fv.length) {
+        const e = document.createElement("div");
+        e.className = "veg-note fav";
+        e.innerHTML = `<img class="ic" src="/img/ic-star.png" alt="">
+          <span><b>お気に入りから</b>${esc(fv.join("・"))}<i>順番に出しています。混ぜたくないものは、べんり→お気に入りで個別に切れます</i></span>`;
+        body.appendChild(e);
+      }
+
       const pr = document.createElement("div");
       pr.className = "people-row";
       pr.innerHTML = `<span class="lbl">${ICON_PERSON}人数</span>
@@ -4623,7 +4850,7 @@
           else if (meal._error) rows = `<li class="empty-dish">生成に失敗しました（後で作り直せます）</li>`;
           else if (meal.dishes && meal.dishes.length)
             rows = meal.dishes.map((d) =>
-              `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
+              `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${d.favorite ? "⭐" : ""}${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
             ).join("");
           else rows = `<li class="empty-dish">タップして料理を追加</li>`;
           card.innerHTML = `
@@ -5516,8 +5743,15 @@
       };
       for (const day of plan.days || [])
         for (const meal of day.meals || [])
-          for (const dish of meal.dishes || [])
+          for (const dish of meal.dishes || []) {
+            // 名前だけのお気に入り（材料が未登録）は、そのままだと買い物リストに何も出ず
+            // 買い忘れる。1行だけ出して気づけるようにする（市販品と同じ扱い）。
+            if (!(dish.ingredients || []).length && dish.name) {
+              add(`${dish.name}（材料は自分で）`, "", "その他", dish.name);
+              continue;
+            }
             for (const ing of dish.ingredients || []) add(ing.name, ing.amount, ing.category, dish.name);
+          }
       for (const e of extra) add(e.name, e.amount, e.category, (e.dishes || [])[0]);
       const items = [];
       for (const rec of map.values()) {

@@ -6,7 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
-import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
+import { analyzePlan, foodAliasMap, foodUnitTables, checkIngredients } from "./nutrition.js";
 import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlanFromCatalog, allDishes } from "./catalog.js";
 import { buildAdvice } from "./nutrition-advice.js";
 import { readColumns } from "./columns.js";
@@ -253,6 +253,10 @@ const SCHEMA_STATEMENTS = [
     id TEXT PRIMARY KEY, household_id TEXT NOT NULL, name TEXT NOT NULL, name_norm TEXT NOT NULL,
     role TEXT, dish_json TEXT, created_at TEXT NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_fav_hh_norm ON favorite_dishes (household_id, name_norm)`,
+  // 生成に混ぜるか（既定=混ぜる）。よく出したくないお気に入りは切れるようにする。
+  `ALTER TABLE favorite_dishes ADD COLUMN IF NOT EXISTS auto_mix INTEGER NOT NULL DEFAULT 1`,
+  // 「次の献立に必ず入れる」。順番待ちを待たずに自分で呼べるようにする。
+  `ALTER TABLE favorite_dishes ADD COLUMN IF NOT EXISTS pinned INTEGER NOT NULL DEFAULT 0`,
   // 冷蔵庫・作り置き（グループ共有・短命の在庫）。kind: 'ingredient'=食材 / 'prepped'=作り置き。
   // amount はざっくり任意（「半分」「少し」等）。常備品(pantry)＝定常在庫とは役割が別。
   `CREATE TABLE IF NOT EXISTS fridge_items (
@@ -480,7 +484,7 @@ const normalizeStaple = (v) =>
   Array.isArray(v) ? v.filter((x) => STAPLE_NAME[x]) : STAPLE_NAME[v] ? [v] : [];
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], mainCandidates = [], sameDayDishes = [], vegNote = "" } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], mainCandidates = [], sameDayDishes = [], vegNote = "", favDish = null } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -531,6 +535,11 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
       : "",
     fridgeDishHint
       ? `★この食事の主菜は、冷蔵庫の残り食材をまとめて使い切る「${fridgeDishHint}」にすること（最優先の指定。一般家庭の定番の作り方で）。`
+      : "",
+    // 世帯のお気に入り。作り方はこちらで差し替えるが、他の品を合わせてもらうために名前を伝える
+    favDish
+      ? `★この食事の${favDish.role}は必ず「${favDish.name}」にすること（この世帯のお気に入り。最優先の指定）。`
+        + `他の品は、これに合う組み合わせ・食材が重ならないものにすること。`
       : "",
     mainHint
       ? `★主菜の主材料は必ず「${mainHint}」にすること（今回の主菜はこの主材料で作る。これは最優先の指定。副菜・汁物はこの限りではない）。`
@@ -1096,6 +1105,73 @@ async function getRecentReuseVeggies(householdId, { planLimit = 2 } = {}) {
   return [...new Set(out)];
 }
 
+// 料理名ごとに「最後に献立へ出した日」を集める。お気に入りの順番待ちに使う。
+// 献立そのものを見るので、手で入れたぶんも「出した」に数えられる（二重に出ない）。
+async function getDishLastUsed(householdId, { planLimit = 40 } = {}) {
+  const rows = await all(
+    "SELECT data_json FROM meal_plans WHERE household_id = $1 ORDER BY created_at DESC LIMIT $2",
+    [householdId, planLimit]
+  );
+  const last = new Map();
+  for (const r of rows) {
+    try {
+      for (const day of JSON.parse(r.data_json).days || [])
+        for (const m of day.meals || [])
+          for (const d of m.dishes || []) {
+            const k = normName(d.name || "");
+            if (!k) continue;
+            const prev = last.get(k);
+            if (!prev || day.date > prev) last.set(k, day.date);
+          }
+    } catch {}
+  }
+  return last;
+}
+
+// 献立に混ぜるお気に入りを選ぶ。
+// 「登録したのに出てこない」を防ぐため、順番待ち（未登場→古い順）を厳格にする。
+// 「よく出したいわけではない」ものは auto_mix を切れるので、頻度は利用者側でも調整できる。
+async function pickFavoritesToMix(householdId, meals, opts = {}) {
+  const rows = await all(
+    "SELECT * FROM favorite_dishes WHERE household_id = $1 AND auto_mix = 1",
+    [householdId]
+  );
+  if (!rows.length) return [];
+  const avoid = [opts.avoid, ...(opts.storeAvoid || [])]
+    .flatMap((x) => String(x || "").split(/[、,\s]+/)).filter(Boolean);
+  const ok = rows.filter((r) => {
+    let dish = null;
+    try { dish = r.dish_json ? JSON.parse(r.dish_json) : null; } catch {}
+    // 時間の条件は、レシピを持っているものだけ判定できる（名前だけのものは通す）
+    if (opts.maxCookMinutes && dish?.cook_minutes > opts.maxCookMinutes) return false;
+    if (avoid.length && dish) {
+      const text = (dish.ingredients || []).map((i) => i.name).join("、") + "、" + r.name;
+      if (avoid.some((a) => text.includes(a))) return false;
+    }
+    return true;
+  });
+  if (!ok.length) return [];
+
+  const last = await getDishLastUsed(householdId);
+  const sorted = ok.slice().sort((a, b) => {
+    if (!!Number(a.pinned) !== !!Number(b.pinned)) return Number(b.pinned) - Number(a.pinned); // ピンが先
+    const la = last.get(normName(a.name)) || ""; // 未登場は "" ＝ いちばん古い扱い
+    const lb = last.get(normName(b.name)) || "";
+    return la < lb ? -1 : la > lb ? 1 : 0;
+  });
+
+  // 自動で混ぜる数。全部お気に入りだとAIで作る意味がないので、食事数の1/3までにする。
+  // 件数が増えるほど多めに出して、一巡が遅くなりすぎないようにする。
+  const pinned = sorted.filter((r) => Number(r.pinned)).length;
+  const autoN = meals >= 3 ? Math.min(Math.ceil(meals / 3), Math.ceil(ok.length / 4)) : 0;
+  const n = Math.min(sorted.length, meals, Math.max(pinned, autoN));
+  return sorted.slice(0, n).map((r) => {
+    let dish = null;
+    try { dish = r.dish_json ? JSON.parse(r.dish_json) : null; } catch {}
+    return { id: r.id, name: r.name, role: r.role || dish?.role || "主菜", dish, pinned: !!Number(r.pinned) };
+  });
+}
+
 // 同じ食事枠（朝食/昼食/夕食）ごとに、直近（既定30日）に出した料理名を集める。
 // 主菜・副菜の繰り返し防止に使う（例: 夕食の副菜「キャベツとコーンのサラダ」が何度も出るのを防ぐ）。
 // 汁物は毎日の味噌汁など自然な繰り返しが普通のため対象にしない。日付の新しい順。
@@ -1510,7 +1586,11 @@ app.delete("/api/households/:id/presets/:presetId", auth, async (req, res) => {
 const favToClient = (r) => {
   let dish = null;
   if (r.dish_json) { try { dish = JSON.parse(r.dish_json); } catch {} }
-  return { id: r.id, name: r.name, role: r.role || dish?.role || "", dish };
+  return {
+    id: r.id, name: r.name, role: r.role || dish?.role || "", dish,
+    autoMix: r.auto_mix == null ? true : !!Number(r.auto_mix), // 生成に混ぜるか
+    pinned: !!Number(r.pinned),                                // 次の献立に必ず入れる
+  };
 };
 
 app.get("/api/households/:id/favorites", auth, async (req, res) => {
@@ -1520,7 +1600,8 @@ app.get("/api/households/:id/favorites", auth, async (req, res) => {
       "SELECT * FROM favorite_dishes WHERE household_id = $1 ORDER BY created_at DESC",
       [req.params.id]
     );
-    res.json(rows.map(favToClient));
+    const last = await getDishLastUsed(req.params.id); // 順番待ちを画面に見せる
+    res.json(rows.map((r) => ({ ...favToClient(r), lastUsed: last.get(normName(r.name)) || null })));
   } catch (err) {
     handleError(res, err);
   }
@@ -1559,6 +1640,107 @@ app.post("/api/households/:id/favorites", auth, async (req, res) => {
       [id, req.params.id, name, norm, role, dishJson, new Date().toISOString()]
     );
     res.json(favToClient(row));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 材料が栄養計算に乗るかを調べる。編集しているその場で「この行は入りません」を出すため。
+app.post("/api/nutrition/check", auth, (req, res) => {
+  try {
+    const list = Array.isArray(req.body?.ingredients) ? req.body.ingredients.slice(0, 60) : [];
+    res.json({ items: checkIngredients(list, req.body?.people) });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 名前だけのお気に入りに、材料をAIで書いてもらう。
+// 買い物リストに載せるためと、栄養計算に乗せるため。作り方は書かない（十八番なので不要）。
+const FAV_INGREDIENTS_SCHEMA = {
+  type: "object",
+  properties: {
+    role: { type: "string", description: "主菜 / 副菜 / 汁物 のいずれか" },
+    cook_minutes: { type: "integer", description: "調理時間の目安（分）" },
+    ingredients: { type: "array", items: INGREDIENT },
+  },
+  required: ["role", "cook_minutes", "ingredients"],
+  additionalProperties: false,
+};
+app.post("/api/households/:id/favorites/:favId/ingredients", auth, aiLimiter, requireAi(() => 1, "edit"), async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const row = await one("SELECT * FROM favorite_dishes WHERE id = $1 AND household_id = $2",
+      [req.params.favId, req.params.id]);
+    if (!row) return res.status(404).json({ error: "見つかりません。" });
+    const people = Math.min(12, Math.max(1, Number(req.body?.people) || 2));
+    const prompt = [
+      `「${row.name}」という家庭料理の材料を、${people}人分で書き出してください。`,
+      "一般家庭でよく作る、いちばん定番の作り方を前提にしてください。",
+      "",
+      "ルール:",
+      "- 作り方（手順）は不要。材料だけ。",
+      "- 材料は name（食材名）・amount（分量）・category（分類）に分ける。",
+      "- category は 野菜・果物 / 肉・魚 / 卵・乳・豆腐 / 主食・乾物 / 調味料 / その他 から選び、常備調味料と水・お湯は必ず「調味料」にする。",
+      "- 分量表記: 野菜・豆腐など数えられるものは「1/2個(100g)」のように個数(目安の重量g)。肉・魚は「200g」など重量。調味料は大さじ・小さじ。",
+      "- にんにく・しょうがは「かけ」で書く。食材名はひらがな・カタカナ・漢字を混ぜず、○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ／だいこん に揃える。",
+      "- 「適量」「お好みで」は使わず、必ず数量を入れる（栄養計算に使うため）。",
+      "- role は 主菜 / 副菜 / 汁物 のいずれか。",
+    ].join("\n");
+    const stream = client.messages.stream({
+      model: SINGLE_MODEL,
+      max_tokens: 2000,
+      tools: [{ name: "save_ingredients", description: "材料を保存する。", input_schema: FAV_INGREDIENTS_SCHEMA }],
+      tool_choice: { type: "tool", name: "save_ingredients" },
+      messages: [{ role: "user", content: prompt }],
+    });
+    const msg = await stream.finalMessage();
+    const block = msg.content.find((b) => b.type === "tool_use" && b.name === "save_ingredients");
+    if (!block || !(block.input.ingredients || []).length) throw new Error("EMPTY_RESPONSE");
+
+    let dish = null;
+    try { dish = row.dish_json ? JSON.parse(row.dish_json) : null; } catch {}
+    dish = {
+      ...(dish || {}), name: row.name,
+      role: row.role || block.input.role || "主菜",
+      description: dish?.description || "",
+      cook_minutes: block.input.cook_minutes || dish?.cook_minutes || 0,
+      ingredients: block.input.ingredients,
+      steps: dish?.steps || [],
+      people, // 何人分で書いたか（画面に出す）
+    };
+    const updated = await one(
+      "UPDATE favorite_dishes SET dish_json = $1, role = COALESCE(role, $2) WHERE id = $3 RETURNING *",
+      [JSON.stringify(dish), dish.role, row.id]
+    );
+    if (!req.aiPaid) await incAiUsage(req.user.id, 1, "edit");
+    res.json(favToClient(updated));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 「生成に混ぜる」「次に出す」の切り替え、材料の書き換え
+app.patch("/api/households/:id/favorites/:favId", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const row = await one("SELECT * FROM favorite_dishes WHERE id = $1 AND household_id = $2",
+      [req.params.favId, req.params.id]);
+    if (!row) return res.status(404).json({ error: "見つかりません。" });
+    const sets = [], vals = [];
+    if (typeof req.body?.autoMix === "boolean") { sets.push(`auto_mix = $${sets.length + 1}`); vals.push(req.body.autoMix ? 1 : 0); }
+    if (typeof req.body?.pinned === "boolean") { sets.push(`pinned = $${sets.length + 1}`); vals.push(req.body.pinned ? 1 : 0); }
+    if (req.body?.dish && typeof req.body.dish === "object") {
+      const j = JSON.stringify(req.body.dish);
+      if (j.length > 20000) return res.status(413).json({ error: "レシピが大きすぎます。" });
+      sets.push(`dish_json = $${sets.length + 1}`); vals.push(j);
+    }
+    if (!sets.length) return res.json(favToClient(row));
+    const updated = await one(
+      `UPDATE favorite_dishes SET ${sets.join(", ")} WHERE id = $${sets.length + 1} RETURNING *`,
+      [...vals, req.params.favId]
+    );
+    res.json(favToClient(updated));
   } catch (err) {
     handleError(res, err);
   }
@@ -1855,6 +2037,7 @@ function planToClient(row) {
     days: JSON.parse(row.data_json).days,
     // その献立で使い回した野菜（開き直したときも案内を出すため）
     weekVeggies: (() => { try { return JSON.parse(row.input_json).weekVeggies || []; } catch { return []; } })(),
+    mixedFavorites: (() => { try { return JSON.parse(row.input_json).mixedFavorites || []; } catch { return []; } })(),
   };
 }
 async function loadPlanForUser(req, res) {
@@ -1985,6 +2168,19 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
       ? await planMealAssignments(units, opts, avoidText)
       : { mains: units.map(() => ""), sides: units.map(() => ""), fridgeDishes: units.map(() => "") };
 
+    // 世帯のお気に入りを何品か混ぜる。順番待ち（未登場→古い順）で選ぶので、
+    // 登録したのに永遠に出てこない、ということが起きない。
+    const favPicks = new Array(units.length).fill(null);
+    if (opts.mixFavorites !== false) {
+      const favs = await pickFavoritesToMix(household.id, units.length, {
+        maxCookMinutes: opts.maxCookMinutes, avoid: opts.avoid, storeAvoid: store.avoid,
+      });
+      // 冷蔵庫の使い切りが決まっている食事は、そちらを優先して避ける
+      const slots = units.map((_, i) => i).filter((i) => !(assign.fridgeDishes || [])[i]);
+      favs.forEach((f, k) => { if (slots[k] != null) favPicks[slots[k]] = f; });
+      if (favs.length) send({ type: "favorites", names: favs.map((f) => f.name) });
+    }
+
     const styles = styleRotationFor(opts.staple);
     // 候補出しで避ける料理名（最近作ったもの＋この画面で既に確定したもの）
     const recentAll = [...new Set([...recentDishes, ...Object.values(recentBySlot).flat()])];
@@ -2059,6 +2255,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
         mainCandidates: fridgeDishHint ? [] : mainCandidatesFor(u, opts, store, [...batchMains, ...(avoid || [])], mainHint),
         sameDayDishes: sameDayOf(i),
         vegNote: vegDirective(weekVeggies, vegOfUnit[i]), // 野菜の使い回し
+        favDish: favPicks[i], // この食事に入れる世帯のお気に入り
       });
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
@@ -2076,6 +2273,16 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
         }
       } catch (e) {
         if (!dishes.length) dishes = [];
+      }
+      // お気に入りは、利用者が育てたレシピをそのまま使う（AIの書き直しで内容が変わらないように）
+      const fav = favPicks[i];
+      if (fav && dishes.length) {
+        const at = dishes.findIndex((d) => d.role === fav.role);
+        const idx = at >= 0 ? at : 0;
+        dishes[idx] = fav.dish
+          ? { ...JSON.parse(JSON.stringify(fav.dish)), role: fav.role, name: fav.name }
+          : { role: fav.role, name: fav.name, description: "", cook_minutes: 0, ingredients: [], steps: [] };
+        dishes[idx].favorite = true; // 画面で「お気に入り」と分かるように
       }
       const mn = mainNameOf(dishes);
       if (mn) batchMains.add(mn);
@@ -2104,11 +2311,17 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
         date,
         meals: meals.sort((a, b) => (SLOT_ORDER[a.slot] ?? 9) - (SLOT_ORDER[b.slot] ?? 9)),
       }));
+    // 「次に出す」で呼ばれたぶんは、出したのでピンを外す
+    const usedPins = favPicks.filter((f) => f && f.pinned).map((f) => f.id);
+    if (usedPins.length) {
+      await q("UPDATE favorite_dishes SET pinned = 0 WHERE id = ANY($1)", [usedPins]).catch(() => {});
+    }
     const dates = targets.map((t) => t.date).sort();
     return await one(INSERT_PLAN, [
       randomUUID(), household.id, dates[0], dates[dates.length - 1], opts.people, opts.maxCookMinutes,
       opts.dishCount, opts.preferences, opts.avoid,
-      JSON.stringify({ targets, opts, weekVeggies: weekVeggies.map((v) => v.name) }),
+      JSON.stringify({ targets, opts, weekVeggies: weekVeggies.map((v) => v.name),
+        mixedFavorites: favPicks.filter(Boolean).map((f) => f.name) }),
       JSON.stringify({ days }), new Date().toISOString(),
     ]);
 }
@@ -2133,6 +2346,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
       guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/調理法/好み）
       reuseVeg: req.body?.reuseVeg !== false, // 野菜の使い回し（既定ON。3食未満は中で無効化）
+      mixFavorites: req.body?.mixFavorites !== false, // お気に入りを混ぜる（既定ON）
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false,
