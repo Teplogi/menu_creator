@@ -969,6 +969,25 @@
     .dtag.d4 { color: #2f8a55; background: #e6f6ec; }
     .dtag.d5 { color: #a8801a; background: #fcf3d9; }
     .dtag.d6 { color: #77593f; background: #f3ece4; }
+    /* 「日付」で1日だけ見るときの日付チップ。指で横に流して日を切り替える */
+    .daypick { display: flex; gap: 8px; overflow-x: auto; padding: 10px 2px 4px; margin: 0 -2px;
+      scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+    .daypick::-webkit-scrollbar { display: none; }
+    .dchip { flex: none; scroll-snap-align: center; position: relative; min-width: 62px;
+      border: 1.5px solid var(--line); background: var(--card); border-radius: 14px;
+      padding: 8px 10px 7px; font: inherit; cursor: pointer; color: var(--ink);
+      display: flex; flex-direction: column; align-items: center; gap: 1px;
+      transition: border-color .2s, background .2s, transform .15s; }
+    .dchip b { font-size: .92rem; font-weight: 800; line-height: 1.15; }
+    .dchip span { font-size: .68rem; font-weight: 700; color: var(--muted); }
+    .dchip i { position: absolute; top: -5px; right: -4px; min-width: 17px; height: 17px; padding: 0 4px;
+      border-radius: 9px; background: var(--orange); color: #fff; font-size: .64rem; font-weight: 800;
+      font-style: normal; line-height: 17px; text-align: center; box-shadow: 0 0 0 2px var(--cream); }
+    .dchip.d0 b, .dchip.d0 span { color: #c0334a; }
+    .dchip.d6 b, .dchip.d6 span { color: #2570b0; }
+    .dchip:active { transform: scale(.96); }
+    .dchip.on { border-color: var(--orange); background: var(--orange-soft); }
+    .dchip.on i { box-shadow: 0 0 0 2px var(--orange-soft); }
     .moved-tag { display: inline-block; margin-left: 6px; font-size: .64rem; font-weight: 800; color: #fff; background: #4fc3f7; border-radius: 6px; padding: 1px 7px; }
     .shopitem .cb { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--dot); flex: none;
       display: grid; place-items: center; transition: all .12s; }
@@ -5594,6 +5613,11 @@
     // 週（日曜〜土曜）単位で買い物リストを開く
     async function openShoppingWeek(anchor, fromTab) {
       shopAnchor = anchor;
+      // 前に選んだ日が過ぎていたら、直近の献立がある日へ寄せる（古い日を開いて空、を防ぐ）
+      if (shopPickDate && shopPickDate < fmt(new Date())) {
+        const days = shopPickableDates().filter((d) => d >= fmt(new Date()));
+        setShopPickDate(days[0] || null);
+      }
       shopWeek = weekStart(anchor); // 保存先の基準週
       editingId = null;
       backHandler = fromTab ? goHome : backToOverview;
@@ -5678,17 +5702,42 @@
     // 買う範囲。週の区切りとは無関係に「起点から◯日分」で数える
     // （金・土に3日分/7日分を見たいとき、翌週に移動しなくても続きが見えるようにするため）。
     const RANGE_DAYS = { today: 1, d3: 3, d7: 7 };
+    // 「日付」で1日だけ見るときの対象日。開き直しても選んだ日が残るように保存する
+    let shopPickDate = localStorage.getItem("shopPickDate") || null;
+    const setShopPickDate = (d) => {
+      shopPickDate = d || null;
+      try { d ? localStorage.setItem("shopPickDate", d) : localStorage.removeItem("shopPickDate"); } catch {}
+    };
     const getShopRange = () => {
       const v = localStorage.getItem("shopRange");
+      if (v === "pick") return shopPickDate ? "pick" : "d3"; // 日付未選択なら既定へ
       return RANGE_DAYS[v] ? v : "d3"; // 旧値("week"等)は既定に寄せる
     };
     const setShopRange = (v) => localStorage.setItem("shopRange", v);
     function shopRangeDates() {
+      if (getShopRange() === "pick") return [shopPickDate];
       const start = shopAnchor || fmt(new Date());
       const n = RANGE_DAYS[getShopRange()] || 3;
       const out = [];
       for (let i = 0; i < n; i++) out.push(addDays(start, i));
       return out;
+    }
+    // 「日付」で選べる日。献立がある日を並べ、今日と選択中の日は必ず入れる。
+    // 買い物リストは週ごとに保存しているので、そこから日付を拾うと今の週しか出ない。
+    // 献立（plansCache）を元にする。
+    function shopPickableDates() {
+      const today = fmt(new Date());
+      const set = new Set([today]);
+      if (shopPickDate) set.add(shopPickDate);
+      const until = addDays(today, 30); // 遠い先まで並べても選びにくいので1か月まで
+      for (const d of Object.keys(buildDateMap())) if (d >= today && d <= until) set.add(d);
+      return [...set].sort();
+    }
+    // その日に「まだ買っていないもの」の数。週をまたぐので、その日の週のリストを直接読む。
+    function shopDayCount(date) {
+      const l = readJSON(listKeyFor(weekStart(date)), null);
+      if (!Array.isArray(l)) return null; // まだ作られていない週は数を出さない
+      return l.filter((it) => it.date === date && !it.checked).length;
     }
 
     function renderShopping(focusAdd) {
@@ -5698,7 +5747,7 @@
       let html = "";
       // 起点が今日でないとき（先の献立から開いたとき）だけ知らせる
       const todayStr = fmt(new Date());
-      if (shopAnchor && shopAnchor !== todayStr) {
+      if (shopAnchor && shopAnchor !== todayStr && getShopRange() !== "pick") {
         html += `<div class="anchor-note">${esc(mdLabel(shopAnchor))}(${esc(dow(shopAnchor))}) からの分を表示中
           <button id="anchorToday">今日から見る</button></div>`;
       }
@@ -5719,7 +5768,18 @@
       html += `<div class="segmented">
         <button class="seg ${range === "today" ? "on" : ""}" data-range="today">今日</button>
         <button class="seg ${range === "d3" ? "on" : ""}" data-range="d3">3日分</button>
-        <button class="seg ${range === "d7" ? "on" : ""}" data-range="d7">7日分</button></div>`;
+        <button class="seg ${range === "d7" ? "on" : ""}" data-range="d7">7日分</button>
+        <button class="seg ${range === "pick" ? "on" : ""}" data-range="pick">日付</button></div>`;
+      // 「日付」= その1日だけ。買い物の当日に「今日ぶんだけ」を見たいとき用。
+      // 献立がある日を横に並べて、指でめくれるようにする。
+      if (range === "pick") {
+        const days = shopPickableDates();
+        html += `<div class="daypick" id="dayPick">${days.map((d) => {
+          const n = shopDayCount(d);
+          return `<button class="dchip d${dowIdx(d)} ${d === shopPickDate ? "on" : ""}" data-date="${esc(d)}">
+            <b>${esc(mdLabel(d))}</b><span>${esc(dow(d))}</span>${n ? `<i>${n}</i>` : ""}</button>`;
+        }).join("")}</div>`;
+      }
 
       // 範囲で仕分け（日付なし＝自分で足したもの、調味料枠は常に表示）
       const inRange = (it) => !it.date || it.date === "__season__" || rangeSet.has(it.date);
@@ -5764,7 +5824,7 @@
           </div>`;
         }
         const uses = r.dishes && r.dishes.length ? `<span class="uses">${esc(r.dishes.join("・"))}</span>` : "";
-        const dates = r.dates.length > 1 || (r.dates.length === 1 && range !== "today")
+        const dates = r.dates.length > 1 || (r.dates.length === 1 && rangeDates.length > 1)
           ? `<span class="dtags">${r.dates.map((d) => `<span class="dtag d${dowIdx(d)}">${esc(mdLabel(d))}(${esc(dow(d))})</span>`).join("")}</span>` : "";
         const meta = uses || dates ? `<span class="shopmeta">${uses}${dates}</span>` : "";
         const moved = r.moved ? `<span class="moved-tag">移動</span>` : "";
@@ -5811,7 +5871,8 @@
       }
       // 範囲外に残っている分の件数（隠れているだけと分かるように）
       if (outCount && range !== "d7") {
-        html += `<p class="rangehint">このあとの日に、あと <b>${outCount}品</b> あります<button id="showWeek">7日分をまとめて見る</button></p>`;
+        const lead = range === "pick" ? "ほかの日に" : "このあとの日に";
+        html += `<p class="rangehint">${lead}、あと <b>${outCount}品</b> あります<button id="showWeek">7日分をまとめて見る</button></p>`;
       }
       // チェック済みは折りたたみで下部にまとめる
       if (bought.length) {
@@ -5840,7 +5901,20 @@
       const saveEdit = (id) => editItem(id, body.querySelector(".ed-nm").value, body.querySelector(".ed-am").value);
 
       body.querySelectorAll(".seg[data-range]").forEach((b) =>
-        b.addEventListener("click", () => { setShopRange(b.dataset.range); editingId = null; renderShopping(); }));
+        b.addEventListener("click", () => {
+          // 「日付」を初めて押したときは、いちばん近い献立の日を選んでおく
+          if (b.dataset.range === "pick" && !shopPickDate) {
+            const today = fmt(new Date());
+            const days = shopPickableDates();
+            setShopPickDate(days.find((d) => d >= today) || days[days.length - 1] || today);
+          }
+          setShopRange(b.dataset.range); editingId = null; renderShopping();
+        }));
+      body.querySelectorAll(".dchip").forEach((b) =>
+        b.addEventListener("click", () => { setShopPickDate(b.dataset.date); editingId = null; renderShopping(); }));
+      // 選んでいる日を横スクロールの中央へ（ページ自体は動かさない）
+      const strip = $("dayPick"), onChip = strip && strip.querySelector(".dchip.on");
+      if (onChip) strip.scrollLeft = onChip.offsetLeft - (strip.clientWidth - onChip.offsetWidth) / 2;
       const showWeek = $("showWeek");
       if (showWeek) showWeek.addEventListener("click", () => { setShopRange("d7"); editingId = null; renderShopping(); });
       const anchorToday = $("anchorToday");
