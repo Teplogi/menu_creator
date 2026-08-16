@@ -51,6 +51,32 @@ export function reuseCount(meals) {
   return Math.max(2, Math.min(6, Math.round(meals / 2)));
 }
 
+// 「1回でどれだけ使うか」＝ 1品あたりの使用量 ÷ 売り単位。
+// もやし1袋・トマト1個・ごぼう1本のように1回で使い切るものは、使い回しても
+// 端数が減らない（枠を1つ潰すだけ）ので対象から外す。
+// 売り単位（produce.json の unit）を直せば、この判定もそのまま追従する。
+const GRAMS = (s) => { const m = String(s || "").match(/(\d+(?:\.\d+)?)\s*g/); return m ? Number(m[1]) : null; };
+const USED_UP = 0.7; // 1回で7割以上使うなら「使い切る」とみなす
+function usageRatio(catalog) {
+  const { items } = load();
+  const per = new Map();
+  for (const d of catalog) {
+    for (const i of d.ingredients || []) {
+      const c = canonVeg(i.name);
+      const w = GRAMS(i.amount);
+      if (c && w) (per.get(c) || per.set(c, []).get(c)).push(w);
+    }
+  }
+  const out = new Map();
+  for (const [n, ws] of per) {
+    const unit = GRAMS(items[n]?.unit);
+    if (!unit || ws.length < 3) continue; // 品数が少なすぎると中央値が当てにならない
+    ws.sort((a, b) => a - b);
+    out.set(n, ws[Math.floor(ws.length / 2)] / unit);
+  }
+  return out;
+}
+
 // カタログから「その野菜を使う副菜・汁物が何品あるか」を数える。
 // 作れる料理が少ない野菜を選ぶと、同じ料理の繰り返しになってしまうため。
 function dishCounts(catalog) {
@@ -87,6 +113,7 @@ export function pickWeekVeggies(opts = {}) {
   if (!total) return [];
 
   const counts = dishCounts(opts.catalog || []);
+  const ratio = usageRatio(opts.catalog || []);
   const norm = (arr) => new Set((arr || []).map((x) => canonVeg(x)).filter(Boolean));
   const avoid = norm(opts.avoid);
   const soft = norm(opts.soft);
@@ -107,7 +134,9 @@ export function pickWeekVeggies(opts = {}) {
       if (soft.has(n)) s *= 0.4;    // 控えめにしたい食材
       return { name: n, dishes, s };
     })
-    .filter((x) => x.dishes >= 3) // 週に2〜3回まわすので、作れる副菜・汁物が3品は要る
+    // 週に2〜3回まわすので、作れる副菜・汁物が3品は要る。
+    // 1回で使い切る野菜（もやし・トマト・ごぼう等）は使い回しても端数が減らないので外す。
+    .filter((x) => x.dishes >= 3 && (ratio.get(x.name) ?? 0) < USED_UP)
     .sort((a, b) => b.s - a.s);
 
   const out = [];
