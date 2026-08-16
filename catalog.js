@@ -169,6 +169,7 @@ export function pickMainCandidates(opts = {}) {
 export const candidateLine = (d) => `${d.name}（${d.main}・${d.time}分・${d.genre}）`;
 
 export const catalogSize = () => DISHES.length;
+export const allDishes = () => DISHES; // 野菜の使い回しで「その野菜で作れる料理数」を数えるのに使う
 
 // ---------- 具材の選択（味噌汁・スープ） ----------
 // 味噌汁は具を変えれば何度出しても飽きないので、料理を増やす代わりに

@@ -7,9 +7,10 @@ import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
 import { analyzePlan, foodAliasMap, foodUnitTables } from "./nutrition.js";
-import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlanFromCatalog } from "./catalog.js";
+import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlanFromCatalog, allDishes } from "./catalog.js";
 import { buildAdvice } from "./nutrition-advice.js";
 import { readColumns } from "./columns.js";
+import { pickWeekVeggies, assignVeggies, vegDirective, checkVegCompliance } from "./produce.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -479,7 +480,7 @@ const normalizeStaple = (v) =>
   Array.isArray(v) ? v.filter((x) => STAPLE_NAME[x]) : STAPLE_NAME[v] ? [v] : [];
 
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], mainCandidates = [], sameDayDishes = [] } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], mainCandidates = [], sameDayDishes = [], vegNote = "" } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -548,6 +549,7 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     sideHint
       ? `★副菜を作る場合は「${sideHint}」系にすること（主菜と食材・味付けが被らないように）。`
       : "",
+    vegNote, // 野菜の使い回し（買い物を減らす）
     // 同じ日に2食以上あるとき、昼と夕で食材が丸かぶりしないようにする
     sameDayDishes && sameDayDishes.length
       ? `同じ日の他の食事では「${sameDayDishes.join("」「")}」を作ります。1日のうちで食材が重なると飽きるので、主菜・副菜とも使う食材をできるだけ変えること。`
@@ -604,7 +606,7 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
     "- 肉・魚は「200g」「2切れ(160g)」のように重量を基本にする。調味料は 大さじ・小さじ・少々。",
     "- 同じ食材はどの料理でも同じ単位で書く（玉ねぎを「個」と「g」で混在させない）。",
     "- にんにく・しょうがは「1かけ(5g)」「1かけ(15g)」のように必ず「かけ」で書く（「片」「小さじ」「すりおろし小さじ1」は使わない）。",
-    "- 食材名の書き方も統一する。ひらがな・カタカナ・漢字を混ぜない。○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ　× ニンニク／人参／生姜／タマネギ／ジャガイモ。",
+    "- 食材名の書き方も統一する。ひらがな・カタカナ・漢字を混ぜない。○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ／だいこん／はくさい　× ニンニク／人参／生姜／タマネギ／ジャガイモ／大根／白菜。",
     "",
     "【魚・サラダの書き方（入手しやすさ優先）】",
     "- 魚の種類を変えても成立する料理（塩焼き・照り焼き・ムニエル・フライ・煮付け・南蛮漬け・刺身など）は、料理名にも材料にも魚の種類を書かない。近所のスーパーに特定の魚が無いことがあるため、ユーザーが後で種類を選べるようにする。",
@@ -975,7 +977,7 @@ function buildDishPrompt(instruction, ctx) {
     "- 魚は種類を変えても成立する料理（塩焼き・ムニエル・フライ・煮付け・刺身等）なら魚種を特定しない一般名にし、材料も「魚の切り身」等にする（さばの味噌煮・ぶり大根のように魚種と一体の定番はそのままでよい）。サラダは定番野菜で作る。",
     "- 材料は name（食材名）・amount（分量）・category（分類）に分ける。category は 野菜・果物 / 肉・魚 / 卵・乳・豆腐 / 主食・乾物 / 調味料 / その他 から選び、常備調味料と水・お湯は必ず「調味料」にする。",
     "- 分量表記: 野菜・果物・豆腐など数えられる食材は「1/2個(100g)」のように個数(目安の重量g)で書く（単位は個・本・枚・袋・束・株・丁・かけ等、数は整数かきれいな分数。gだけの表記は野菜に使わない）。肉・魚は「200g」「2切れ(160g)」など重量基本、調味料は大さじ・小さじ・少々。",
-    "- にんにく・しょうがは必ず「かけ」で書く（「片」「小さじ」は使わない）。食材名はひらがな・カタカナ・漢字を混ぜず、○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ　× ニンニク／人参／生姜／タマネギ に揃える。",
+    "- にんにく・しょうがは必ず「かけ」で書く（「片」「小さじ」は使わない）。食材名はひらがな・カタカナ・漢字を混ぜず、○ にんにく／にんじん／しょうが／玉ねぎ／じゃがいも／ねぎ／だいこん／はくさい　× ニンニク／人参／生姜／タマネギ／大根／白菜 に揃える。",
     // サンドイッチ類は夕食の主菜としては軽すぎる（朝・昼向け）
     slot === "夕食"
       ? "- これは夕食。サンドイッチ・トースト・ホットドッグ・ハンバーガーなど、パンにはさむ軽食は主菜にしない（ユーザーが名指しで指示した場合だけ従う）。"
@@ -1079,6 +1081,21 @@ async function getRecentDishNames(householdId, { days = 21, planLimit = 12, cap 
   return [...new Set(names)].slice(0, cap);
 }
 
+// 直近に「使い回す野菜」に選んだものを集める。除外はせず、選ばれにくくするだけに使う。
+// 定番（にんじん・玉ねぎ等）は外しても献立から消えないので、外すと
+// 「使い回しの対象外なのに結局買う」といういちばん悪い状態になる。だから除外はしない。
+async function getRecentReuseVeggies(householdId, { planLimit = 2 } = {}) {
+  const rows = await all(
+    "SELECT input_json FROM meal_plans WHERE household_id = $1 ORDER BY created_at DESC LIMIT $2",
+    [householdId, planLimit]
+  );
+  const out = [];
+  for (const r of rows) {
+    try { out.push(...(JSON.parse(r.input_json).weekVeggies || [])); } catch {}
+  }
+  return [...new Set(out)];
+}
+
 // 同じ食事枠（朝食/昼食/夕食）ごとに、直近（既定30日）に出した料理名を集める。
 // 主菜・副菜の繰り返し防止に使う（例: 夕食の副菜「キャベツとコーンのサラダ」が何度も出るのを防ぐ）。
 // 汁物は毎日の味噌汁など自然な繰り返しが普通のため対象にしない。日付の新しい順。
@@ -1117,6 +1134,7 @@ async function getStoreItems(householdId) {
   return {
     avoid: pick("avoid"),
     soft: [...pick("soft"), ...pick("hard")], // hard は旧仕様（控えめ扱い）
+    staples: pick("staple"), // 野菜の使い回しの「定番枠」。空なら produce.json の既定
   };
 }
 
@@ -1636,7 +1654,7 @@ app.post("/api/households/:id/store-items", auth, async (req, res) => {
   try {
     if (!(await requireMember(req, res, req.params.id))) return;
     const name = (req.body?.name || "").toString().trim().slice(0, 40);
-    const kind = ["avoid", "soft"].includes(req.body?.kind) ? req.body.kind : null;
+    const kind = ["avoid", "soft", "staple"].includes(req.body?.kind) ? req.body.kind : null;
     if (!name) return res.status(400).json({ error: "食材名を入力してください。" });
     if (!kind) return res.status(400).json({ error: "種類が正しくありません。" });
     const norm = normName(name);
@@ -1835,6 +1853,8 @@ function planToClient(row) {
     avoid: row.avoid,
     createdAt: row.created_at,
     days: JSON.parse(row.data_json).days,
+    // その献立で使い回した野菜（開き直したときも案内を出すため）
+    weekVeggies: (() => { try { return JSON.parse(row.input_json).weekVeggies || []; } catch { return []; } })(),
   };
 }
 async function loadPlanForUser(req, res) {
@@ -1940,6 +1960,23 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
     send({ type: "start", total: units.length, units: units.map((u) => ({ date: u.date, slot: u.slot })) });
 
+    // 今週使い回す野菜を決める。1週間ぶん作ると野菜が20種類に散らばり、その半分が
+    // 「1回だけ使って端数が余る」状態になるので、数種類を複数日で使わせる。
+    // 主菜は対象外（献立の印象を決めるのは主菜なので、ここは今まで通り散らす）。
+    const fridgeNames = (opts.fridgeUse || []).map((f) => f.name);
+    const weekVeggies = opts.reuseVeg === false ? [] : pickWeekVeggies({
+      meals: units.length,
+      catalog: allDishes(),
+      seed: `${household.id}|${[...targets].map((t) => t.date).sort()[0] || ""}`,
+      fridge: fridgeNames,
+      avoid: [opts.avoid, ...(store.avoid || [])].flatMap((x) => String(x || "").split(/[、,\s]+/)).filter(Boolean),
+      soft: store.soft,
+      staples: store.staples,
+      recent: await getRecentReuseVeggies(household.id),
+    });
+    const vegOfUnit = assignVeggies(units, weekVeggies);
+    if (weekVeggies.length) send({ type: "veggies", names: weekVeggies.map((v) => v.name) });
+
     // 主材料＋副菜カテゴリの割り当てを先に決める（要望の配分を反映＋被り/連続回避）。
     // 2食以上のときだけプランナーを使う。
     const avoidText = [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、");
@@ -1968,6 +2005,9 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     };
     const collected = new Map();
     const batchMains = new Set(); // このバッチで確定した主菜名（並列でも同名に収束しないよう照合する）
+    // 同じく副菜名。野菜を使い回すと候補が狭まり「ごぼうのきんぴら」が週に2回出る。
+    // 汁物は毎日の味噌汁のように繰り返しが自然なので入れない（作り直しで待ち時間も伸びる）。
+    const batchSides = new Set();
     const mainNameOf = (ds) => ((ds || []).find((d) => d.role === "主菜") || (ds || [])[0] || {}).name || "";
     // 同じ日の他の食事に何を割り当てたか（並列生成でも先に決まっているので順序に依存しない）
     const sameDayOf = (i) => units
@@ -2012,12 +2052,13 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
       const sideHint = needSides ? assign.sides[i] || "" : ""; // 副菜のカテゴリ（同上）
       const div = (attempt, avoid) => ({
         recentDishes, recentSlotDishes: recentBySlot[u.slot] || [], mainHint, sideHint, fridgeDishHint,
-        avoidDishes: avoid || [],
+        avoidDishes: [...(avoid || []), ...batchSides],
         styleHint: styles[(i + attempt) % styles.length],
         storeAvoid: store.avoid, storeSoft: store.soft,
         // 冷蔵庫の使い切りで料理が決まっている食事は、候補を出さない（そちらが最優先のため）
         mainCandidates: fridgeDishHint ? [] : mainCandidatesFor(u, opts, store, [...batchMains, ...(avoid || [])], mainHint),
         sameDayDishes: sameDayOf(i),
+        vegNote: vegDirective(weekVeggies, vegOfUnit[i]), // 野菜の使い回し
       });
       // Haiku はまれに dishes 空を返すため、空なら作り直す（最大3回）
       try {
@@ -2025,9 +2066,11 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
           const r = await generate([{ date: u.date, slots: [u.slot] }], opts, div(attempt), SINGLE_MODEL, tick);
           dishes = r.days?.[0]?.meals?.[0]?.dishes || [];
         }
-        // 主菜名がバッチ内で重複したら、その名前を避けて作り直す（最大2回。並列生成の盲点をコードで補正）
-        for (let retry = 0; retry < 2 && mainNameOf(dishes) && batchMains.has(mainNameOf(dishes)); retry++) {
-          const r2 = await generate([{ date: u.date, slots: [u.slot] }], opts, div(retry + 1, [...batchMains]), SINGLE_MODEL, tick);
+        // 料理名がバッチ内で重複したら、その名前を避けて作り直す（最大2回。並列生成の盲点をコードで補正）
+        const dup = (ds) => (mainNameOf(ds) && batchMains.has(mainNameOf(ds)))
+          || (ds || []).some((d) => d.role === "副菜" && d.name && batchSides.has(d.name));
+        for (let retry = 0; retry < 2 && dup(dishes); retry++) {
+          const r2 = await generate([{ date: u.date, slots: [u.slot] }], opts, div(retry + 1, [...batchMains, ...batchSides]), SINGLE_MODEL, tick);
           const nd = r2.days?.[0]?.meals?.[0]?.dishes || [];
           if (nd.length) dishes = nd;
         }
@@ -2036,6 +2079,11 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
       }
       const mn = mainNameOf(dishes);
       if (mn) batchMains.add(mn);
+      for (const d of dishes) if (d.role === "副菜" && d.name) batchSides.add(d.name);
+      if (weekVeggies.length && dishes.length) {
+        const c = checkVegCompliance(dishes, weekVeggies);
+        if (!c.ok) console.log(`（野菜の使い回し: ${u.date} ${u.slot} でセット外の野菜 ${c.extra.join("・")}）`);
+      }
       if (!opts.includeSteps) dishes.forEach((d) => delete d.steps);
       collected.set(`${u.date}|${u.slot}`, dishes);
       send(
@@ -2060,7 +2108,8 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     return await one(INSERT_PLAN, [
       randomUUID(), household.id, dates[0], dates[dates.length - 1], opts.people, opts.maxCookMinutes,
       opts.dishCount, opts.preferences, opts.avoid,
-      JSON.stringify({ targets, opts }), JSON.stringify({ days }), new Date().toISOString(),
+      JSON.stringify({ targets, opts, weekVeggies: weekVeggies.map((v) => v.name) }),
+      JSON.stringify({ days }), new Date().toISOString(),
     ]);
 }
 
@@ -2083,6 +2132,7 @@ app.post("/api/plans/stream", auth, aiLimiter, requireAi((req) => aiCostFromTarg
       staple: normalizeStaple(staple),
       fridgeUse: sanitizeFridgeUse(req.body?.fridgeUse), // 冷蔵庫の使い切り指定（[{name, amount}]）
       guided: sanitizeGuided(req.body?.guided), // こだわりチップ（主菜バランス/調理法/好み）
+      reuseVeg: req.body?.reuseVeg !== false, // 野菜の使い回し（既定ON。3食未満は中で無効化）
       preferences: (preferences || "").toString().trim(),
       avoid: (avoid || "").toString().trim(),
       includeSteps: includeSteps !== false,

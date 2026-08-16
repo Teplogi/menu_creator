@@ -364,6 +364,13 @@
     .howto-btn .ht-tx b { display: block; font-size: .9rem; font-weight: 700; }
     .howto-btn .ht-tx span { display: block; font-size: .78rem; color: var(--muted); line-height: 1.45; margin-top: 2px; }
     .howto-btn .ht-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.15rem; }
+    /* 今週使い回す野菜のお知らせ */
+    .veg-note { display: flex; align-items: flex-start; gap: 10px; background: #eef7ee;
+      border: 1.5px solid #cfe6d2; border-radius: 14px; padding: 11px 13px; margin: 0 0 12px; }
+    .veg-note .ic { width: 22px; height: 22px; object-fit: contain; flex: none; margin-top: 1px; }
+    .veg-note span { flex: 1; min-width: 0; font-size: .88rem; line-height: 1.55; color: var(--ink); }
+    .veg-note b { display: block; font-size: .74rem; font-weight: 800; color: #2f8a55; letter-spacing: .02em; }
+    .veg-note i { display: block; font-style: normal; font-size: .74rem; color: #6f8a72; margin-top: 3px; }
     /* 献立が1つも無いときのホーム。何ができるアプリなのかをここで伝える */
     .empty-start { text-align: center; padding: 18px 18px 26px; }
     .empty-start .es-il { width: 148px; height: auto; max-width: 55%; border-radius: 20px; margin-bottom: 12px; }
@@ -1600,6 +1607,14 @@
           <div id="guidedRows"></div>
         </div>
 
+        <!-- 3食以上のときだけ出す。1〜2食では使い回す余地がない -->
+        <div class="reuse-row" id="reuseVegWrap" style="display:none">
+          <label class="toggle-row">買い物を減らす（野菜を使い回す）
+            <label class="switch"><input type="checkbox" id="reuseVeg" checked /><span class="track"></span><span class="knob"></span></label>
+          </label>
+          <p class="hint" style="margin:2px 0 0">同じ野菜を複数の日に使って、半端に余るのを防ぎます。主菜の食材はこれまで通り毎日変わります。</p>
+        </div>
+
         <label class="field"><span class="t">避けたい食材・アレルギー</span>
           <p id="avoidReminder" style="margin:2px 0 0;font-size:.85rem;color:var(--muted);line-height:1.7">読み込み中…</p>
         </label>
@@ -1715,6 +1730,14 @@
           <button class="copybtn" onclick="addStoreItem('soft')">追加</button>
         </div>
         <div id="storeSoftList" class="pantrylist"></div>
+
+        <div class="store-sub" style="color:#2f8a55;margin-top:16px">🥕 定番の野菜<span>（毎週よく買うもの → 使い回しの軸にする）</span></div>
+        <p style="font-size:.8rem;color:var(--muted);margin:0 0 8px;line-height:1.6">献立では、ここの野菜を複数の日に使って半端に余るのを防ぎます。空のときは にんじん・玉ねぎ・じゃがいも を使います（ねぎ・にんにく等の薬味は、指定しなくても自由に使われます）。</p>
+        <div class="urlbox">
+          <input type="text" id="storeStapleInput" placeholder="野菜名（例: キャベツ）" />
+          <button class="copybtn" onclick="addStoreItem('staple')">追加</button>
+        </div>
+        <div id="storeStapleList" class="pantrylist"></div>
       </div>
       <div class="card" id="billingCard" style="display:none">
         <div class="sec-head"><span class="label">プラン</span><span class="lead"></span></div>
@@ -3384,15 +3407,20 @@
       catch { storeItems = []; }
       renderStoreItems();
     }
-    const STORE_LIST_ID = { avoid: "storeAvoidList", soft: "storeSoftList" };
-    const STORE_INPUT_ID = { avoid: "storeAvoidInput", soft: "storeSoftInput" };
+    const STORE_LIST_ID = { avoid: "storeAvoidList", soft: "storeSoftList", staple: "storeStapleList" };
+    const STORE_INPUT_ID = { avoid: "storeAvoidInput", soft: "storeSoftInput", staple: "storeStapleInput" };
+    const STORE_EMPTY = {
+      avoid: "まだ登録がありません。",
+      soft: "まだ登録がありません。",
+      staple: "未設定（にんじん・玉ねぎ・じゃがいも を使います）",
+    };
     function renderStoreItems() {
-      for (const kind of ["avoid", "soft"]) {
+      for (const kind of ["avoid", "soft", "staple"]) {
         const wrap = $(STORE_LIST_ID[kind]);
         if (!wrap) continue;
         // 旧仕様の 'hard' は「控えめ(soft)」として表示
         const items = storeItems.filter((it) => it.kind === kind || (kind === "soft" && it.kind === "hard"));
-        if (!items.length) { wrap.innerHTML = `<p class="empty" style="padding:8px 0">まだ登録がありません。</p>`; continue; }
+        if (!items.length) { wrap.innerHTML = `<p class="empty" style="padding:8px 0">${esc(STORE_EMPTY[kind])}</p>`; continue; }
         wrap.innerHTML = items.map((it) =>
           `<span class="pantrychip">${esc(it.name)}<button data-id="${esc(it.id)}" aria-label="削除">×</button></span>`
         ).join("");
@@ -4247,6 +4275,9 @@
           <div class="minis">${mk("朝食", false)}${mk("昼食", false)}${mk("夕食", dinnerOn)}</div>
         </div>`;
       }).join("");
+      // 食数が変わると「野菜を使い回す」の出し入れも変わる
+      wrap.querySelectorAll(".minipill input").forEach((c) => c.addEventListener("change", syncReuseVeg));
+      syncReuseVeg();
     }
     function applyPreset(p) { rebuildDays(p); }
 
@@ -4261,8 +4292,14 @@
     // ---------- 生成 ----------
     // 「作り方は作らない」のときは、カタログから組み立てる即時生成に切り替える。
     // 材料はカタログに入っているのでAIを呼ぶ必要がなく、待ち時間ゼロ・無料枠も減らない。
+    // 「野菜を使い回す」は3食以上でしか意味がないので、選んだ食数に応じて出し入れする
+    function syncReuseVeg() {
+      const n = collectTargets().reduce((a, t) => a + t.slots.length, 0);
+      $("reuseVegWrap").style.display = n >= 3 ? "block" : "none";
+    }
     function syncCreateMode() {
       const quick = $("noSteps").checked;
+      syncReuseVeg();
       $("submitBtn").textContent = quick ? "すぐに作成する（AIを使わない）" : "AIで作成する";
       $("aiAnywayBtn").style.display = quick ? "block" : "none";
       $("quickNote").style.display = quick ? "block" : "none";
@@ -4310,6 +4347,7 @@
           .filter((x) => x.kind === "ingredient" && fridgeUseSel.has(x.id))
           .map((x) => ({ name: x.name, amount: x.amount || "" })),
         guided: { ...guidedSel },
+        reuseVeg: $("reuseVeg").checked, // 野菜の使い回し
       };
 
       $("submitBtn").disabled = true;
@@ -4401,7 +4439,10 @@
           const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
           if (!line) continue;
           let ev; try { ev = JSON.parse(line); } catch { continue; }
-          if (ev.type === "tick") {
+          if (ev.type === "veggies") {
+            currentPlan._veggies = ev.names || []; // 今週使い回す野菜
+            if (activeViewId() === "detail") renderOverview();
+          } else if (ev.type === "tick") {
             if (activeViewId() === "detail") applyTick(ev); // 途中経過（料理名・進み具合）
           } else if (ev.type === "meal" || ev.type === "meal_error") {
             const m = findStreamMeal(ev.date, ev.slot);
@@ -4549,6 +4590,16 @@
       // 生成中は買い物リスト・栄養は出さない（まだ中身が確定していないため）
       document.querySelectorAll("#view-detail > .btn-shop")
         .forEach((b) => { b.style.display = plan._streaming ? "none" : ""; });
+
+      // 今週使い回す野菜。効いていることが伝わらないと意味がないので明示する
+      const vg = plan._veggies || plan.weekVeggies || [];
+      if (vg.length) {
+        const v = document.createElement("div");
+        v.className = "veg-note";
+        v.innerHTML = `<img class="ic" src="/img/ic-basket.png" alt="">
+          <span><b>今週の野菜</b>${esc(vg.join("・"))}<i>同じ野菜を複数の日に使って、半端に余るのを防いでいます</i></span>`;
+        body.appendChild(v);
+      }
 
       const pr = document.createElement("div");
       pr.className = "people-row";
