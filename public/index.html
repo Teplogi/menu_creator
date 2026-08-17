@@ -634,6 +634,16 @@
     .pw-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
     .pw-list li { font-size: .92rem; color: var(--ink); line-height: 1.4; }
     /* ---- 規約リンク ---- */
+    .auth-reco { text-align: center; font-size: .78rem; font-weight: 700; color: #2f8a55;
+      background: #eef7ee; border-radius: 999px; padding: 5px 12px; width: fit-content;
+      margin: 12px auto 10px; }
+    .pw-toggle { display: block; margin: 0 auto; }
+    .pw-warn { font-size: .78rem; line-height: 1.65; color: #8a4b12; background: #fdf1e3;
+      border: 1.5px solid #f2d7b0; border-radius: 12px; padding: 10px 12px; margin: 0 0 14px; }
+    .pw-warn b { color: #7a3f0d; }
+    .pw-warn a { color: #7a3f0d; font-weight: 700; }
+    .pw-forgot { text-align: center; margin: 12px 0 0; font-size: .8rem; }
+    .pw-forgot a { color: var(--muted); font-weight: 600; }
     .legal-note { font-size: .78rem; color: var(--muted); text-align: center; margin: 14px 0 2px; line-height: 1.6; }
     .legal-note a { color: var(--orange-dark); font-weight: 600; }
     .legal-links { text-align: center; font-size: .82rem; margin-top: 4px; }
@@ -1615,19 +1625,30 @@
           <p class="auth-tagline">ふたりの毎日に、時短献立を</p>
           <p id="joinNote" style="display:none;font-size:.85rem;color:var(--orange-dark);font-weight:700;margin:8px 0 0;line-height:1.6">🎉 招待リンクから開いています。<br>ログインまたは登録すると、グループに参加できます。</p>
         </div>
-        <div id="googleAuth" style="display:none">
-          <div id="googleBtn" style="display:flex;justify-content:center"></div>
-          <div class="auth-or"><span>または</span></div>
-        </div>
         <div class="segmented">
           <button type="button" class="seg on" id="tab-login" onclick="setAuthMode('login')">ログイン</button>
           <button type="button" class="seg" id="tab-register" onclick="setAuthMode('register')">新規登録</button>
         </div>
-        <form onsubmit="event.preventDefault();submitAuth()">
+        <!-- パスワードの再設定にまだ対応していないので、Googleを主導線にする。
+             忘れると復旧できないことは、隠さずその場に書く。 -->
+        <div id="googleAuth" style="display:none">
+          <p class="auth-reco" id="googleReco">パスワード不要で、いちばんかんたんです</p>
+          <div id="googleBtn" style="display:flex;justify-content:center"></div>
+          <div class="auth-or"><span id="authOrText">または</span></div>
+        </div>
+        <button type="button" class="linklike pw-toggle" id="pwToggle" onclick="togglePwForm()" style="display:none">
+          ユーザー名とパスワードで登録する</button>
+        <form id="pwForm" onsubmit="event.preventDefault();submitAuth()">
+          <p class="pw-warn" id="pwWarn" style="display:none">
+            <b>パスワードの再設定は、まだご利用いただけません。</b>
+            忘れると入れなくなってしまうため、上の<b>Googleでのログイン</b>をおすすめします。
+            （万一のときは <a href="mailto:peitullysblack@gmail.com">peitullysblack@gmail.com</a> までご連絡ください）</p>
           <label class="field"><span class="t">ユーザー名</span><input type="text" id="authUser" autocomplete="username" placeholder="例: tanaka" /></label>
           <label class="field" style="margin-top:14px"><span class="t">パスワード（6文字以上）</span><input type="password" id="authPass" autocomplete="current-password" placeholder="••••••" /></label>
           <p id="authErr" style="color:var(--orange-dark);font-weight:600;font-size:.85rem;margin:12px 0 0;min-height:1em"></p>
           <button type="submit" class="btn-primary" id="authBtn">ログイン</button>
+          <p class="pw-forgot" id="pwForgot">
+            <a href="#" onclick="showForgotHelp();return false;">パスワードを忘れた方へ</a></p>
         </form>
         <p class="legal-note">登録・ログインすることで、<a href="/terms.html" target="_blank" rel="noopener">利用規約</a>と<a href="/privacy.html" target="_blank" rel="noopener">プライバシーポリシー</a>に同意したものとみなされます。</p>
         <p class="legal-links" style="margin-top:10px"><a href="#" onclick="showLanding();return false;">← めにゅらく！について（できること・料金）</a></p>
@@ -2569,13 +2590,45 @@
       finally { sessionStorage.removeItem("joinToken"); cleanJoinFromUrl(); }
     }
 
+    let pwFormOpen = false; // 新規登録では、パスワード登録はたたんでおく
     function setAuthMode(mode) {
       authMode = mode;
       $("tab-login").classList.toggle("on", mode === "login");
       $("tab-register").classList.toggle("on", mode === "register");
       $("authBtn").textContent = mode === "login" ? "ログイン" : "登録してはじめる";
       $("authErr").textContent = "";
+      $("authPass").setAttribute("autocomplete", mode === "login" ? "current-password" : "new-password");
+      pwFormOpen = mode === "login"; // ログインは今まで通りすぐ入力できるように
       renderGoogleButton(); // タブに合わせてGoogleボタンの表記も更新（登録/ログイン）
+      syncAuthForm();
+    }
+    // 新規登録は Google を主導線にし、パスワード登録は一段たたむ。
+    // 再設定に対応していないので、開いたときに必ず注意書きを出す。
+    function syncAuthForm() {
+      const reg = authMode === "register";
+      const googleOn = $("googleAuth").style.display !== "none";
+      $("pwForm").style.display = pwFormOpen || !googleOn ? "block" : "none";
+      $("pwToggle").style.display = reg && googleOn && !pwFormOpen ? "block" : "none";
+      $("pwWarn").style.display = reg ? "block" : "none";
+      $("pwForgot").style.display = reg ? "none" : "block";
+      const reco = $("googleReco");
+      if (reco) reco.textContent = reg
+        ? "パスワード不要で、いちばんかんたんです"
+        : "前回Googleで登録した方はこちら";
+      const or = $("authOrText");
+      if (or) or.style.display = $("pwForm").style.display === "none" ? "none" : "";
+      $("googleAuth").querySelector(".auth-or").style.display =
+        $("pwForm").style.display === "none" ? "none" : "flex";
+    }
+    function togglePwForm() { pwFormOpen = true; syncAuthForm(); $("authUser").focus(); }
+    function showForgotHelp() {
+      alert(
+        "申し訳ありません。パスワードの再設定は、まだご利用いただけません。\n\n" +
+        "・Googleで登録された方は、上の「Googleでログイン」から入れます\n" +
+        "・ユーザー名とパスワードで登録された方は、お手数ですが\n" +
+        "　peitullysblack@gmail.com までご連絡ください\n\n" +
+        "（メールでの再設定は、近日中に対応予定です）"
+      );
     }
     function submitAuth() { doAuth(authMode === "login" ? "/api/auth/login" : "/api/auth/register"); }
     async function doAuth(path) {
@@ -2605,6 +2658,7 @@
       if (!el) return;
       $("googleAuth").style.display = "block";
       el.innerHTML = "";
+      setTimeout(syncAuthForm, 0); // Googleが使えると分かった時点で出し分け直す
       // 新規登録タブは「登録」、ログインタブは「ログイン」の表記にする（GISの許容テキスト内で出し分け）
       const text = authMode === "login" ? "signin_with" : "signup_with";
       google.accounts.id.renderButton(el, { theme: "outline", size: "large", text, shape: "pill", locale: "ja", width: 260 });
