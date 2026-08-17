@@ -364,6 +364,11 @@
     .howto-btn .ht-tx b { display: block; font-size: .9rem; font-weight: 700; }
     .howto-btn .ht-tx span { display: block; font-size: .78rem; color: var(--muted); line-height: 1.45; margin-top: 2px; }
     .howto-btn .ht-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.15rem; }
+    /* テスト期間中の断り（LP） */
+    .lp-testnote { max-width: 620px; margin: 0 auto 22px; background: #eef7ee; border: 1.5px solid #cfe6d2;
+      border-radius: 14px; padding: 13px 16px; font-size: .92rem; line-height: 1.7; color: #2f6b45; text-align: left; }
+    .lp-testnote b { display: inline; color: #1f5233; }
+    .lp-testnote b:first-child { display: block; font-size: .98rem; margin-bottom: 3px; }
     /* グループ作成画面の下の逃げ道（行き止まりにしない） */
     .setup-foot { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 4px; }
     .linklike { border: none; background: none; color: var(--orange-dark); font: inherit; font-size: .84rem;
@@ -1518,6 +1523,12 @@
               <span class="lp-eyebrow">PRICE</span>
               <p class="ttl">まずは無料で。物足りなくなったら。</p>
               <p class="sub">献立づくりと買い物リストの共有は、無料のままずっと使えます。</p>
+              <!-- テスト期間中だけ出す。料金表を見て「お金がかかる」と思われないように -->
+              <div class="lp-testnote" id="lpTestNote" style="display:none">
+                <b>いまはテスト期間中です</b>
+                下のプレミアム機能も含めて、<b>すべて無料でお使いいただけます</b>。
+                お支払いは発生しません。料金は正式公開後の予定です。
+              </div>
               <div class="lp-plans">
                 <div class="lp-plan">
                   <div class="pl-name">無料プラン</div>
@@ -2268,7 +2279,15 @@
       return data;
     }
 
-    function showLanding() { showView("landing", "めにゅらく！"); }
+    // テスト期間中は、料金表の上に断りを出す（ログイン前なので専用の入口から取る）
+    let publicConfig = null;
+    async function loadPublicConfig() {
+      try { publicConfig = await (await fetch("/api/public-config")).json(); } catch { publicConfig = null; }
+      const n = $("lpTestNote");
+      if (n) n.style.display = publicConfig?.testMode ? "block" : "none";
+      return publicConfig;
+    }
+    function showLanding() { loadPublicConfig(); showView("landing", "めにゅらく！"); }
     function lpScroll(id) { $(id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }
     function startFromLanding(mode) { setAuthMode(mode || "register"); showView("auth", "めにゅらく！"); renderGoogleButton(); updateJoinNote(); }
     function showAuth() { setAuthMode(authMode); showView("auth", "めにゅらく！"); renderGoogleButton(); updateJoinNote(); }
@@ -2623,10 +2642,27 @@
       catch { billingStatus = null; }
       return billingStatus;
     }
+    // 「毎週おまかせ作成」のバッジ。テスト期間中は有料表示のままにしない
+    function syncProBadge() {
+      const b = document.querySelector("#autoCard .pro-badge");
+      if (b) b.textContent = billingStatus?.testMode ? "テスト期間中は無料" : "プレミアム";
+    }
     function renderBillingCard() {
+      syncProBadge();
       const card = $("billingCard");
       if (!card) return;
       const b = billingStatus;
+      // テスト期間中は、無料で全部使えることをはっきり出す（試してもらうため）
+      if (b && b.testMode) {
+        card.style.display = "";
+        $("billingBody").innerHTML =
+          `<div class="plan-row"><span class="plan-badge premium">テスト期間中</span>
+             <span class="plan-note">すべての機能を無料でお使いいただけます</span></div>
+           <p class="hint" style="margin:0">お試し期間のため、お支払いは発生しません。
+             <b>毎週おまかせ作成</b>や<b>栄養コメント</b>など、公開後に有料になる予定の機能も、
+             いまは制限なく使えます。回数の上限もありません。</p>`;
+        return;
+      }
       // 課金が未設定（STRIPE未設定）なら、プランUI自体を出さない
       if (!b || !b.billingEnabled) { card.style.display = "none"; return; }
       card.style.display = "";
@@ -2729,6 +2765,11 @@
       const el = $("aiQuotaHint");
       if (!el) return;
       const b = billingStatus;
+      if (b && b.testMode) {
+        el.innerHTML = "テスト期間中です。<b>回数の制限なく</b>お使いいただけます。";
+        el.style.display = $("noSteps")?.checked ? "none" : "";
+        return;
+      }
       if (!b || !b.billingEnabled || b.active) { el.style.display = "none"; return; }
       el.innerHTML = `無料枠：今月あと 献立 <b>${b.freeRemaining}</b>/${b.freeLimit}食 ・ AI修正 <b>${b.editRemaining ?? "-"}</b>/${b.editLimit ?? "-"}回。` +
         `これを超える分は<a href="#" onclick="startCheckout();return false;">プレミアム</a>で使い放題です。`;
@@ -2898,6 +2939,7 @@
       try { a = await apiOK(`/api/households/${household.id}/auto`); } catch { return; }
       // 未加入でも中身は見せる。操作と保存だけ止める。
       $("autoLocked").style.display = a.premium ? "none" : "flex";
+      syncProBadge();
       $("autoBody").classList.toggle("locked-fields", !a.premium);
       $("autoSaveBtn").disabled = !a.premium;
       $("autoWeekday").innerHTML = AUTO_DOW.map((l, i) => opt(i, l, a.weekday)).join("");

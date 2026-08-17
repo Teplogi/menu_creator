@@ -85,10 +85,17 @@ const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || null;
 const FREE_AI_MEALS_PER_MONTH = Number(process.env.FREE_AI_MEALS_PER_MONTH) || 10;
 // AI修正（作り直し・1品差し替え）の無料枠は献立生成とは別枠にする（修正も体験してもらうため）
 const FREE_AI_EDITS_PER_MONTH = Number(process.env.FREE_AI_EDITS_PER_MONTH) || 5;
-// 課金が有効なのは「秘密鍵」と「価格ID」が両方そろっているときだけ。
+// テスト期間モード。テスターに目玉機能（毎週おまかせ作成・栄養コメント）まで
+// 触ってもらうため、課金導線を止めて全機能を開放する。
+// Stripeがテストキーのままだと、決済画面に飛ばしてしまい不信を招くので、
+// 外部テスターに配る間は必ずこれを立てる。
+const TEST_MODE = process.env.TEST_MODE === "1";
+// 課金が有効なのは「秘密鍵」と「価格ID」が両方そろっていて、テスト期間でないときだけ。
 // 未設定の間は AI 生成を全ユーザーに開放する（開発・公開前でも普通に使える）。
-const billingEnabled = () => !!(stripe && STRIPE_PRICE_ID);
-if (!billingEnabled()) {
+const billingEnabled = () => !TEST_MODE && !!(stripe && STRIPE_PRICE_ID);
+if (TEST_MODE) {
+  console.log("（テスト期間モード: 課金導線を止め、全機能を開放しています）");
+} else if (!billingEnabled()) {
   console.log("（課金は未設定: STRIPE_SECRET_KEY / STRIPE_PRICE_ID 未設定のため、AI生成は全開放されます）");
 }
 
@@ -2795,6 +2802,12 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1, "edi
 const appBaseUrl = (req) => process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
 
 // 現在の課金状態＋無料枠の残りをフロントに返す
+// ログイン前でも読める設定（紹介ページで「テスト期間中」を出すのに使う）
+app.get("/api/public-config", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({ testMode: TEST_MODE });
+});
+
 app.get("/api/billing/status", auth, async (req, res) => {
   try {
     const active = billingEnabled() ? await hasActiveEntitlement(req.user.id) : false;
@@ -2802,6 +2815,7 @@ app.get("/api/billing/status", auth, async (req, res) => {
     const usage = await getAiUsage(req.user.id);
     res.json({
       billingEnabled: billingEnabled(),
+      testMode: TEST_MODE, // テスト期間中は画面に「無料で全部使えます」と出す
       active,
       plan: active ? e?.plan || "monthly" : null,
       currentPeriodEnd: active ? e?.current_period_end || null : null,
@@ -2822,6 +2836,7 @@ app.get("/api/billing/status", auth, async (req, res) => {
 // 申込（Checkout セッション作成）→ フロントは返ってきた url に遷移
 app.post("/api/billing/checkout", auth, async (req, res) => {
   try {
+    if (TEST_MODE) return res.status(503).json({ error: "テスト期間中のため、お支払いは受け付けていません。すべての機能を無料でお使いいただけます。" });
     if (!billingEnabled()) return res.status(503).json({ error: "課金は現在利用できません。" });
     const customerId = await getOrCreateStripeCustomer(req.user);
     const base = appBaseUrl(req);
@@ -2843,6 +2858,7 @@ app.post("/api/billing/checkout", auth, async (req, res) => {
 // 解約・カード変更（Customer Portal）→ フロントは返ってきた url に遷移
 app.post("/api/billing/portal", auth, async (req, res) => {
   try {
+    if (TEST_MODE) return res.status(503).json({ error: "テスト期間中のため、お支払いは受け付けていません。すべての機能を無料でお使いいただけます。" });
     if (!billingEnabled()) return res.status(503).json({ error: "課金は現在利用できません。" });
     const e = await one("SELECT stripe_customer_id FROM entitlements WHERE user_id = $1", [req.user.id]);
     if (!e?.stripe_customer_id) return res.status(400).json({ error: "課金情報が見つかりません。" });

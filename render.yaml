@@ -37,6 +37,12 @@ services:
       - key: GOOGLE_CLIENT_ID
         value: "654211998942-jgahkneb1no0ucj19g1p4b8utl55cu3s.apps.googleusercontent.com"
       # --- 非秘密: 既定値 ---
+      # ★テスト期間モード。課金導線を止めて全機能を開放する。
+      #   Stripeがテストキーのままだと、押した人をテスト決済画面に飛ばしてしまい
+      #   不信を招くので、外部テスターに配る間は必ず "1" のままにする。
+      #   正式公開（Stripeを本番キーに切替）するときに "0" へ。
+      - key: TEST_MODE
+        value: "1"             # 正式公開時は "0"
       # ★β期間は無料枠を多めにしてテスターが自由に試せるように。公開時に 10 / 5 へ戻す。
       - key: FREE_AI_MEALS_PER_MONTH
         value: "150"           # 公開時は "10"
