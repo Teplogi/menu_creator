@@ -1437,7 +1437,10 @@ app.get("/api/households/:id/members", auth, async (req, res) => {
        WHERE m.household_id = $1 ORDER BY m.created_at`,
       [req.params.id]
     );
-    res.json(rows.map((m) => ({ username: m.username, displayName: m.display_name || m.username, role: m.role })));
+    res.json(rows.map((m) => ({
+      username: m.username, displayName: m.display_name || m.username, role: m.role,
+      me: m.username === req.user.username, // 自分の行だけ「抜ける」を出すため
+    })));
   } catch (err) {
     handleError(res, err);
   }
@@ -1447,6 +1450,9 @@ app.get("/api/households/:id/members", auth, async (req, res) => {
 app.post("/api/households/:id/members", auth, async (req, res) => {
   try {
     if (!(await requireMember(req, res, req.params.id))) return;
+    const mine = await one("SELECT role FROM memberships WHERE household_id = $1 AND user_id = $2",
+      [req.params.id, req.user.id]);
+    if (mine?.role !== "owner") return res.status(403).json({ error: "メンバーを追加できるのは、グループを作った人だけです。" });
     const uname = (req.body?.username || "").toString().trim();
     const target = await one("SELECT * FROM users WHERE username_lc = $1", [uname.toLowerCase()]);
     if (!target) return res.status(404).json({ error: "そのユーザーは見つかりません。" });
@@ -1455,6 +1461,43 @@ app.post("/api/households/:id/members", auth, async (req, res) => {
       req.params.id, target.id, "member", new Date().toISOString(),
     ]);
     res.json({ ok: true, username: target.username });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// メンバーを外す／自分で抜ける。
+// オーナーは他のメンバーを外せる。メンバーは自分だけ抜けられる。
+// オーナーが抜けるときは、残っているいちばん古いメンバーがオーナーを引き継ぐ。
+// 最後の1人は抜けられない（グループのデータが誰のものでもなくなるため）。
+app.delete("/api/households/:id/members/:username", auth, async (req, res) => {
+  try {
+    const hh = await requireMember(req, res, req.params.id);
+    if (!hh) return;
+    const target = await one("SELECT * FROM users WHERE username_lc = $1",
+      [String(req.params.username || "").toLowerCase()]);
+    if (!target) return res.status(404).json({ error: "そのユーザーは見つかりません。" });
+    const mine = await one("SELECT role FROM memberships WHERE household_id = $1 AND user_id = $2",
+      [hh.id, req.user.id]);
+    const self = target.id === req.user.id;
+    if (!self && mine?.role !== "owner") {
+      return res.status(403).json({ error: "他のメンバーを外せるのは、グループを作った人だけです。" });
+    }
+    const rows = await all(
+      "SELECT user_id, role FROM memberships WHERE household_id = $1 ORDER BY created_at", [hh.id]);
+    if (!rows.some((r) => r.user_id === target.id)) return res.status(404).json({ error: "このグループのメンバーではありません。" });
+    if (rows.length <= 1) {
+      return res.status(400).json({ error: "最後の1人は抜けられません。献立が残ったままになるためです。" });
+    }
+    await q("DELETE FROM memberships WHERE household_id = $1 AND user_id = $2", [hh.id, target.id]);
+    // オーナーが抜けたら、残りのいちばん古い人が引き継ぐ
+    const wasOwner = rows.find((r) => r.user_id === target.id)?.role === "owner";
+    if (wasOwner) {
+      const next = rows.find((r) => r.user_id !== target.id);
+      if (next) await q("UPDATE memberships SET role = 'owner' WHERE household_id = $1 AND user_id = $2",
+        [hh.id, next.user_id]);
+    }
+    res.json({ ok: true, left: self });
   } catch (err) {
     handleError(res, err);
   }

@@ -364,6 +364,22 @@
     .howto-btn .ht-tx b { display: block; font-size: .9rem; font-weight: 700; }
     .howto-btn .ht-tx span { display: block; font-size: .78rem; color: var(--muted); line-height: 1.45; margin-top: 2px; }
     .howto-btn .ht-go { flex: none; color: var(--orange); font-weight: 800; font-size: 1.15rem; }
+    /* グループ作成画面の下の逃げ道（行き止まりにしない） */
+    .setup-foot { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 4px; }
+    .linklike { border: none; background: none; color: var(--orange-dark); font: inherit; font-size: .84rem;
+      font-weight: 700; cursor: pointer; padding: 6px 4px; text-decoration: underline; }
+    .linklike:hover { opacity: .75; }
+    /* メンバー行の操作 */
+    .member { display: flex; align-items: center; gap: 8px; padding: 9px 2px; border-bottom: 1px dashed var(--line); }
+    .member:last-child { border-bottom: 0; }
+    .member .mn { flex: 1; min-width: 0; font-weight: 700; font-size: .92rem; overflow-wrap: anywhere; }
+    .member .mrole { font-size: .66rem; font-weight: 800; color: var(--orange-dark);
+      background: var(--orange-soft); border-radius: 5px; padding: 2px 7px; flex: none; }
+    .member .mme { font-size: .66rem; font-weight: 800; color: #2f8a55; background: #eef7ee;
+      border-radius: 5px; padding: 2px 7px; flex: none; }
+    .member .mout { border: 1.5px solid var(--line); background: #fff; color: #c0392b; font: inherit;
+      font-size: .74rem; font-weight: 700; border-radius: 9px; padding: 5px 10px; cursor: pointer; flex: none; }
+    .member .mout:hover { border-color: #e0a0a0; background: #fdf2f2; }
     /* 今週使い回す野菜のお知らせ */
     .veg-note { display: flex; align-items: flex-start; gap: 10px; background: #eef7ee;
       border: 1.5px solid #cfe6d2; border-radius: 14px; padding: 11px 13px; margin: 0 0 12px; }
@@ -472,6 +488,25 @@
     .fav-row .fdel svg { width: 17px; height: 17px; }
     .fav-detail { background: var(--cream); border-radius: 10px; padding: 10px 14px; margin: 0 0 8px; font-size: .86rem; }
     .fav-detail ul, .fav-detail ol { margin: 4px 0; padding-left: 20px; }
+    /* 一覧の冒頭の説明 */
+    .fav-lead { background: var(--orange-soft); border-radius: 12px; padding: 11px 13px; margin: 4px 0 12px;
+      font-size: .82rem; line-height: 1.6; color: #7a5a2e; }
+    .fav-lead b { display: block; color: var(--orange-dark); font-size: .86rem; margin-bottom: 3px; }
+    /* 1件ぶんのカード。操作にはすべて文字のラベルを付ける */
+    .favcard { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 13px; margin-bottom: 10px; }
+    .favcard.off { background: #fbf9f7; border-style: dashed; }
+    .favcard .fhead { display: flex; align-items: flex-start; gap: 8px; }
+    .favcard .fnm { flex: 1; min-width: 0; font-weight: 800; font-size: .96rem; line-height: 1.45;
+      cursor: pointer; overflow-wrap: anywhere; }
+    .favcard.off .fnm { color: var(--muted); }
+    .favcard .fmeta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+    .favcard .fbtns { display: flex; gap: 8px; margin-top: 10px; }
+    .favcard .fbtns button { flex: 1; border: 1.5px solid var(--line); background: #fff; color: var(--ink);
+      font: inherit; font-size: .78rem; font-weight: 700; border-radius: 10px; padding: 8px 6px; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+    .favcard .fbtns button:active { transform: scale(.98); }
+    .favcard .fbtns .b-mix.on { border-color: var(--orange); background: var(--orange-soft); color: var(--orange-dark); }
+    .favcard .fbtns .b-next.on { border-color: var(--orange); background: var(--orange); color: #fff; }
     /* 順番待ちの状態（まだ出ていない / 最後に出した日）。「登録したのに出ない」を見えるようにする */
     .fav-row .fwait { font-size: .66rem; font-weight: 700; color: #2f8a55; background: #eef7ee;
       border-radius: 5px; padding: 1px 6px; }
@@ -1598,6 +1633,22 @@
         <label class="field"><span class="t">グループの名前</span><input type="text" id="hhName" placeholder="例: ふたりのごはん / 田中家" /></label>
         <button class="btn-primary" id="createHhBtn" onclick="createHousehold()">グループを作ってはじめる</button>
         <button class="btn-ghost" id="claimOld" style="display:none" onclick="claimOldHousehold()">以前のデータ（この端末）を引き継ぐ</button>
+        <!-- 招待リンクを一度使うとトークンが消えるため、同じ端末の別アカウントが
+             参加できなくなっていた。ここから何度でも参加できるようにする。 -->
+        <div id="setupJoin" style="display:none">
+          <div class="auth-or"><span>または</span></div>
+          <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">
+            <b>招待を受け取っている方</b>は、もらったリンクを貼るとそのグループに参加できます。</p>
+          <div class="urlbox">
+            <input type="text" id="setupJoinInput" placeholder="招待リンク または 招待コード" />
+            <button class="copybtn" onclick="joinByCode('setupJoinInput','setupJoinHint')">参加</button>
+          </div>
+          <p class="hint" id="setupJoinHint"></p>
+        </div>
+        <div id="setupFoot" class="setup-foot">
+          <button class="linklike" id="setupBack" style="display:none" onclick="goHome()">← 前の画面にもどる</button>
+          <button class="linklike" onclick="logout()">別のアカウントでログインする</button>
+        </div>
       </div>
     </section>
 
@@ -1736,6 +1787,7 @@
         <p class="hint" id="groupNameHint"></p>
         <div class="sec-head" style="margin-top:14px"><span class="label">メンバー</span><span class="lead"></span></div>
         <div id="memberList"></div>
+        <p class="hint" id="memberHint" style="margin:8px 2px 0"></p>
         <div class="sec-head" style="margin-top:14px"><span class="label">パートナーを招待</span><span class="lead"></span></div>
         <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">この<b>招待リンク</b>をLINEなどで送るだけ。相手がリンクを開くと、このグループに参加できます。</p>
         <div class="urlbox">
@@ -1757,6 +1809,13 @@
         <div class="sec-head"><span class="label">グループを切り替え</span><span class="lead"></span></div>
         <div id="hhList" class="hhlist"></div>
         <button class="btn-ghost" onclick="showSetup()">＋ 新しいグループを作る</button>
+        <div class="sec-head" style="margin-top:16px"><span class="label">招待されたグループに参加</span><span class="lead"></span></div>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">もらった<b>招待リンク</b>を貼ると、そのグループに参加できます。リンクを開いても参加できなかったときはこちらから。</p>
+        <div class="urlbox">
+          <input type="text" id="joinCodeInput" placeholder="招待リンク または 招待コード" />
+          <button class="copybtn" onclick="joinByCode('joinCodeInput','joinCodeHint')">参加</button>
+        </div>
+        <p class="hint" id="joinCodeHint"></p>
       </div>
       <div class="card">
         <div class="sec-head"><span class="label">常備品リスト</span><span class="lead"></span></div>
@@ -1911,12 +1970,19 @@
     <section class="view" id="view-favorites">
       <div class="card">
         <div class="sec-head"><span class="label">お気に入りレシピ</span><span class="lead"></span></div>
-        <p style="font-size:.85rem;color:var(--muted);margin:0 0 10px">献立の料理の<b>⭐</b>で保存できます。自分の十八番は<b>名前だけ</b>でもOK（レシピなしでそのまま献立に置けます）。グループで共有されます。</p>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 10px">献立の料理の<b>⭐</b>で保存できます。自分の十八番は<b>名前だけ</b>でもOK。グループで共有されます。</p>
         <div class="urlbox">
           <input type="text" id="favNameInput" placeholder="料理名（例: 実家の肉じゃが）" maxlength="60" />
           <button class="copybtn" onclick="addFavoriteManual()">追加</button>
         </div>
         <p class="hint" id="favHint"></p>
+
+        <!-- 何のための一覧なのかを最初に書く。記号だけ置くと意味が伝わらない。 -->
+        <div class="fav-lead" id="favLead">
+          <b>献立をつくると、ここから何品か自動で入ります。</b>
+          <span>まだ出していないものから順に選ばれるので、登録したものは順番に登場します。
+          あまり出したくないものは「献立に入れる」をオフに、すぐ出したいものは「次に出す」を押してください。</span>
+        </div>
         <div id="favList"></div>
       </div>
     </section>
@@ -2209,6 +2275,13 @@
     function updateJoinNote() { const n = $("joinNote"); if (n) n.style.display = sessionStorage.getItem("joinToken") ? "block" : "none"; }
     function showSetup() {
       $("claimOld").style.display = localStorage.getItem("householdToken") ? "block" : "none";
+      // すでにグループがあるなら、行き止まりにならないよう戻れるようにする
+      $("setupBack").style.display = (households || []).length ? "block" : "none";
+      $("setupJoin").style.display = "block";
+      const pending = localStorage.getItem("lastJoinToken") || "";
+      $("setupJoinInput").value = pending;
+      $("setupJoinHint").textContent = pending
+        ? "この端末で開いた招待リンクです。別のアカウントで参加するときは、このまま「参加」を押してください。" : "";
       showView("setup", "グループの設定");
     }
     async function goHome() {
@@ -2408,11 +2481,64 @@
     // 招待リンク（?join=token）の処理
     function captureJoinToken() {
       const t = new URLSearchParams(location.search).get("join");
-      if (t) sessionStorage.setItem("joinToken", t);
+      if (!t) return;
+      sessionStorage.setItem("joinToken", t);
+      // 1回使うと消えていたため、同じ端末の別アカウント（Googleログイン等）が
+      // 参加できなくなっていた。あとから手動で参加できるよう控えを残す。
+      try { localStorage.setItem("lastJoinToken", t); } catch {}
     }
     function cleanJoinFromUrl() {
       try { const u = new URL(location.href); if (u.searchParams.has("join")) { u.searchParams.delete("join"); history.replaceState(null, "", u.pathname + (u.search || "")); } } catch {}
     }
+    // 招待リンクやコードを貼って参加する。リンクごと貼られても拾えるようにしておく。
+    async function joinByCode(inputId, hintId) {
+      const el = $(inputId), hint = $(hintId);
+      const raw = (el.value || "").trim();
+      if (!raw) { el.focus(); return; }
+      let token = raw;
+      const m = raw.match(/[?&]join=([^&\s]+)/);
+      if (m) token = decodeURIComponent(m[1]);
+      else if (/^https?:\/\//.test(raw)) { if (hint) hint.textContent = "このリンクには招待コードが入っていません。"; return; }
+      if (hint) hint.textContent = "参加しています…";
+      try {
+        const hh = await apiOK("/api/households/claim", { method: "POST", body: { shareToken: token } });
+        const me = await apiOK("/api/auth/me");
+        households = me.households;
+        household = households.find((h) => h.id === hh.id) || household;
+        localStorage.setItem("householdId", household.id);
+        el.value = "";
+        if (hint) hint.textContent = "";
+        await goHome();
+        setTimeout(() => alert(`「${hh.name}」に参加しました！`), 250);
+      } catch (e) {
+        if (hint) hint.textContent = e.message.includes("見つかりません")
+          ? "この招待コードは使えません。リンクが新しくなっている可能性があるので、送り主にもう一度もらってください。"
+          : e.message;
+      }
+    }
+    // メンバーを外す／自分で抜ける
+    async function removeMember(username, label, isMe) {
+      const msg = isMe
+        ? `「${household.name}」から抜けますか？
+このグループの献立・買い物リストは見られなくなります（他のメンバーには残ります）。`
+        : `「${label}」さんをこのグループから外しますか？
+相手はこのグループの献立を見られなくなります。`;
+      if (!(await confirmDialog(msg, isMe ? "抜ける" : "外す", "やめる"))) return;
+      try {
+        const r = await apiOK(`/api/households/${household.id}/members/${encodeURIComponent(username)}`, { method: "DELETE" });
+        const me = await apiOK("/api/auth/me");
+        households = me.households;
+        if (r.left) {
+          // 自分が抜けたので、別のグループへ。無ければ作成画面へ。
+          household = households[0] || null;
+          if (!household) { localStorage.removeItem("householdId"); return showSetup(); }
+          localStorage.setItem("householdId", household.id);
+          return goHome();
+        }
+        renderSettings();
+      } catch (e) { $("memberHint").textContent = e.message; }
+    }
+
     async function processPendingJoin() {
       const token = sessionStorage.getItem("joinToken");
       if (!token) return null;
@@ -2651,9 +2777,22 @@
       $("memberList").innerHTML = '<p class="empty">読み込み中…</p>';
       try {
         const members = await apiOK(`/api/households/${household.id}/members`);
-        $("memberList").innerHTML = members.map((m) =>
-          `<div class="member"><span class="mn">${esc(m.displayName || m.username)}</span>${m.role === "owner" ? '<span class="mrole">オーナー</span>' : ""}</div>`
-        ).join("");
+        const iAmOwner = members.some((m) => m.me && m.role === "owner");
+        $("memberList").innerHTML = members.map((m) => {
+          // オーナーは他の人を外せる。自分は誰でも抜けられる（最後の1人を除く）。
+          const canRemove = (iAmOwner && !m.me) || m.me;
+          const label = m.me ? "抜ける" : "外す";
+          return `<div class="member"><span class="mn">${esc(m.displayName || m.username)}</span>
+            ${m.role === "owner" ? '<span class="mrole">オーナー</span>' : ""}
+            ${m.me ? '<span class="mme">あなた</span>' : ""}
+            ${canRemove && members.length > 1 ? `<button class="mout" data-u="${esc(m.username)}" data-me="${m.me ? 1 : 0}" data-n="${esc(m.displayName || m.username)}">${label}</button>` : ""}
+          </div>`;
+        }).join("");
+        $("memberList").querySelectorAll(".mout").forEach((b) =>
+          b.addEventListener("click", () => removeMember(b.dataset.u, b.dataset.n, b.dataset.me === "1")));
+        $("memberHint").textContent = iAmOwner
+          ? "あなたはオーナーです。メンバーを外したり、招待したりできます。"
+          : "メンバーを外せるのはオーナーだけです。自分でグループを抜けることはできます。";
       } catch (e) { $("memberList").innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
     }
 
@@ -2895,36 +3034,49 @@
         return;
       }
       const today = fmt(new Date());
+      // 「まだ出ていません」だけでは何のことか分からないので、順番待ちだと分かる言い方にする
       const waitTag = (f) => {
-        if (!f.lastUsed) return `<span class="fwait">まだ出ていません</span>`;
+        if (!f.autoMix) return `<span class="fwait old">献立には入れない設定</span>`;
+        if (f.pinned) return `<span class="fwait">次の献立に入ります</span>`;
+        if (!f.lastUsed) return `<span class="fwait">献立にまだ登場していません（次の順番）</span>`;
         const d = Math.round((parseDate(today) - parseDate(f.lastUsed)) / 86400000);
-        return `<span class="fwait old">${esc(mdLabel(f.lastUsed))}に登場${d > 0 ? `（${d}日前）` : ""}</span>`;
+        return `<span class="fwait old">前回 ${esc(mdLabel(f.lastUsed))}${d > 0 ? `（${d}日前）` : ""}</span>`;
       };
       wrap.innerHTML = favorites.map((f) => {
-        const row = `<div class="fav-row" data-id="${esc(f.id)}">
-          <span class="fmain"><span class="fnm" title="タップで中身を見る">${esc(f.name)}</span>
-            ${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
-            <span class="ftag">${f.dish && (f.dish.ingredients || []).length ? "材料あり" : "名前のみ"}</span>
-            ${waitTag(f)}</span>
-          <span class="fops">
-            <label class="fmix" title="献立の作成に混ぜる">
-              <input type="checkbox" class="fmixcb" data-id="${esc(f.id)}" ${f.autoMix ? "checked" : ""}><span class="bar"></span></label>
-            <button class="fpin ${f.pinned ? "on" : ""}" data-id="${esc(f.id)}" title="次の献立に必ず入れる">📌</button>
+        const hasIng = f.dish && (f.dish.ingredients || []).length;
+        const card = `<div class="favcard ${f.autoMix ? "" : "off"}" data-id="${esc(f.id)}">
+          <div class="fhead">
+            <span class="fnm" title="タップで材料を見る・直す">${esc(f.name)}</span>
             <button class="fdel" data-id="${esc(f.id)}" aria-label="削除">${TRASH_SVG}</button>
-          </span></div>`;
-        return row + (favExpandedId === f.id ? favDetailHtml(f) : "");
+          </div>
+          <div class="fmeta">
+            ${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
+            <span class="ftag">${hasIng ? "材料あり" : "材料なし"}</span>
+            ${waitTag(f)}
+          </div>
+          <div class="fbtns">
+            <button class="b-mix ${f.autoMix ? "on" : ""}" data-id="${esc(f.id)}">
+              ${f.autoMix ? "✓ 献立に入れる" : "献立に入れない"}</button>
+            <button class="b-next ${f.pinned ? "on" : ""}" data-id="${esc(f.id)}" ${f.autoMix ? "" : "disabled style=opacity:.4"}>
+              ${f.pinned ? "✓ 次に出す" : "次に出す"}</button>
+          </div>
+        </div>`;
+        return card + (favExpandedId === f.id ? favDetailHtml(f) : "");
       }).join("");
 
-      wrap.querySelectorAll(".fav-row .fnm").forEach((el) => el.addEventListener("click", () => {
-        const id = el.closest(".fav-row").dataset.id;
+      wrap.querySelectorAll(".favcard .fnm").forEach((el) => el.addEventListener("click", () => {
+        const id = el.closest(".favcard").dataset.id;
         favExpandedId = favExpandedId === id ? null : id;
         favEdit = null; favCheck = null;
         renderFavorites();
       }));
       wrap.querySelectorAll(".fdel").forEach((b) => b.addEventListener("click", () => deleteFavorite(b.dataset.id)));
-      wrap.querySelectorAll(".fmixcb").forEach((c) =>
-        c.addEventListener("change", () => patchFavorite(c.dataset.id, { autoMix: c.checked })));
-      wrap.querySelectorAll(".fpin").forEach((b) =>
+      wrap.querySelectorAll(".b-mix").forEach((b) =>
+        b.addEventListener("click", () => {
+          const f = favorites.find((x) => x.id === b.dataset.id);
+          patchFavorite(b.dataset.id, { autoMix: !(f && f.autoMix) });
+        }));
+      wrap.querySelectorAll(".b-next").forEach((b) =>
         b.addEventListener("click", () => {
           const f = favorites.find((x) => x.id === b.dataset.id);
           patchFavorite(b.dataset.id, { pinned: !(f && f.pinned) });
