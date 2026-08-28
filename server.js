@@ -1770,6 +1770,61 @@ app.post("/api/households/:id/favorites/:favId/ingredients", auth, aiLimiter, re
   }
 });
 
+// いま入っている材料をもとに、作り方だけ書いてもらう。
+// 材料は書き換えない（利用者が入れたものを尊重する）。保存は画面側から。
+const FAV_STEPS_SCHEMA = {
+  type: "object",
+  properties: {
+    steps: { type: "array", items: { type: "string" }, description: "作り方の手順（3〜7個）" },
+    cook_minutes: { type: "integer", description: "調理時間の目安（分）" },
+  },
+  required: ["steps"],
+  additionalProperties: false,
+};
+app.post("/api/households/:id/favorites/:favId/steps", auth, aiLimiter, requireAi(() => 1, "edit"), async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const row = await one("SELECT * FROM favorite_dishes WHERE id = $1 AND household_id = $2",
+      [req.params.favId, req.params.id]);
+    if (!row) return res.status(404).json({ error: "見つかりません。" });
+    const name = (req.body?.name || row.name).toString().trim().slice(0, 60);
+    const people = Math.min(12, Math.max(1, Number(req.body?.people) || 2));
+    const list = Array.isArray(req.body?.ingredients) ? req.body.ingredients.slice(0, 40) : [];
+    if (!list.length) return res.status(400).json({ error: "先に材料を入れてください。" });
+    const ingLine = list
+      .map((i) => `${String(i?.name || "").slice(0, 40)}${i?.amount ? ` ${String(i.amount).slice(0, 30)}` : ""}`)
+      .filter(Boolean).join("、");
+
+    const prompt = [
+      `「${name}」の作り方を書いてください。${people}人分です。`,
+      `材料はこちらで決まっています: ${ingLine}`,
+      "",
+      "ルール:",
+      "- 材料は増やさない・減らさない。上の材料だけで作れる手順にする。",
+      "- 一般家庭でよく作る、いちばん定番の作り方にする。",
+      "- 手順は3〜7個。1つの手順は1〜2文で、短く具体的に。",
+      "- 「適量」「お好みで」より、時間や火加減など具体的な目安を入れる。",
+      "- 手順に番号は付けない（画面側で振ります）。すべて日本語。",
+    ].join("\n");
+
+    const stream = client.messages.stream({
+      model: SINGLE_MODEL,
+      max_tokens: 2000,
+      tools: [{ name: "save_steps", description: "作り方を保存する。", input_schema: FAV_STEPS_SCHEMA }],
+      tool_choice: { type: "tool", name: "save_steps" },
+      messages: [{ role: "user", content: prompt }],
+    });
+    const msg = await stream.finalMessage();
+    const block = msg.content.find((b) => b.type === "tool_use" && b.name === "save_steps");
+    const steps = (block?.input?.steps || []).map((x) => String(x).trim()).filter(Boolean);
+    if (!steps.length) throw new Error("EMPTY_RESPONSE");
+    if (!req.aiPaid) await incAiUsage(req.user.id, 1, "edit");
+    res.json({ steps, cookMinutes: block.input.cook_minutes || 0 });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // 「生成に混ぜる」「次に出す」の切り替え、材料の書き換え
 app.patch("/api/households/:id/favorites/:favId", auth, async (req, res) => {
   try {
@@ -1780,6 +1835,23 @@ app.patch("/api/households/:id/favorites/:favId", auth, async (req, res) => {
     const sets = [], vals = [];
     if (typeof req.body?.autoMix === "boolean") { sets.push(`auto_mix = $${sets.length + 1}`); vals.push(req.body.autoMix ? 1 : 0); }
     if (typeof req.body?.pinned === "boolean") { sets.push(`pinned = $${sets.length + 1}`); vals.push(req.body.pinned ? 1 : 0); }
+    // 料理名の変更。同じ世帯に同名があると一意制約に引っかかるので先に見る。
+    if (typeof req.body?.name === "string") {
+      const name = req.body.name.trim().slice(0, 60);
+      if (!name) return res.status(400).json({ error: "料理名を入力してください。" });
+      const norm = normName(name);
+      if (norm !== row.name_norm) {
+        const dup = await one("SELECT id FROM favorite_dishes WHERE household_id = $1 AND name_norm = $2",
+          [req.params.id, norm]);
+        if (dup) return res.status(409).json({ error: "同じ名前のお気に入りがすでにあります。" });
+      }
+      sets.push(`name = $${sets.length + 1}`); vals.push(name);
+      sets.push(`name_norm = $${sets.length + 1}`); vals.push(norm);
+    }
+    if (typeof req.body?.role === "string") {
+      const role = ["主菜", "副菜", "汁物"].includes(req.body.role) ? req.body.role : null;
+      if (role) { sets.push(`role = $${sets.length + 1}`); vals.push(role); }
+    }
     if (req.body?.dish && typeof req.body.dish === "object") {
       const j = JSON.stringify(req.body.dish);
       if (j.length > 20000) return res.status(413).json({ error: "レシピが大きすぎます。" });

@@ -551,6 +551,24 @@
     .nu-miss b { display: block; font-size: .92rem; }
     .nu-miss span { display: block; margin-top: 3px; font-weight: 700; }
     .nu-miss i { display: block; margin-top: 5px; font-style: normal; font-size: .77rem; opacity: .9; }
+    /* お気に入りの編集フォーム（名前・種類・人数・時間） */
+    .fav-fields { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
+    .fav-f { display: block; }
+    .fav-f > span { display: block; font-size: .72rem; font-weight: 800; color: var(--muted); margin-bottom: 3px; }
+    .fav-f input, .fav-f select { width: 100%; padding: 8px 10px; border: 1.5px solid var(--line);
+      border-radius: 10px; font: inherit; font-size: .88rem; background: #fff; color: var(--ink); }
+    .fav-f3 { display: flex; gap: 8px; }
+    .fav-f3 .fav-f { flex: 1; min-width: 0; }
+    .fav-sec { display: block; margin: 14px 0 6px; font-size: .84rem; color: var(--orange-dark); }
+    /* 作り方の1手順 */
+    .fs-row { display: flex; align-items: flex-start; gap: 7px; padding: 3px 0; }
+    .fs-no { flex: none; width: 20px; height: 20px; margin-top: 7px; border-radius: 50%;
+      background: var(--orange); color: #fff; font-size: .7rem; font-weight: 800;
+      line-height: 20px; text-align: center; }
+    .fs-tx { flex: 1; min-width: 0; padding: 7px 9px; border: 1.5px solid var(--line);
+      border-radius: 10px; font: inherit; font-size: .85rem; line-height: 1.6; background: #fff;
+      color: var(--ink); resize: vertical; }
+    .fs-x { margin-top: 6px; }
     .fav-noing { background: #fdf1e3; border-radius: 10px; padding: 11px 13px; margin: 0 0 8px; font-size: .82rem;
       color: #8a4b12; line-height: 1.6; }
     .fav-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 9px; }
@@ -3132,7 +3150,7 @@
       wrap.querySelectorAll(".favcard .fnm").forEach((el) => el.addEventListener("click", () => {
         const id = el.closest(".favcard").dataset.id;
         favExpandedId = favExpandedId === id ? null : id;
-        favEdit = null; favCheck = null;
+        favEdit = null; favSteps = null; favHead = null; favCheck = null;
         renderFavorites();
       }));
       wrap.querySelectorAll(".fdel").forEach((b) => b.addEventListener("click", () => deleteFavorite(b.dataset.id)));
@@ -3149,25 +3167,33 @@
       wireFavDetail();
     }
 
-    // 展開したときの中身。材料はその場で直せて、行ごとに栄養計算に乗るかを出す。
+    // 展開したときの中身。名前・種類・人数・時間・材料・作り方をその場で直せる。
     // 「編集すると栄養がずれる」のではなく、書いたとおりに計算される。困るのは
     // 成分表にない書き方をしたときに黙って抜けることなので、そこを見えるようにする。
     let favEdit = null;   // 編集中の材料 [{name, amount, category}]
+    let favSteps = null;  // 編集中の作り方 [string]
+    let favHead = null;   // 編集中の名前・種類・人数・時間（材料を1行足しただけで戻らないように）
     let favCheck = null;  // 栄養計算に乗るかの判定
     function favDetailHtml(f) {
-      const has = f.dish && (f.dish.ingredients || []).length;
-      if (!has && !favEdit) {
-        return `<div class="fav-noing">
-            <b>材料が登録されていません。</b><br>
-            買い物リストには「${esc(f.name)}（材料は自分で）」とだけ出ます。栄養計算にも入りません。
-            <div class="fav-acts">
-              <button class="btn-primary" id="favAiIng">材料を書いてもらう</button>
-              <button class="btn-ghost" id="favManualIng">自分で入力する</button>
+      const d = f.dish || {};
+      const hasIng = (d.ingredients || []).length;
+      // 材料も作り方もまだ無いときは、まずどう用意するかを選んでもらう
+      if (!hasIng && !favEdit && !favSteps) {
+        return `<div class="fav-detail">
+            ${favHeadHtml(f)}
+            <div class="fav-noing">
+              <b>材料と作り方が登録されていません。</b><br>
+              買い物リストには「${esc(f.name)}（材料は自分で）」とだけ出ます。栄養計算にも入りません。
+              <div class="fav-acts">
+                <button class="btn-primary" id="favAiIng">材料を書いてもらう</button>
+                <button class="btn-ghost" id="favManualIng">自分で入力する</button>
+              </div>
             </div>
+            <div class="fav-acts"><button class="btn-primary" id="favSaveIng">保存する</button></div>
             <p class="hint" id="favIngHint" style="margin:8px 0 0"></p>
           </div>`;
       }
-      const list = favEdit || (f.dish.ingredients || []);
+      const list = favEdit || d.ingredients || [];
       const rows = list.map((i, k) => {
         const c = favCheck ? favCheck[k] : null;
         const mark = !c ? `<span class="fi-mark"></span>`
@@ -3187,18 +3213,58 @@
           ? `<p class="fi-sum ng"><b>${ngN}品が栄養計算に入りません。</b>その分は差し引かれずに表示されます。<br>
              登録にない食材はそのままで構いません（入っていないと分かれば十分です）。</p>`
           : `<p class="fi-sum ok">${okN}品すべて栄養計算に入ります ✓</p>`;
+
+      const steps = favSteps || d.steps || [];
+      const stepRows = steps.map((t, k) => `<div class="fs-row">
+          <span class="fs-no">${k + 1}</span>
+          <textarea class="fs-tx" data-k="${k}" rows="2" placeholder="手順を書く">${esc(t)}</textarea>
+          <button class="fi-x fs-x" data-k="${k}" aria-label="削除">×</button></div>`).join("");
+
       return `<div class="fav-detail">
-          ${f.dish && f.dish.description ? `<p style="margin:2px 0">${esc(f.dish.description)}</p>` : ""}
-          <b>材料${f.dish && f.dish.people ? `（${esc(f.dish.people)}人分）` : ""}</b>
+          ${favHeadHtml(f)}
+          <b class="fav-sec">材料</b>
           <div id="favIngList">${rows}</div>
           ${sum}
           <div class="fav-acts">
             <button class="btn-ghost" id="favAddIng">＋ 材料を追加</button>
             <button class="btn-ghost" id="favCheckIng">計算に入るか見る</button>
-            <button class="btn-primary" id="favSaveIng">保存</button>
+          </div>
+
+          <b class="fav-sec">作り方</b>
+          <div id="favStepList">${stepRows || `<p class="hint" style="margin:0 0 6px">まだありません。下から足せます。</p>`}</div>
+          <div class="fav-acts">
+            <button class="btn-ghost" id="favAddStep">＋ 手順を追加</button>
+            ${hasIng ? `<button class="btn-ghost" id="favAiSteps">作り方を書いてもらう</button>` : ""}
+          </div>
+
+          <div class="fav-acts" style="margin-top:14px">
+            <button class="btn-primary" id="favSaveIng">保存する</button>
           </div>
           <p class="hint" id="favIngHint" style="margin:8px 0 0"></p>
-          ${f.dish && (f.dish.steps || []).length ? `<b style="display:block;margin-top:10px">作り方</b><ol>${f.dish.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
+        </div>`;
+    }
+    // 名前・ひとこと・種類・人数・調理時間
+    function favHeadHtml(f) {
+      const d = f.dish || {};
+      // 打ちかけの内容（favHead）があればそれを出す。無ければ保存済みの値。
+      const h = favHead || {
+        name: f.name, description: d.description || "",
+        role: f.role || d.role || "主菜", people: d.people || 2, cookMinutes: d.cook_minutes || 0,
+      };
+      return `<div class="fav-fields">
+          <label class="fav-f"><span>料理名</span>
+            <input id="favName" value="${esc(h.name)}" maxlength="60" placeholder="例: 実家の肉じゃが"></label>
+          <label class="fav-f"><span>ひとこと（任意）</span>
+            <input id="favDesc" value="${esc(h.description)}" maxlength="120" placeholder="例: 母から教わった甘めの味"></label>
+          <div class="fav-f3">
+            <label class="fav-f"><span>種類</span>
+              <select id="favRole">${["主菜", "副菜", "汁物"].map((r) =>
+                `<option value="${r}" ${r === h.role ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+            <label class="fav-f"><span>何人分</span>
+              <input id="favPeople" type="number" min="1" max="12" value="${esc(h.people)}"></label>
+            <label class="fav-f"><span>時間(分)</span>
+              <input id="favMin" type="number" min="0" max="300" value="${esc(h.cookMinutes)}"></label>
+          </div>
         </div>`;
     }
     function wireFavDetail() {
@@ -3207,47 +3273,85 @@
       const on = (id, fn) => { const e = $(id); if (e) e.addEventListener("click", fn); };
       on("favAiIng", () => aiWriteIngredients(f.id));
       on("favManualIng", () => { favEdit = [{ name: "", amount: "", category: "" }]; favCheck = null; renderFavorites(); });
-      on("favAddIng", () => { favEdit = [...readFavEdit(f), { name: "", amount: "", category: "" }]; favCheck = null; renderFavorites(); });
+      on("favAddIng", () => {
+        const s = readFavForm(f);
+        favEdit = [...s.ingredients, { name: "", amount: "", category: "" }];
+        favSteps = s.steps; favCheck = null; renderFavorites();
+      });
+      on("favAddStep", () => {
+        const s = readFavForm(f);
+        favEdit = s.ingredients; favSteps = [...s.steps, ""]; renderFavorites();
+      });
+      on("favAiSteps", () => aiWriteSteps(f));
       on("favCheckIng", () => checkFavIngredients(f));
-      on("favSaveIng", () => saveFavIngredients(f));
+      on("favSaveIng", () => saveFavorite(f));
       document.querySelectorAll("#favIngList .fi-x").forEach((b) =>
         b.addEventListener("click", () => {
-          favEdit = readFavEdit(f).filter((_, k) => k !== Number(b.dataset.k));
-          favCheck = null; renderFavorites();
+          const s = readFavForm(f);
+          favEdit = s.ingredients.filter((_, k) => k !== Number(b.dataset.k));
+          favSteps = s.steps; favCheck = null; renderFavorites();
+        }));
+      document.querySelectorAll("#favStepList .fs-x").forEach((b) =>
+        b.addEventListener("click", () => {
+          const s = readFavForm(f);
+          favEdit = s.ingredients;
+          favSteps = s.steps.filter((_, k) => k !== Number(b.dataset.k));
+          renderFavorites();
         }));
     }
-    // 画面の入力欄から今の材料を読む（描き直しで打ちかけの内容が消えないように）
-    function readFavEdit(f) {
-      const wrap = $("favIngList");
-      const base = favEdit || (f.dish && f.dish.ingredients) || [];
-      if (!wrap) return base.map((i) => ({ ...i }));
-      return [...wrap.querySelectorAll(".fi-row")].map((r, k) => ({
-        ...(base[k] || {}),
-        name: r.querySelector(".nm").value.trim(),
-        amount: r.querySelector(".am").value.trim(),
-      }));
+    // 画面の入力欄から今の内容を読む（描き直しで打ちかけの内容が消えないように）
+    function readFavForm(f) {
+      const d = f.dish || {};
+      const iw = $("favIngList"), sw = $("favStepList");
+      const base = favEdit || d.ingredients || [];
+      const ingredients = iw
+        ? [...iw.querySelectorAll(".fi-row")].map((r, k) => ({
+            ...(base[k] || {}),
+            name: r.querySelector(".nm").value.trim(),
+            amount: r.querySelector(".am").value.trim(),
+          }))
+        : base.map((i) => ({ ...i }));
+      const steps = sw
+        ? [...sw.querySelectorAll(".fs-tx")].map((t) => t.value.trim())
+        : (favSteps || d.steps || []).slice();
+      const num = (id, dflt) => { const n = Number($(id)?.value); return Number.isFinite(n) && n > 0 ? n : dflt; };
+      const head = {
+        name: ($("favName")?.value ?? (favHead?.name ?? f.name)).trim(),
+        description: ($("favDesc")?.value ?? (favHead?.description ?? d.description ?? "")).trim(),
+        role: $("favRole")?.value || favHead?.role || f.role || d.role || "主菜",
+        people: num("favPeople", favHead?.people || d.people || 2),
+        cookMinutes: Number($("favMin")?.value ?? favHead?.cookMinutes ?? d.cook_minutes) || 0,
+      };
+      favHead = head; // 描き直しで戻らないように覚えておく
+      return { ingredients, steps, ...head };
     }
     async function checkFavIngredients(f) {
-      favEdit = readFavEdit(f);
+      const s = readFavForm(f);
+      favEdit = s.ingredients; favSteps = s.steps;
       try {
         const r = await apiOK("/api/nutrition/check", {
-          method: "POST", body: { ingredients: favEdit, people: (f.dish && f.dish.people) || 2 },
+          method: "POST", body: { ingredients: favEdit, people: s.people },
         });
         favCheck = r.items;
         renderFavorites();
       } catch (e) { const h = $("favIngHint"); if (h) h.textContent = e.message; }
     }
-    async function saveFavIngredients(f) {
-      const list = readFavEdit(f).filter((i) => i.name);
-      const d = f.dish || {};
+    // 名前も中身もまとめて保存する
+    async function saveFavorite(f) {
+      const s = readFavForm(f);
+      if (!s.name) { const h = $("favIngHint"); if (h) h.textContent = "料理名を入れてください。"; return; }
       const dish = {
-        ...d, name: f.name, role: f.role || d.role || "主菜",
-        description: d.description || "", cook_minutes: d.cook_minutes || 0,
-        ingredients: list, steps: d.steps || [], people: d.people || 2,
+        ...(f.dish || {}), name: s.name, role: s.role,
+        description: s.description, cook_minutes: s.cookMinutes,
+        ingredients: s.ingredients.filter((i) => i.name),
+        steps: s.steps.filter(Boolean),
+        people: s.people,
       };
       try {
-        await apiOK(`/api/households/${household.id}/favorites/${f.id}`, { method: "PATCH", body: { dish } });
-        favEdit = null; favCheck = null;
+        await apiOK(`/api/households/${household.id}/favorites/${f.id}`, {
+          method: "PATCH", body: { name: s.name, role: s.role, dish },
+        });
+        favEdit = null; favSteps = null; favHead = null; favCheck = null;
         await loadFavorites(); renderFavorites();
         const h = $("favHint"); if (h) h.textContent = "保存しました ✓";
       } catch (e) { const h = $("favIngHint"); if (h) h.textContent = e.message; }
@@ -3257,12 +3361,32 @@
       if (hint) hint.textContent = "書いています…";
       try {
         await apiOK(`/api/households/${household.id}/favorites/${id}/ingredients`, { method: "POST", body: { people: 2 } });
-        favEdit = null; favCheck = null;
+        favEdit = null; favSteps = null; favHead = null; favCheck = null;
         await loadFavorites(); renderFavorites();
         const f = favorites.find((x) => x.id === id);
         if (f) await checkFavIngredients(f); // 書けたら、そのまま計算に乗るかも見せる
       } catch (e) {
         if (e.upgrade) return; // 無料枠切れはペイウォールが出る
+        const h = $("favIngHint"); if (h) h.textContent = e.message;
+      }
+    }
+    // いま入っている材料をもとに、作り方だけ書いてもらう（材料は書き換えない）
+    async function aiWriteSteps(f) {
+      const hint = $("favIngHint");
+      const s = readFavForm(f);
+      const ing = s.ingredients.filter((i) => i.name);
+      if (!ing.length) { if (hint) hint.textContent = "先に材料を入れてください。"; return; }
+      if (hint) hint.textContent = "作り方を書いています…";
+      try {
+        const r = await apiOK(`/api/households/${household.id}/favorites/${f.id}/steps`, {
+          method: "POST", body: { name: s.name, people: s.people, ingredients: ing },
+        });
+        favEdit = s.ingredients; favSteps = r.steps || [];
+        renderFavorites();
+        const h = $("favIngHint");
+        if (h) h.textContent = "書けました。直したいところを直して、下の「保存する」を押してください。";
+      } catch (e) {
+        if (e.upgrade) return;
         const h = $("favIngHint"); if (h) h.textContent = e.message;
       }
     }
