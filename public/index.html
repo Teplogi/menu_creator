@@ -588,7 +588,6 @@
     .ex-box[open] summary::before { content: "−"; }
     .ex-note { font-size: .78rem; color: var(--muted); margin: 8px 0 8px; line-height: 1.7; }
     /* 句読点までのかたまり。この中では改行しない（読みやすい位置で折り返すため） */
-    .jpw { display: inline-block; }
     /* こだわり（誘導式チップ） */
     /* 1行に収める（狭い画面でははみ出す分を横スクロール。折り返して2段にしない） */
     .grow { display: flex; align-items: center; gap: 3px; flex-wrap: nowrap; margin-bottom: 6px;
@@ -998,7 +997,10 @@
       margin-bottom: 16px; border: none; border-radius: 14px; background: var(--orange-soft);
       color: var(--orange-dark); font-weight: 700; font-size: .95rem; padding: 13px; cursor: pointer; }
     .btn-shop svg { width: 18px; height: 18px; }
-    .shop-head { display: flex; align-items: center; margin: 2px 4px 14px; }
+    /* 「買うもの（…）」と日付ラベルを1行に詰めると、狭い画面で両方が折り返して崩れる。
+       入りきらないときは日付ラベルを次の行に落とし、ラベル自体は折り返さない。 */
+    .shop-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
+      margin: 2px 4px 14px; }
     .shop-head .t { color: var(--muted); font-size: .9rem; }
     .shop-head .reset { margin-left: auto; background: none; border: none; color: var(--orange);
       font-weight: 700; font-size: .8rem; cursor: pointer; }
@@ -1101,7 +1103,8 @@
     /* 2行目: 何に使うか＋使う日 */
     .shopmeta { flex-basis: 100%; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 1px; }
     .shopmeta .uses { font-size: .73rem; color: var(--muted); line-height: 1.4; }
-    .shop-head .rangelab { margin-left: auto; font-size: .78rem; font-weight: 700; color: var(--orange-dark);
+    .shop-head .rangelab { margin-left: auto; flex: none; white-space: nowrap;
+      font-size: .78rem; font-weight: 700; color: var(--orange-dark);
       background: var(--orange-soft); border-radius: 999px; padding: 2px 10px; }
     /* ---- 栄養（カロリー・PFC） ---- */
     .nu-hero { text-align: center; padding: 6px 0 2px; }
@@ -2192,46 +2195,12 @@
       }
       return spoonDefault[unit] ?? null;
     }
-    // ---------- 日本語の読みやすい改行 ----------
-    // 句読点までを1かたまりとして扱い、その途中では改行させない。
-    // 「グループの名前（アプリ内で表示）。あとから変更できます。」が
-    // 「…表示）。」／「あとから変更できます。」で折り返るようになる。
-    // word-break:auto-phrase が未対応のブラウザ（iOS Safari 等）でも効かせるための処理。
-    const JPW_SEL = "p, li, summary, .t, .hint, .desc, .empty, .soon-ds, .nu-note, .ex-note, .lp-sub";
-    function jpWrapEl(el) {
-      if (el.dataset.jpw) return;
-      // 記事の本文は長いので、句読点ごとに固めると行がガタガタになる。ここは普通に折り返す。
-      if (el.closest(".col-body")) return;
-      el.dataset.jpw = "1";
-      for (const node of [...el.childNodes]) {
-        if (node.nodeType !== 3) continue; // テキストノードだけ触る（<b>や<a>は壊さない）
-        const parts = node.nodeValue.split(/(?<=[、。])/).filter(Boolean);
-        if (parts.length < 2) continue;
-        const frag = document.createDocumentFragment();
-        for (const p of parts) {
-          const s = document.createElement("span");
-          s.className = "jpw";
-          s.textContent = p;
-          frag.appendChild(s);
-        }
-        node.parentNode.replaceChild(frag, node);
-      }
-    }
-    function applyJpWrap(root) {
-      const scope = root || document.body;
-      if (scope.matches?.(JPW_SEL)) jpWrapEl(scope);
-      scope.querySelectorAll?.(JPW_SEL).forEach(jpWrapEl);
-    }
-    // 画面はあとから描き替わるところが多いので、DOMの変化を見て自動で適用する
-    let jpwQueued = false;
-    function watchJpWrap() {
-      applyJpWrap(document.body);
-      new MutationObserver(() => {
-        if (jpwQueued) return;
-        jpwQueued = true;
-        requestAnimationFrame(() => { jpwQueued = false; applyJpWrap(document.body); });
-      }).observe(document.body, { childList: true, subtree: true });
-    }
+    // ---------- 日本語の改行について ----------
+    // 以前は句読点ごとに <span style="display:inline-block"> で包んでいたが、
+    // 幅の狭いところ（作り方の手順など）でかたまり同士が横に並び、文章が
+    // 段組みのように割れてしまった。CSS の word-break:auto-phrase だけに任せる
+    // （非対応のブラウザでは日本語として普通の折り返しになるだけで、実害はない）。
+    // 画面の描き替えを監視する処理も、あわせてやめた。
 
     // 1文字ぶんの打ち間違い（挿入・削除・置換）まで許容する
     function nearlySame(a, b) {
@@ -6613,7 +6582,6 @@
     }
 
     registerServiceWorker();
-    watchJpWrap(); // 日本語の改行位置を整える（以降の描き替えにも自動で適用）
     init();
   </script>
 </body>
