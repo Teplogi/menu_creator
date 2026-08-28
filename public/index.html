@@ -501,8 +501,6 @@
     .favcard { border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 13px; margin-bottom: 10px; }
     .favcard.off { background: #fbf9f7; border-style: dashed; }
     .favcard .fhead { display: flex; align-items: flex-start; gap: 8px; }
-    .favcard .fnm { flex: 1; min-width: 0; font-weight: 800; font-size: .96rem; line-height: 1.45;
-      cursor: pointer; overflow-wrap: anywhere; }
     .favcard.off .fnm { color: var(--muted); }
     .favcard .fmeta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
     .favcard .fbtns { display: flex; gap: 8px; margin-top: 10px; }
@@ -551,6 +549,39 @@
     .nu-miss b { display: block; font-size: .92rem; }
     .nu-miss span { display: block; margin-top: 3px; font-weight: 700; }
     .nu-miss i { display: block; margin-top: 5px; font-style: normal; font-size: .77rem; opacity: .9; }
+    /* ---- お気に入りの開閉 ----
+       編集欄が出たことが分かるように、カードと編集欄をつなげて見せ、
+       高さのアニメーションで「開いた」ことを伝える。 */
+    .favcard .fnm { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0;
+      border: none; background: none; padding: 0; text-align: left; font: inherit;
+      font-weight: 800; font-size: .96rem; line-height: 1.45; color: inherit; cursor: pointer;
+      overflow-wrap: anywhere; }
+    .favcard .fav-chev { flex: none; color: var(--orange); display: inline-flex;
+      transition: transform .3s cubic-bezier(.4,0,.2,1); }
+    .favcard .fav-chev svg { width: 16px; height: 16px; }
+    .favcard.open .fav-chev { transform: rotate(90deg); }
+    /* 閉じているときだけ「押せる」ことを知らせる */
+    .fav-edithint { margin-top: 9px; font-size: .72rem; font-weight: 700; color: var(--muted);
+      text-align: center; }
+    .favcard.open .fav-edithint { display: none; }
+    /* 開いたカードは編集欄と地続きに見せる */
+    .favcard.open { border-color: var(--orange); border-bottom: none;
+      border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0;
+      box-shadow: 0 -1px 0 0 var(--orange) inset; }
+    .favcard.open .fnm { color: var(--orange-dark); }
+    /* 高さのアニメーション（0fr → 1fr）。中身の高さが分からなくても動く */
+    .fav-slide { display: grid; grid-template-rows: 0fr; margin-bottom: 10px;
+      transition: grid-template-rows .32s cubic-bezier(.4,0,.2,1); }
+    .fav-slide.in { grid-template-rows: 1fr; }
+    .fav-slide-in { overflow: hidden; min-height: 0; }
+    .fav-slide .fav-detail { margin: 0; border-radius: 0 0 14px 14px;
+      border: 1.5px solid var(--orange); border-top: none;
+      opacity: 0; transform: translateY(-4px);
+      transition: opacity .26s ease .08s, transform .26s ease .08s; }
+    .fav-slide.in .fav-detail { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .fav-slide, .fav-slide .fav-detail, .favcard .fav-chev { transition: none; }
+    }
     /* お気に入りの編集フォーム（名前・種類・人数・時間） */
     .fav-fields { display: flex; flex-direction: column; gap: 9px; margin-bottom: 12px; }
     .fav-f { display: block; }
@@ -3127,9 +3158,11 @@
       };
       wrap.innerHTML = favorites.map((f) => {
         const hasIng = f.dish && (f.dish.ingredients || []).length;
-        const card = `<div class="favcard ${f.autoMix ? "" : "off"}" data-id="${esc(f.id)}">
+        const open = favExpandedId === f.id;
+        const card = `<div class="favcard ${f.autoMix ? "" : "off"} ${open ? "open" : ""}" data-id="${esc(f.id)}">
           <div class="fhead">
-            <span class="fnm" title="タップで材料を見る・直す">${esc(f.name)}</span>
+            <button class="fnm" type="button">${esc(f.name)}
+              <span class="fav-chev" aria-hidden="true">${CHEV_SVG}</span></button>
             <button class="fdel" data-id="${esc(f.id)}" aria-label="削除">${TRASH_SVG}</button>
           </div>
           <div class="fmeta">
@@ -3143,13 +3176,36 @@
             <button class="b-next ${f.pinned ? "on" : ""}" data-id="${esc(f.id)}" ${f.autoMix ? "" : "disabled style=opacity:.4"}>
               ${f.pinned ? "✓ 次に出す" : "次に出す"}</button>
           </div>
+          <div class="fav-edithint">タップして材料・作り方を編集</div>
         </div>`;
-        return card + (favExpandedId === f.id ? favDetailHtml(f) : "");
+        // 開いたときだけアニメーションさせる。材料を1行足しただけの描き直しでは
+        // すでに開いた状態（.in 付き）で出して、開き直しに見えないようにする。
+        return card + (open
+          ? `<div class="fav-slide${favJustOpened ? "" : " in"}" id="favSlide"><div class="fav-slide-in">${favDetailHtml(f)}</div></div>`
+          : "");
       }).join("");
+
+      // 開いた直後だけ、高さのアニメーションを走らせてから見える位置へ寄せる。
+      // 閉じた状態（0fr）が一度描かれてからでないと動かないので、レイアウトを
+      // 確定させてから次のフレームでクラスを付ける。
+      if (favJustOpened) {
+        favJustOpened = false;
+        const slide = $("favSlide");
+        if (slide) {
+          void slide.offsetHeight; // ここで 0fr の状態を確定させる
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            slide.classList.add("in");
+            wrap.querySelector(".favcard.open")?.scrollIntoView({ block: "nearest" });
+          }));
+        }
+      }
+
 
       wrap.querySelectorAll(".favcard .fnm").forEach((el) => el.addEventListener("click", () => {
         const id = el.closest(".favcard").dataset.id;
-        favExpandedId = favExpandedId === id ? null : id;
+        const opening = favExpandedId !== id;
+        favExpandedId = opening ? id : null;
+        favJustOpened = opening; // 開くときだけアニメーションさせる
         favEdit = null; favSteps = null; favHead = null; favCheck = null;
         renderFavorites();
       }));
@@ -3170,6 +3226,7 @@
     // 展開したときの中身。名前・種類・人数・時間・材料・作り方をその場で直せる。
     // 「編集すると栄養がずれる」のではなく、書いたとおりに計算される。困るのは
     // 成分表にない書き方をしたときに黙って抜けることなので、そこを見えるようにする。
+    let favJustOpened = false; // いま開いたところか（アニメを1回だけ走らせるため）
     let favEdit = null;   // 編集中の材料 [{name, amount, category}]
     let favSteps = null;  // 編集中の作り方 [string]
     let favHead = null;   // 編集中の名前・種類・人数・時間（材料を1行足しただけで戻らないように）
