@@ -1245,7 +1245,30 @@
     .shopcat.open .arw { transform: rotate(90deg); }
     .shopcat.bought { color: #4caf88; margin-top: 24px; }
     .shopcat.bought .cnt { color: #3a8f6c; background: #e4f5ec; }
-    .alldone { text-align: center; color: #4caf88; font-weight: 800; font-size: .95rem; padding: 18px 10px 6px; }
+    /* 買い終わったことがひと目で分かるように、1行ではなくカードで出す */
+    .alldone { display: flex; flex-direction: column; align-items: center; gap: 4px;
+      text-align: center; background: #eef7ee; border: 1.5px solid #cfe6d2; border-radius: 16px;
+      padding: 20px 16px; margin: 6px 0 4px;
+      animation: doneIn .42s cubic-bezier(.2,.9,.3,1.2) both; }
+    .alldone .ic { font-size: 2rem; line-height: 1;
+      animation: donePop .5s cubic-bezier(.2,.9,.3,1.6) both .1s; }
+    .alldone b { font-size: 1.05rem; font-weight: 800; color: #2f6b45; }
+    .alldone span:not(.ic) { font-size: .84rem; color: #4d7a5e; line-height: 1.6; }
+    .alldone .ad-btn { margin-top: 10px; border: 1.5px solid #9ccfab; background: #fff; color: #2f6b45;
+      font: inherit; font-size: .82rem; font-weight: 700; border-radius: 999px;
+      padding: 8px 18px; cursor: pointer; }
+    .alldone .ad-btn:active { transform: scale(.98); }
+    /* まだ他の日の分が残っているときは、言い切らない見た目にする */
+    .alldone.part { background: #fdf6ec; border-color: #f2ddb8; }
+    .alldone.part .ic { font-size: 1.5rem; color: var(--orange-dark); }
+    .alldone.part b { color: #8a5a12; }
+    .alldone.part span:not(.ic) { color: #96703a; }
+    .alldone.part .ad-btn { border-color: #e8c891; color: #8a5a12; }
+    @keyframes doneIn { from { opacity: 0; transform: translateY(8px); } }
+    @keyframes donePop { from { transform: scale(0); } }
+    @media (prefers-reduced-motion: reduce) {
+      .alldone, .alldone .ic { animation: none; }
+    }
     .memo-wrap { margin-top: 24px; }
 
     /* ---- コラム（薬剤師・管理栄養士監修の読み物） ---- */
@@ -6384,7 +6407,8 @@
 
     // 買う範囲。週の区切りとは無関係に「起点から◯日分」で数える
     // （金・土に3日分/7日分を見たいとき、翌週に移動しなくても続きが見えるようにするため）。
-    const RANGE_DAYS = { today: 1, d3: 3, d7: 7 };
+    // 「今日」は「日付」で今日を選ぶのと同じだったので廃止した。
+    const RANGE_DAYS = { d3: 3, d7: 7 };
     // 「日付」で1日だけ見るときの対象日。開き直しても選んだ日が残るように保存する
     let shopPickDate = localStorage.getItem("shopPickDate") || null;
     const setShopPickDate = (d) => {
@@ -6394,6 +6418,8 @@
     const getShopRange = () => {
       const v = localStorage.getItem("shopRange");
       if (v === "pick") return shopPickDate ? "pick" : "d3"; // 日付未選択なら既定へ
+      // 旧「今日」を使っていた人は、同じ見え方になる「日付（今日）」へ引き継ぐ
+      if (v === "today") { setShopPickDate(fmt(new Date())); setShopRange("pick"); return "pick"; }
       return RANGE_DAYS[v] ? v : "d3"; // 旧値("week"等)は既定に寄せる
     };
     const setShopRange = (v) => localStorage.setItem("shopRange", v);
@@ -6449,7 +6475,6 @@
       const rangeDates = shopRangeDates();
       const rangeSet = new Set(rangeDates);
       html += `<div class="segmented">
-        <button class="seg ${range === "today" ? "on" : ""}" data-range="today">今日</button>
         <button class="seg ${range === "d3" ? "on" : ""}" data-range="d3">3日分</button>
         <button class="seg ${range === "d7" ? "on" : ""}" data-range="d7">7日分</button>
         <button class="seg ${range === "pick" ? "on" : ""}" data-range="pick">日付</button></div>`;
@@ -6547,13 +6572,30 @@
         html += `<div id="seasonList" ${boxStyle(shopOpen.season)}>${seasons.map((r) => row(r)).join("")}</div>`;
       }
 
+      // 買うものが全部チェックされたら、はっきり分かるように出す。
+      // 「範囲外にまだ残っている」ときは言い切らない（買い忘れて帰らせないため）。
       if (!hasAny) {
-        html += bought.length
-          ? `<p class="alldone">🎉 買うものはすべてチェックしました</p>`
-          : `<p class="empty">この期間に買うものはありません。</p>`;
+        if (!bought.length) {
+          html += `<p class="empty">この期間に買うものはありません。</p>`;
+        } else if (outCount) {
+          html += `<div class="alldone part">
+              <span class="ic">✓</span>
+              <b>${esc(rangeLabel || "この範囲")}は買い終わりました</b>
+              <span>ほかの日の分が <b>${outCount}品</b> 残っています。</span>
+              <button class="ad-btn" id="doneShowWeek">7日分をまとめて見る</button>
+            </div>`;
+        } else {
+          html += `<div class="alldone">
+              <span class="ic">🎉</span>
+              <b>買い物完了です</b>
+              <span>${bought.length}品ぜんぶチェックできました。お疲れさまでした。</span>
+              <button class="ad-btn" id="doneHome">献立を見る</button>
+            </div>`;
+        }
       }
-      // 範囲外に残っている分の件数（隠れているだけと分かるように）
-      if (outCount && range !== "d7") {
+      // 範囲外に残っている分の件数（隠れているだけと分かるように）。
+      // 全部買い終わったときは上の案内に含めているので、ここでは出さない。
+      if (outCount && range !== "d7" && hasAny) {
         const lead = range === "pick" ? "ほかの日に" : "このあとの日に";
         html += `<p class="rangehint">${lead}、あと <b>${outCount}品</b> あります<button id="showWeek">7日分をまとめて見る</button></p>`;
       }
@@ -6598,8 +6640,13 @@
       // 選んでいる日を横スクロールの中央へ（ページ自体は動かさない）
       const strip = $("dayPick"), onChip = strip && strip.querySelector(".dchip.on");
       if (onChip) strip.scrollLeft = onChip.offsetLeft - (strip.clientWidth - onChip.offsetWidth) / 2;
+      const toWeek = () => { setShopRange("d7"); editingId = null; renderShopping(); };
       const showWeek = $("showWeek");
-      if (showWeek) showWeek.addEventListener("click", () => { setShopRange("d7"); editingId = null; renderShopping(); });
+      if (showWeek) showWeek.addEventListener("click", toWeek);
+      const doneWeek = $("doneShowWeek");
+      if (doneWeek) doneWeek.addEventListener("click", toWeek);
+      const doneHome = $("doneHome");
+      if (doneHome) doneHome.addEventListener("click", () => goHome());
       const anchorToday = $("anchorToday");
       if (anchorToday) anchorToday.addEventListener("click", () => { openShoppingWeek(fmt(new Date()), false); });
       body.querySelectorAll(".shopitem input[type=checkbox]").forEach((cb) =>
