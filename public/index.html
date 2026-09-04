@@ -6475,9 +6475,9 @@
       const rangeDates = shopRangeDates();
       const rangeSet = new Set(rangeDates);
       html += `<div class="segmented">
+        <button class="seg ${range === "pick" ? "on" : ""}" data-range="pick">日付</button>
         <button class="seg ${range === "d3" ? "on" : ""}" data-range="d3">3日分</button>
-        <button class="seg ${range === "d7" ? "on" : ""}" data-range="d7">7日分</button>
-        <button class="seg ${range === "pick" ? "on" : ""}" data-range="pick">日付</button></div>`;
+        <button class="seg ${range === "d7" ? "on" : ""}" data-range="d7">7日分</button></div>`;
       // 「日付」= その1日だけ。買い物の当日に「今日ぶんだけ」を見たいとき用。
       // 献立がある日を横に並べて、指でめくれるようにする。
       if (range === "pick") {
