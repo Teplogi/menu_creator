@@ -301,10 +301,18 @@ const SCHEMA_STATEMENTS = [
     member_update BOOLEAN NOT NULL DEFAULT true,
     updated_at TEXT NOT NULL)`,
   // 定期通知の二重送信防止（user×種類×日/週キー）
+  // 買い物リスト（世帯で共有）。端末ローカルだと手分けして買えず、
+  // 「買い終わった」ことをサーバが知れないので通知も出せなかった。
+  `CREATE TABLE IF NOT EXISTS shopping_lists (
+    household_id TEXT NOT NULL, week_start TEXT NOT NULL,
+    data_json TEXT NOT NULL, updated_at TEXT NOT NULL,
+    PRIMARY KEY (household_id, week_start))`,
+  `ALTER TABLE households ADD COLUMN IF NOT EXISTS shop_memo TEXT`,
   `CREATE TABLE IF NOT EXISTS push_sent_log (
     user_id TEXT NOT NULL, kind TEXT NOT NULL, day TEXT NOT NULL,
     PRIMARY KEY (user_id, kind, day))`,
   // 毎週おまかせ作成（プレミアム）。時刻・曜日はすべて日本時間で持つ。
+  `ALTER TABLE notification_prefs ADD COLUMN IF NOT EXISTS shopping_done BOOLEAN NOT NULL DEFAULT true`,
   `CREATE TABLE IF NOT EXISTS auto_plans (
     household_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -2007,6 +2015,133 @@ app.post("/api/households/claim", auth, async (req, res) => {
   }
 });
 
+// ---------- 買い物リスト（世帯で共有） ----------
+// これまで端末の localStorage にしか無かったため、ふたりで手分けして買えなかったし、
+// 「買い終わった」ことをサーバが知れず通知も出せなかった。
+//
+// 同時に触られてもチェックが消えないよう、まるごと上書きはしない。
+// 品目ごとに updatedAt を持たせ、新しいほうを採用する（消したものは墓標で残す）。
+const SHOP_ITEM_KEYS = ["id", "name", "amount", "checked", "category", "date", "dishes", "movedFrom", "updatedAt"];
+const shopClean = (it) => {
+  const o = {};
+  for (const k of SHOP_ITEM_KEYS) if (it[k] !== undefined) o[k] = it[k];
+  o.id = String(o.id || "").slice(0, 64);
+  o.name = String(o.name || "").slice(0, 80);
+  o.amount = String(o.amount || "").slice(0, 40);
+  o.checked = !!o.checked;
+  o.updatedAt = String(o.updatedAt || "").slice(0, 32) || new Date().toISOString();
+  return o;
+};
+const newer = (a, b) => (String(a || "") >= String(b || "") ? a : b);
+
+// 保存済みと送られてきたものを、品目ごとに新しいほうで突き合わせる
+function mergeShopping(stored, incoming) {
+  const items = new Map(), dels = new Map();
+  const put = (it) => {
+    const cur = items.get(it.id);
+    if (!cur || String(it.updatedAt) > String(cur.updatedAt)) items.set(it.id, it);
+  };
+  const del = (id, at) => { dels.set(id, newer(dels.get(id), at)); };
+  for (const src of [stored, incoming]) {
+    for (const it of src.items || []) put(shopClean(it));
+    for (const [id, at] of Object.entries(src.deleted || {})) del(String(id).slice(0, 64), String(at).slice(0, 32));
+  }
+  // 消した時刻のほうが新しければ、その品目は消えたものとして扱う
+  const out = [];
+  for (const [id, it] of items) {
+    const d = dels.get(id);
+    if (d && String(d) >= String(it.updatedAt)) continue;
+    out.push(it);
+    dels.delete(id); // 復活したので墓標は不要
+  }
+  // 墓標は30日で捨てる（増え続けないように）
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+  const deleted = {};
+  for (const [id, at] of dels) if (String(at) >= cutoff) deleted[id] = at;
+  return { items: out.slice(0, 400), deleted };
+}
+
+const weekOk = (w) => /^\d{4}-\d{2}-\d{2}$/.test(String(w || ""));
+
+async function readShopping(householdId, week) {
+  const r = await one("SELECT data_json FROM shopping_lists WHERE household_id = $1 AND week_start = $2",
+    [householdId, week]);
+  if (!r) return { items: [], deleted: {} };
+  try { const j = JSON.parse(r.data_json); return { items: j.items || [], deleted: j.deleted || {} }; }
+  catch { return { items: [], deleted: {} }; }
+}
+
+// まとめて取得（週をカンマ区切りで指定）
+app.get("/api/households/:id/shopping", auth, async (req, res) => {
+  try {
+    const hh = await requireMember(req, res, req.params.id);
+    if (!hh) return;
+    const weeks = String(req.query.weeks || "").split(",").map((s) => s.trim()).filter(weekOk).slice(0, 8);
+    const out = {};
+    for (const w of weeks) out[w] = await readShopping(hh.id, w);
+    res.json({ weeks: out, memo: hh.shop_memo || "" });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 保存（送られてきたものと突き合わせて、結果を返す）
+app.put("/api/households/:id/shopping/:week", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const week = req.params.week;
+    if (!weekOk(week)) return res.status(400).json({ error: "週の指定が正しくありません。" });
+    const incoming = {
+      items: Array.isArray(req.body?.items) ? req.body.items.slice(0, 400) : [],
+      deleted: req.body?.deleted && typeof req.body.deleted === "object" ? req.body.deleted : {},
+    };
+    const stored = await readShopping(req.params.id, week);
+    const merged = mergeShopping(stored, incoming);
+    await q(
+      `INSERT INTO shopping_lists (household_id, week_start, data_json, updated_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (household_id, week_start) DO UPDATE SET data_json = $3, updated_at = $4`,
+      [req.params.id, week, JSON.stringify(merged), new Date().toISOString()]
+    );
+    res.json(merged);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 買い物が終わったことを相手に知らせる。画面に「買い物完了です」が出たときに1回だけ呼ぶ。
+app.post("/api/households/:id/shopping/done", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const label = String(req.body?.label || "").slice(0, 40);
+    const count = Math.max(0, Math.min(999, Number(req.body?.count) || 0));
+    // 同じ範囲で何度も飛ばさないよう、1日1回にする
+    const key = `${new Date().toISOString().slice(0, 10)}|${req.params.id}|${label}`;
+    if (!(await markSentOnce(req.user.id, "shopping_done", key))) return res.json({ ok: true, sent: false });
+    await pushToHouseholdOthers(req.params.id, req.user.id, "shopping_done", {
+      title: "めにゅらく！",
+      body: `${displayNameOf(req.user)}さんが買い物を終えました🛒${count ? `（${count}品）` : ""}`,
+      url: "/",
+      tag: "shopdone-" + req.params.id,
+    }).catch(() => {});
+    res.json({ ok: true, sent: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 買い物メモ（世帯で共有）
+app.put("/api/households/:id/shopping-memo", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const memo = String(req.body?.memo || "").slice(0, 2000);
+    await q("UPDATE households SET shop_memo = $1 WHERE id = $2", [memo, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // ---------- プッシュ通知（Web Push / PWA） ----------
 // ユーザーの通知設定を取得（無ければ既定=全ON を作成）。
 async function getNotifPrefs(userId) {
@@ -2018,7 +2153,7 @@ async function getNotifPrefs(userId) {
     );
     p = await one("SELECT * FROM notification_prefs WHERE user_id = $1", [userId]);
   }
-  return p || { dinner_reminder: true, plan_reminder: true, member_update: true };
+  return p || { dinner_reminder: true, plan_reminder: true, member_update: true, shopping_done: true };
 }
 
 // 1ユーザーの全端末へ送信（kind の設定がOFFなら送らない）。無効な購読は掃除する。
@@ -2107,6 +2242,7 @@ app.get("/api/push/prefs", auth, async (req, res) => {
       dinner_reminder: p.dinner_reminder !== false,
       plan_reminder: p.plan_reminder !== false,
       member_update: p.member_update !== false,
+      shopping_done: p.shopping_done !== false,
     });
   } catch (err) {
     handleError(res, err);
@@ -2119,9 +2255,10 @@ app.post("/api/push/prefs", auth, async (req, res) => {
     const cur = await getNotifPrefs(req.user.id);
     const val = (k) => (typeof b[k] === "boolean" ? b[k] : cur[k] !== false);
     await q(
-      `UPDATE notification_prefs SET dinner_reminder = $2, plan_reminder = $3, member_update = $4, updated_at = $5
+      `UPDATE notification_prefs SET dinner_reminder = $2, plan_reminder = $3, member_update = $4,
+              shopping_done = $6, updated_at = $5
        WHERE user_id = $1`,
-      [req.user.id, val("dinner_reminder"), val("plan_reminder"), val("member_update"), new Date().toISOString()]
+      [req.user.id, val("dinner_reminder"), val("plan_reminder"), val("member_update"), new Date().toISOString(), val("shopping_done")]
     );
     res.json({ ok: true });
   } catch (err) {

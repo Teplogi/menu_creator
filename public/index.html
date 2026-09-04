@@ -2027,6 +2027,7 @@
           <div class="toggle-row">今日の夕食リマインド<label class="switch"><input type="checkbox" id="ntDinner" onchange="saveNotifPref('dinner_reminder', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
           <div class="toggle-row">献立づくりリマインド（週1）<label class="switch"><input type="checkbox" id="ntPlan" onchange="saveNotifPref('plan_reminder', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
           <div class="toggle-row">グループメンバーの更新通知<label class="switch"><input type="checkbox" id="ntMember" onchange="saveNotifPref('member_update', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
+          <div class="toggle-row">買い物が終わったお知らせ<label class="switch"><input type="checkbox" id="ntShop" onchange="saveNotifPref('shopping_done', this.checked)" /><span class="track"></span><span class="knob"></span></label></div>
           <div style="display:flex;gap:8px;margin-top:2px">
             <button class="btn-ghost" onclick="testNotif()">テスト送信</button>
             <button class="btn-ghost" onclick="disableNotifications()">通知をオフにする</button>
@@ -6255,6 +6256,108 @@
     }
     // 表示範囲が触れている週（1〜2週）をまとめて1つのリストとして扱う。
     // 各アイテムに _wk を付けておき、保存時にその週へ書き戻す。
+    // ---------- 買い物リストの共有 ----------
+    // 表示はこれまで通り localStorage を見る（速いしオフラインでも動く）。
+    // その裏で、保存のたびにサーバへ送り、開いている間は定期的に受け取る。
+    // まるごと上書きするとパートナーのチェックが消えるので、品目ごとに updatedAt を
+    // 持たせ、新しいほうを採用する（サーバ側で突き合わせる）。消したものは墓標で残す。
+    const delKeyFor = (wk) => "shopdel:w:" + wk;
+    const nowIso = () => new Date().toISOString();
+    let shopSyncTimer = null;   // 送信のまとめ待ち
+    let shopPollTimer = null;   // 受け取りの定期実行
+    const shopPending = new Set(); // 送信待ちの週
+
+    // 保存の直前に、変わった品目へ updatedAt を打ち、消えた品目を墓標に残す
+    function stampShopWeek(wk, items) {
+      const before = readJSON(listKeyFor(wk), null);
+      const prev = new Map((Array.isArray(before) ? before : []).map((x) => [x.id, x]));
+      const same = (a, b) => a && b
+        && a.name === b.name && a.amount === b.amount && !!a.checked === !!b.checked
+        && a.date === b.date && a.category === b.category;
+      const now = nowIso();
+      for (const it of items) {
+        const p = prev.get(it.id);
+        if (!p || !same(p, it)) it.updatedAt = now;
+        else if (p.updatedAt) it.updatedAt = p.updatedAt;
+        prev.delete(it.id);
+      }
+      if (prev.size) { // 残ったもの＝消された
+        const dels = readJSON(delKeyFor(wk), {}) || {};
+        for (const id of prev.keys()) dels[id] = now;
+        localStorage.setItem(delKeyFor(wk), JSON.stringify(dels));
+      }
+    }
+    function queueShopSync(weeks) {
+      for (const w of weeks) shopPending.add(w);
+      if (!household || shopSyncTimer) return;
+      // 連続でチェックしても1回にまとめる
+      shopSyncTimer = setTimeout(() => { shopSyncTimer = null; pushShopWeeks(); }, 700);
+    }
+    async function pushShopWeeks() {
+      if (!household || !shopPending.size) return;
+      const weeks = [...shopPending];
+      shopPending.clear();
+      for (const wk of weeks) {
+        const items = readJSON(listKeyFor(wk), null);
+        if (!Array.isArray(items)) continue;
+        try {
+          const merged = await apiOK(`/api/households/${household.id}/shopping/${wk}`, {
+            method: "PUT", body: { items, deleted: readJSON(delKeyFor(wk), {}) || {} },
+          });
+          applyMergedWeek(wk, merged);
+        } catch { shopPending.add(wk); } // 通信できないときは次の機会に送る
+      }
+      if (activeViewId() === "shopping") renderShopping();
+    }
+    // サーバの突き合わせ結果を端末側へ反映する
+    function applyMergedWeek(wk, merged) {
+      if (!merged || !Array.isArray(merged.items)) return false;
+      const before = localStorage.getItem(listKeyFor(wk));
+      const after = JSON.stringify(merged.items);
+      localStorage.setItem(listKeyFor(wk), after);
+      localStorage.setItem(delKeyFor(wk), JSON.stringify(merged.deleted || {}));
+      return before !== after;
+    }
+    // 相手の変更を受け取る。開いた直後と、開いている間は定期的に。
+    async function pullShopWeeks(weeks) {
+      if (!household || !weeks.length) return false;
+      try {
+        const r = await apiOK(`/api/households/${household.id}/shopping?weeks=${weeks.join(",")}`);
+        let changed = false;
+        for (const [wk, data] of Object.entries(r.weeks || {})) {
+          // まだサーバに何も無い週は、こちらの内容を送る側なので上書きしない
+          if (!(data.items || []).length && !Object.keys(data.deleted || {}).length) continue;
+          if (applyMergedWeek(wk, data)) changed = true;
+        }
+        const memo = $("shopMemo");
+        if (memo && document.activeElement !== memo && (r.memo || "") !== memo.value) {
+          memo.value = r.memo || "";
+          localStorage.setItem(memoKey(), r.memo || "");
+        }
+        return changed;
+      } catch { return false; }
+    }
+    function startShopPolling() {
+      stopShopPolling();
+      shopPollTimer = setInterval(async () => {
+        if (activeViewId() !== "shopping") return stopShopPolling();
+        if (editingId) return; // 編集中に書き換わると入力が消えるので待つ
+        if (await pullShopWeeks(touchedWeeks())) renderShopping();
+      }, 20000);
+    }
+    function stopShopPolling() { clearInterval(shopPollTimer); shopPollTimer = null; }
+
+    // 「買い物完了です」が出たら、相手に知らせる（同じ範囲では1日1回だけ）
+    let shopDoneSent = null;
+    async function notifyShopDone(label, count) {
+      if (!household) return;
+      const key = `${fmt(new Date())}|${household.id}|${label}`;
+      if (shopDoneSent === key) return;
+      shopDoneSent = key;
+      try { await apiOK(`/api/households/${household.id}/shopping/done`, { method: "POST", body: { label, count } }); }
+      catch { shopDoneSent = null; } // 送れなかったら次の描画でまた試す
+    }
+
     function touchedWeeks() {
       const wks = new Set(shopRangeDates().map((d) => weekStart(d)));
       wks.add(shopWeek); // 日付なしアイテム（自分で足したもの・調味料）の置き場
@@ -6278,7 +6381,11 @@
         const { _wk, ...rest } = it;
         byWeek.get(wk).push(rest);
       }
-      for (const [wk, items] of byWeek) localStorage.setItem(listKeyFor(wk), JSON.stringify(items));
+      for (const [wk, items] of byWeek) {
+        stampShopWeek(wk, items); // 変わった品目に時刻を打つ／消えた品目を墓標に残す
+        localStorage.setItem(listKeyFor(wk), JSON.stringify(items));
+      }
+      queueShopSync([...byWeek.keys()]); // 世帯の他メンバーへ共有
     }
 
     function addItem(name, amount, date) {
@@ -6332,6 +6439,8 @@
       if (touchedWeeks().every((wk) => readJSON(listKeyFor(wk), null))) renderShopping();
       else $("shopBody").innerHTML = `<p class="empty">読み込み中…</p>`;
       showView("shopping", "買い物リスト", { back: true, tab: fromTab ? "shop" : null });
+      await pullShopWeeks(touchedWeeks()); // 相手が入れたチェックを先に取り込む
+      startShopPolling();                  // 開いている間は定期的に受け取る
       // 最新のプラン・常備品を取得して再描画（週の集約・常備品振り分けに使用）
       try {
         const [plans, pantry] = await Promise.all([
@@ -6591,6 +6700,7 @@
               <span>${bought.length}品ぜんぶチェックできました。お疲れさまでした。</span>
               <button class="ad-btn" id="doneHome">献立を見る</button>
             </div>`;
+          notifyShopDone(rangeLabel || "all", bought.length); // 相手に知らせる
         }
       }
       // 範囲外に残っている分の件数（隠れているだけと分かるように）。
@@ -6694,7 +6804,16 @@
         el.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } }));
       const memo = $("shopMemo");
       memo.value = localStorage.getItem(memoKey()) || "";
-      memo.addEventListener("input", () => localStorage.setItem(memoKey(), memo.value));
+      // メモも世帯で共有する（打ち終わりから少し待ってまとめて送る）
+      let memoTimer = null;
+      memo.addEventListener("input", () => {
+        localStorage.setItem(memoKey(), memo.value);
+        clearTimeout(memoTimer);
+        memoTimer = setTimeout(() => {
+          if (household) apiOK(`/api/households/${household.id}/shopping-memo`,
+            { method: "PUT", body: { memo: memo.value } }).catch(() => {});
+        }, 900);
+      });
       if (focusAdd) $("addName").focus();
     }
 
@@ -6790,6 +6909,7 @@
         $("ntDinner").checked = p.dinner_reminder !== false;
         $("ntPlan").checked = p.plan_reminder !== false;
         $("ntMember").checked = p.member_update !== false;
+        $("ntShop").checked = p.shopping_done !== false;
       } catch {}
     }
     async function saveNotifPref(kind, value) {
