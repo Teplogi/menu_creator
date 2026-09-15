@@ -11,6 +11,7 @@ import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlan
 import { buildAdvice } from "./nutrition-advice.js";
 import { readColumns } from "./columns.js";
 import { pickWeekVeggies, assignVeggies, vegDirective, checkVegCompliance } from "./produce.js";
+import { expandAvoid, findAvoidHits, allergenChoices } from "./allergens.js";
 import pg from "pg";
 import { randomUUID, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
@@ -498,8 +499,41 @@ function stapleDirective(list) {
 const normalizeStaple = (v) =>
   Array.isArray(v) ? v.filter((x) => STAPLE_NAME[x]) : STAPLE_NAME[v] ? [v] : [];
 
+// ---------- 使わない食材（アレルギー・苦手） ----------
+// 作成画面の自由入力と、設定の「使わない食材」をまとめて広げる
+function avoidOf(avoid, storeAvoid) {
+  return expandAvoid([avoid, ...(storeAvoid || [])]);
+}
+function avoidPromptLine(avoid, storeAvoid) {
+  const av = avoidOf(avoid, storeAvoid);
+  return av.empty
+    ? ""
+    : `次の食材はアレルギー・苦手のため、料理名・材料・調味料・トッピングのどこにも一切使わないこと（絶対）: ${av.prompt}`;
+}
+// 1食ぶんの料理で、使わない食材に当たったもの
+function avoidViolations(dishes, av) {
+  const out = [];
+  for (const d of dishes || []) {
+    const hits = findAvoidHits(d, av);
+    if (hits.length) out.push({ name: d.name, hits });
+  }
+  return out;
+}
+// 作り直しても当たったままの料理には印を付けて、画面で注意を出す
+function markAvoidHits(dishes, av) {
+  for (const d of dishes || []) {
+    const hits = findAvoidHits(d, av);
+    if (hits.length) d.avoidHit = hits;
+    else delete d.avoidHit;
+  }
+}
+const retryNote = (bad) => ({
+  hits: [...new Set(bad.flatMap((b) => b.hits))],
+  dishes: bad.map((b) => b.name),
+});
+
 // ---------- 生成ロジック ----------
-function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], mainCandidates = [], sameDayDishes = [], vegNote = "", favDish = null } = {}) {
+function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recentSlotDishes = [], styleHint = "", mainHint = "", sideHint = "", fridgeDishHint = "", storeAvoid = [], storeSoft = [], mainCandidates = [], sameDayDishes = [], vegNote = "", favDish = null, avoidRetry = null } = {}) {
   const { people, maxCookMinutes, dishCount, staple, preferences, avoid } = opts;
   const includeSteps = opts.includeSteps !== false;
   const targetLines = targets
@@ -535,9 +569,10 @@ function buildPrompt(targets, opts, { avoidDishes = [], recentDishes = [], recen
       "洗い物少なめ": "好みの指定: 使う調理器具が少なくて済む料理にする（フライパン1つ・レンジだけ、など）。",
       "節約したい": "好みの指定: 材料費が抑えられる料理にする（もやし・豆腐・鶏むね肉・卵・旬の野菜などを活かす）。高価な食材は使わない。",
     }[s] || "")),
-    avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
-    storeAvoid && storeAvoid.length
-      ? `次の食材はアレルギー・苦手のため、料理・材料に一切使わないこと（絶対）: ${storeAvoid.join("、")}`
+    // 「甲殻類」のような呼び方は、料理に出てくる書き方（えび・かに・かにかま…）まで広げて伝える
+    avoidPromptLine(avoid, storeAvoid),
+    avoidRetry
+      ? `★前回、使ってはいけない食材（${avoidRetry.hits.join("・")}）を含む「${avoidRetry.dishes.join("」「")}」を作ってしまいました。これらの料理と、その食材を含む料理は絶対に作らないこと。`
       : "",
     storeSoft && storeSoft.length
       ? `次の食材は入手しにくいので、できるだけ使わないでください（基本は控える。他に適切な選択肢が無いときだけ、たまに使うのは可）: ${storeSoft.join("、")}`
@@ -684,7 +719,9 @@ function styleRotationFor(staple) {
 const MAIN_ROTATION = [
   { label: "鶏肉", bad: ["鶏", "とり", "チキン"] },
   { label: "豚肉", bad: ["豚", "ポーク"] },
-  { label: "魚介（魚・えび・いか等）", bad: ["魚", "さかな", "えび", "エビ", "いか", "イカ", "魚介", "シーフード", "貝"] },
+  // えび・いかだけを避けたい人にも魚は出したいので、魚そのものが避けたいときだけ外す
+  // （えび等は候補の絞り込みと生成後の確認で除く）
+  { label: "魚介（魚・えび・いか等）", bad: ["魚", "さかな", "魚介", "シーフード"] },
   { label: "牛肉またはひき肉", bad: ["牛", "ビーフ"] },
   // 卵・豆腐だけだと夕食の主菜としては物足りないので、肉やひき肉と
   // 組み合わせた「食べごたえのある一皿」になるようラベルで方向づけている。
@@ -986,7 +1023,7 @@ function buildDishPrompt(instruction, ctx) {
       ? `調理時間の目安は ${maxCookMinutes} 分以内にし、cook_minutes に数値を入れる。`
       : "cook_minutes に調理時間の目安（分）の数値を入れる。",
     preferences ? `世帯の好み・要望: ${preferences}` : "",
-    avoid ? `避けたい食材・アレルギー: ${avoid}（絶対に使用しない）` : "",
+    avoidPromptLine(avoid, ctx.storeAvoid),
     "",
     "ルール:",
     "- ユーザーの指示を最優先で反映する。指示になければ、今の料理の役割（主菜/副菜/汁物）を保つ。",
@@ -1152,17 +1189,14 @@ async function pickFavoritesToMix(householdId, meals, opts = {}) {
     [householdId]
   );
   if (!rows.length) return [];
-  const avoid = [opts.avoid, ...(opts.storeAvoid || [])]
-    .flatMap((x) => String(x || "").split(/[、,\s]+/)).filter(Boolean);
+  const av = opts.av || expandAvoid([]);
   const ok = rows.filter((r) => {
     let dish = null;
     try { dish = r.dish_json ? JSON.parse(r.dish_json) : null; } catch {}
     // 時間の条件は、レシピを持っているものだけ判定できる（名前だけのものは通す）
     if (opts.maxCookMinutes && dish?.cook_minutes > opts.maxCookMinutes) return false;
-    if (avoid.length && dish) {
-      const text = (dish.ingredients || []).map((i) => i.name).join("、") + "、" + r.name;
-      if (avoid.some((a) => text.includes(a))) return false;
-    }
+    // 使わない食材は、名前だけのお気に入りでも料理名で判定する
+    if (findAvoidHits({ ...(dish || {}), name: r.name }, av).length) return false;
     return true;
   });
   if (!ok.length) return [];
@@ -2397,6 +2431,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     const recentDishes = await getRecentDishNames(household.id);
     const recentBySlot = await getRecentDishesBySlot(household.id); // 食事枠ごとの履歴（副菜含む・30日）
     const store = await getStoreItems(household.id);
+    const av = avoidOf(opts.avoid, store.avoid); // 使わない食材（「甲殻類」→ えび・かに… に広げたもの）
 
     const units = [];
     for (const t of targets) for (const slot of t.slots) units.push({ date: t.date, slot });
@@ -2411,7 +2446,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
       catalog: allDishes(),
       seed: `${household.id}|${[...targets].map((t) => t.date).sort()[0] || ""}`,
       fridge: fridgeNames,
-      avoid: [opts.avoid, ...(store.avoid || [])].flatMap((x) => String(x || "").split(/[、,\s]+/)).filter(Boolean),
+      avoid: av.words,
       soft: store.soft,
       staples: store.staples,
       recent: await getRecentReuseVeggies(household.id),
@@ -2421,7 +2456,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
 
     // 主材料＋副菜カテゴリの割り当てを先に決める（要望の配分を反映＋被り/連続回避）。
     // 2食以上のときだけプランナーを使う。
-    const avoidText = [opts.avoid, ...(store.avoid || [])].filter(Boolean).join("、");
+    const avoidText = av.prompt;
     const needSides = String(opts.dishCount || "").includes("side");
     const assign = units.length >= 2
       ? await planMealAssignments(units, opts, avoidText)
@@ -2432,7 +2467,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
     const favPicks = new Array(units.length).fill(null);
     if (opts.mixFavorites !== false) {
       const favs = await pickFavoritesToMix(household.id, units.length, {
-        maxCookMinutes: opts.maxCookMinutes, avoid: opts.avoid, storeAvoid: store.avoid,
+        maxCookMinutes: opts.maxCookMinutes, av,
       });
       // 冷蔵庫の使い切りが決まっている食事は、そちらを優先して避ける
       const slots = units.map((_, i) => i).filter((i) => !(assign.fridgeDishes || [])[i]);
@@ -2530,6 +2565,17 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
           const nd = r2.days?.[0]?.meals?.[0]?.dishes || [];
           if (nd.length) dishes = nd;
         }
+        // 使わない食材（アレルギー）が入っていたら作り直す。指示だけでは守られないことがあるので、
+        // 料理名・材料をコードで確かめる（「甲殻類」なのにエビチリが出た件）。
+        for (let retry = 0; retry < 2; retry++) {
+          const bad = avoidViolations(dishes, av);
+          if (!bad.length) break;
+          console.log(`（使わない食材: ${u.date} ${u.slot} ${bad.map((b) => `${b.name}=${b.hits.join("・")}`).join(" / ")} → 作り直し）`);
+          const r3 = await generate([{ date: u.date, slots: [u.slot] }], opts,
+            { ...div(retry + 1, [...batchMains, ...bad.map((b) => b.name)]), avoidRetry: retryNote(bad) }, SINGLE_MODEL, tick);
+          const nd = r3.days?.[0]?.meals?.[0]?.dishes || [];
+          if (nd.length) dishes = nd;
+        }
       } catch (e) {
         if (!dishes.length) dishes = [];
       }
@@ -2543,6 +2589,7 @@ async function generateAndSavePlan(household, opts, targets, send = () => {}) {
           : { role: fav.role, name: fav.name, description: "", cook_minutes: 0, ingredients: [], steps: [] };
         dishes[idx].favorite = true; // 画面で「お気に入り」と分かるように
       }
+      markAvoidHits(dishes, av); // 作り直しても残ったものは、画面で注意を出す
       const mn = mainNameOf(dishes);
       if (mn) batchMains.add(mn);
       for (const d of dishes) if (d.role === "副菜" && d.name) batchSides.add(d.name);
@@ -2914,11 +2961,21 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
     const recentDishes = await getRecentDishNames(row.household_id);
     const recentBySlot = await getRecentDishesBySlot(row.household_id); // 同じ食事枠の履歴（副菜含む）
     const store = await getStoreItems(row.household_id);
+    const av = avoidOf(opts.avoid, store.avoid);
 
-    // Haiku がまれに空を返すため、非空になるまで最大3回リトライ（AI修正の失敗を減らす）
-    let newDishes = null;
-    for (let attempt = 0; attempt < 3 && !(newDishes && newDishes.length); attempt++) {
+    // Haiku がまれに空を返すため、非空になるまで最大3回リトライ（AI修正の失敗を減らす）。
+    // 使わない食材が入っていたときも作り直す（こちらは最大2回）。
+    let newDishes = null, avoidRetry = null, avoidTries = 0;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (newDishes && newDishes.length) {
+        const bad = avoidViolations(newDishes, av);
+        if (!bad.length || avoidTries >= 2) break;
+        avoidTries++;
+        avoidRetry = retryNote(bad);
+        avoidDishes.push(...bad.map((b) => b.name));
+      } else if (attempt >= 3) break;
       const regenerated = await generate([{ date, slots: [slot] }], opts, {
+        avoidRetry,
         avoidDishes,
         recentDishes,
         recentSlotDishes: recentBySlot[slot] || [],
@@ -2936,9 +2993,11 @@ app.post("/api/plans/:id/regenerate", auth, aiLimiter, requireAi(() => 1, "edit"
           excludeNames: [...avoidDishes, ...recentDishes],
         }).dishes.map(candidateLine),
       }, SINGLE_MODEL); // 1食作り直しは単発操作＝速い Haiku
-      newDishes = regenerated.days?.[0]?.meals?.[0]?.dishes;
+      const nd = regenerated.days?.[0]?.meals?.[0]?.dishes;
+      if (nd && nd.length) newDishes = nd;
     }
     if (!newDishes || !newDishes.length) throw new Error("EMPTY_RESPONSE");
+    markAvoidHits(newDishes, av);
     if (opts?.includeSteps === false) newDishes.forEach((d) => delete d.steps); // 献立だけモードは作り方を除去
 
     // 「作り直す前に戻す」用に直前の内容を保持（1世代のみ）
@@ -2976,20 +3035,34 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1, "edi
     const { opts } = JSON.parse(row.input_json);
     const current = meal.dishes[idx];
     const others = meal.dishes.filter((_, i) => i !== idx);
-    // Haiku がまれに空を返すため、有効な料理が返るまで最大3回リトライ
-    let newDish = null;
-    for (let attempt = 0; attempt < 3 && !(newDish && newDish.name); attempt++) {
-      newDish = await generateDish(instr, {
+    const store = await getStoreItems(row.household_id);
+    const av = avoidOf(opts?.avoid, store.avoid);
+    // 利用者が名指しで頼んだ場合（「エビチリにして」）は作り直さず、注意の印だけ付ける
+    const askedForIt = findAvoidHits({ name: instr }, av).length > 0;
+    // Haiku がまれに空を返すため、有効な料理が返るまで最大3回リトライ。
+    // 使わない食材が入っていたら、指示を足して最大2回作り直す。
+    let newDish = null, note = "", avoidTries = 0;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      if (newDish && newDish.name) {
+        const hits = findAvoidHits(newDish, av);
+        if (!hits.length || askedForIt || avoidTries >= 2) break;
+        avoidTries++;
+        note = `\n\n★前回「${newDish.name}」に使ってはいけない食材（${hits.join("・")}）が入っていました。その食材を含まない料理にすること（絶対）。`;
+      } else if (attempt >= 3) break;
+      const d = await generateDish(instr + note, {
         people: row.people,
         maxCookMinutes: opts?.maxCookMinutes,
         preferences: opts?.preferences,
         avoid: opts?.avoid,
+        storeAvoid: store.avoid,
         current,
         others,
         slot,
       });
+      if (d && d.name) newDish = d;
     }
     if (!newDish || !newDish.name) throw new Error("EMPTY_RESPONSE");
+    markAvoidHits([newDish], av);
 
     // 「1つ前に戻す」用に直前の料理を保持（1世代のみ・無限に積まない）
     const prevCopy = { ...current };
@@ -3014,7 +3087,7 @@ const appBaseUrl = (req) => process.env.APP_BASE_URL || `${req.protocol}://${req
 // ログイン前でも読める設定（紹介ページで「テスト期間中」を出すのに使う）
 app.get("/api/public-config", (req, res) => {
   res.set("Cache-Control", "no-store");
-  res.json({ testMode: TEST_MODE });
+  res.json({ testMode: TEST_MODE, allergens: allergenChoices() });
 });
 
 app.get("/api/billing/status", auth, async (req, res) => {

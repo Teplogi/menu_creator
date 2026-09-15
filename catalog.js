@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { _internals } from "./nutrition.js";
+import { expandAvoid, findAvoidHits } from "./allergens.js";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const DOC = JSON.parse(fs.readFileSync(path.join(DIR, "data/dish-catalog.json"), "utf8"));
@@ -77,18 +78,10 @@ const seasonOf = (dateStr) => {
   return "冬";
 };
 
-// 避けたい食材の文字列（「貝、紫蘇、大葉」）を、料理名・材料名と突き合わせる形にする
-function avoidKeys(avoidText) {
-  return String(avoidText || "")
-    .split(/[、,，\/／・\s]+/)
-    .map((s) => norm(s))
-    .filter((s) => s.length >= 1);
-}
-const dishHits = (dish, keys) => {
-  if (!keys.length) return false;
-  const hay = norm(dish.name) + "|" + (dish.ingredients || []).map((i) => norm(i.name)).join("|");
-  return keys.some((k) => hay.includes(k));
-};
+// 避けたい食材の文字列（「甲殻類、紫蘇」）を、料理名・材料名と突き合わせる形にする。
+// 「甲殻類」→ えび・かに、「えび」→ 海老・シュリンプ・えびチリ… のように広げる（allergens.js）
+const avoidKeys = (avoidText) => expandAvoid(avoidText);
+const dishHits = (dish, keys) => !keys.empty && findAvoidHits(dish, keys).length > 0;
 
 // 条件を1つずつ当てて絞る。緩めるときは後ろの条件から外していく。
 function filterDishes(all, c) {
@@ -96,7 +89,7 @@ function filterDishes(all, c) {
     if (d.role !== "主菜") return false;
     if (c.slot && !(d.slots || "").includes(SLOT_CHAR[c.slot] || "")) return false;
     if (c.excludeNames && c.excludeNames.has(d.name)) return false;
-    if (c.avoid && c.avoid.length && dishHits(d, c.avoid)) return false;
+    if (c.avoid && dishHits(d, c.avoid)) return false;
     if (c.noFry && d.method === "揚げる") return false;
     if (c.quick && !(d.time <= 20 || (d.equipment || []).includes("電子レンジ"))) return false;
     if (c.kid && !d.kid_friendly) return false;
@@ -277,7 +270,7 @@ function sideCandidates(all, c) {
     if (d.role !== c.role) return false;
     if (c.slot && !(d.slots || "").includes(SLOT_CHAR[c.slot] || "")) return false;
     if (c.excludeNames.has(d.name)) return false;
-    if (c.avoid.length && dishHits(d, c.avoid)) return false;
+    if (c.avoid && dishHits(d, c.avoid)) return false;
     if (c.noFry && d.method === "揚げる") return false;
     if (c.kid && !d.kid_friendly) return false;
     if (c.mild && d.spicy) return false;

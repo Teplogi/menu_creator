@@ -423,6 +423,19 @@
     .store-sub { font-size: .84rem; font-weight: 800; margin: 0 0 6px; }
     .store-sub span { font-weight: 600; color: var(--muted); font-size: .78rem; }
     .pantrylist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .allergy-lead { font-size: .8rem; color: var(--muted); margin: 2px 0 6px; font-weight: 700; }
+    .allergy-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .allergy-chips button { border: 1.5px solid var(--line, #e5ded5); background: #fff; color: var(--ink, #333);
+      font-size: .86rem; font-weight: 700; border-radius: 999px; padding: 6px 12px; cursor: pointer; font-family: inherit; }
+    .allergy-chips button.on { background: #c0392b; border-color: #c0392b; color: #fff; }
+    .allergy-chips button.on::before { content: "✓ "; }
+    .allergy-chips button:disabled { opacity: .5; }
+    .allergy-chips .sep { flex-basis: 100%; font-size: .74rem; color: var(--muted); margin: 6px 0 0; font-weight: 700; }
+    .allergy-more { border: none; background: none; color: var(--orange-dark); font-weight: 700; font-size: .82rem;
+      padding: 6px 0; cursor: pointer; font-family: inherit; }
+    .allergy-note { font-size: .76rem; color: var(--muted); line-height: 1.65; margin: 2px 0 0; }
+    .avoid-warn { display: block; margin: 4px 0 2px; font-size: .78rem; font-weight: 700; color: #c0392b;
+      background: #fdecea; border-radius: 8px; padding: 5px 8px; line-height: 1.5; }
     .pantrychip { display: inline-flex; align-items: center; gap: 4px; background: var(--orange-soft);
       color: var(--orange-dark); font-size: .85rem; font-weight: 700; border-radius: 999px; padding: 5px 6px 5px 12px; }
     .pantrychip button { border: none; background: rgba(0,0,0,.06); color: inherit; width: 20px; height: 20px;
@@ -1938,8 +1951,13 @@
         <p style="font-size:.85rem;color:var(--muted);margin:0 0 14px">食材ごとに扱いを登録すると、AI献立に反映されます。バリエーションは常に最優先なので、<b>「控えめ」も完全には禁止せず、たまには登場します。</b></p>
 
         <div class="store-sub" style="color:#c0392b">🚫 使わない食材<span>（アレルギー・苦手 → 絶対に使わない）</span></div>
+        <p class="allergy-lead">アレルギーはタップで選べます（もう一度タップで解除）</p>
+        <div id="allergyChips" class="allergy-chips"></div>
+        <button type="button" class="allergy-more" id="allergyMoreBtn" onclick="toggleAllergyMore()">ほかの品目も見る ▾</button>
+        <p class="allergy-note">「甲殻類」なら えび・かに、「えび」なら 海老・エビチリ・桜えび のように、呼び方の違いや料理名もまとめて外します。しょうゆ・みそなどの調味料に含まれる小麦・大豆は対象外です。<b>AIの確認には限界があるので、重いアレルギーがある方は材料を必ずご自身でも確かめてください。</b></p>
+        <p class="allergy-lead" style="margin-top:10px">苦手な食材などは、名前を入れて追加</p>
         <div class="urlbox">
-          <input type="text" id="storeAvoidInput" placeholder="食材名（例: えび）" />
+          <input type="text" id="storeAvoidInput" placeholder="食材名（例: セロリ）" />
           <button class="copybtn" onclick="addStoreItem('avoid')">追加</button>
         </div>
         <div id="storeAvoidList" class="pantrylist"></div>
@@ -2373,7 +2391,76 @@
       if (household) setTimeout(() => startTour(), 700); // 初回だけ。2回目以降は中で弾く
     }
     // fromDate: カレンダーの空いている日から呼ばれたときの開始日
+    // ---------- 作る前のアレルギー確認 ----------
+    // 設定を開かないまま最初の献立を作ると、アレルギーの食材が入ったまま出てしまう。
+    // 使わない食材が1つも無い世帯では、最初に作るときに一度だけ聞く（端末ごと）。
+    const allergyAskKey = () => "allergyAsked:" + (household?.id || "");
+    function markAllergyAsked() { try { localStorage.setItem(allergyAskKey(), "1"); } catch {} }
+    async function allergyAskDone() {
+      try { if (localStorage.getItem(allergyAskKey())) return true; } catch { return true; }
+      try {
+        const items = await apiOK(`/api/households/${household.id}/store-items`);
+        if (items.some((x) => x.kind === "avoid")) { markAllergyAsked(); return true; }
+      } catch { return true; } // 確認できないときは作成を止めない
+      return false;
+    }
+    function openAllergyAsk(next) {
+      const sel = new Set();
+      let more = false;
+      let ov = $("allergyAskModal");
+      if (ov) ov.remove();
+      ov = document.createElement("div");
+      ov.id = "allergyAskModal"; ov.className = "modal-overlay";
+      ov.innerHTML = `<div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="aaTitle">
+          <div class="mp-title" id="aaTitle">作る前に、ひとつだけ</div>
+          <p style="font-size:.88rem;line-height:1.7;margin:0 0 10px">ご家族に<b>アレルギー</b>や、使ってほしくない食材はありますか？<br>選んだ食材は、これから作る献立に<b>毎回</b>入らなくなります。</p>
+          <div class="allergy-chips" id="aaChips"></div>
+          <button type="button" class="allergy-more" id="aaMore"></button>
+          <input type="text" id="aaFree" placeholder="そのほか（例: パクチー、貝）" style="width:100%;margin-top:4px" />
+          <p class="allergy-note" style="margin-top:8px">あとから「設定 → 食材の設定」でも変えられます。</p>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
+            <button class="btn-ghost" id="aaNone" style="width:auto;margin-top:0;padding:10px 16px">とくにない</button>
+            <button class="btn-primary" id="aaOk" style="width:auto;margin-top:0;padding:10px 18px;font-size:.95rem">これで献立へ</button>
+          </div></div>`;
+      document.body.appendChild(ov);
+      const render = () => {
+        const keys = more ? [...ALLERGY_MAJOR, ...ALLERGY_OTHERS] : [...ALLERGY_MAJOR, ...ALLERGY_OTHERS.filter((k) => sel.has(k))];
+        $("aaChips").innerHTML = keys.map((k) =>
+          `<button type="button" class="${sel.has(k) ? "on" : ""}" data-k="${esc(k)}" aria-pressed="${sel.has(k)}">${esc(k)}</button>`).join("");
+        $("aaChips").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+          sel.has(b.dataset.k) ? sel.delete(b.dataset.k) : sel.add(b.dataset.k);
+          render();
+        }));
+        $("aaMore").textContent = more ? "閉じる ▴" : "ほかの品目も見る（大豆・ごま・魚介類など）▾";
+        const any = sel.size || $("aaFree").value.trim();
+        $("aaNone").style.display = any ? "none" : "";
+      };
+      $("aaMore").addEventListener("click", () => { more = !more; render(); });
+      $("aaFree").addEventListener("input", render);
+      const close = () => { ov.remove(); };
+      $("aaNone").addEventListener("click", () => { markAllergyAsked(); close(); next(); });
+      $("aaOk").addEventListener("click", async () => {
+        const names = [...sel, ...$("aaFree").value.split(/[、,，\/／\s]+/).map((s) => s.trim()).filter(Boolean)];
+        const btn = $("aaOk");
+        btn.disabled = true; btn.textContent = "登録中…";
+        try {
+          for (const name of [...new Set(names)]) {
+            await apiOK(`/api/households/${household.id}/store-items`, { method: "POST", body: { name, kind: "avoid" } });
+          }
+          markAllergyAsked();
+          close();
+          next();
+        } catch (e) {
+          alert(e.message);
+          btn.disabled = false; btn.textContent = "これで献立へ";
+        }
+      });
+      render();
+      ov.style.display = "flex";
+    }
+
     async function showCreate(fromDate) {
+      if (household && !(await allergyAskDone())) return openAllergyAsk(() => showCreate(fromDate));
       backHandler = goHome;
       showView("create", "献立を作成", { back: true });
       $("aiQuotaHint").style.display = "none";
@@ -4041,12 +4128,47 @@
       soft: "まだ登録がありません。",
       staple: "未設定（にんじん・玉ねぎ・じゃがいも を使います）",
     };
+    // 特定原材料8品目を先に、準ずるものは「ほかの品目」に畳む（サーバの allergens.js と同じ呼び方）
+    const ALLERGY_MAJOR = ["卵", "乳", "小麦", "えび", "かに", "そば", "落花生", "くるみ"];
+    const ALLERGY_OTHERS = ["甲殻類", "貝類", "魚介類", "ナッツ類", "大豆", "ごま", "さば", "さけ", "いか", "いくら",
+      "あわび", "牛肉", "豚肉", "鶏肉", "ゼラチン", "キウイ", "バナナ", "もも", "りんご", "オレンジ", "アーモンド",
+      "カシューナッツ", "マカダミアナッツ", "やまいも", "まつたけ"];
+    let allergyMore = false, allergyBusy = false;
+    function toggleAllergyMore() { allergyMore = !allergyMore; renderAllergyChips(); }
+    function renderAllergyChips() {
+      const wrap = $("allergyChips");
+      if (!wrap) return;
+      const on = new Set(storeItems.filter((it) => it.kind === "avoid").map((it) => it.name));
+      // 畳んでいても、選んでいる品目は見えるようにする
+      const others = allergyMore ? ALLERGY_OTHERS : ALLERGY_OTHERS.filter((k) => on.has(k));
+      const chip = (k) => `<button type="button" class="${on.has(k) ? "on" : ""}" data-k="${esc(k)}" aria-pressed="${on.has(k)}"${allergyBusy ? " disabled" : ""}>${esc(k)}</button>`;
+      wrap.innerHTML = ALLERGY_MAJOR.map(chip).join("")
+        + (others.length ? `<span class="sep">${allergyMore ? "特定原材料に準ずるもの・まとめた呼び方" : ""}</span>` + others.map(chip).join("") : "");
+      wrap.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => toggleAllergy(b.dataset.k)));
+      const more = $("allergyMoreBtn");
+      if (more) more.textContent = allergyMore ? "閉じる ▴" : "ほかの品目も見る ▾";
+    }
+    async function toggleAllergy(k) {
+      if (allergyBusy) return;
+      allergyBusy = true; renderAllergyChips();
+      try {
+        const hit = storeItems.find((it) => it.kind === "avoid" && it.name === k);
+        if (hit) await apiOK(`/api/households/${household.id}/store-items/${hit.id}`, { method: "DELETE" });
+        else await apiOK(`/api/households/${household.id}/store-items`, { method: "POST", body: { name: k, kind: "avoid" } });
+        markAllergyAsked();
+      } catch (e) { alert(e.message); }
+      allergyBusy = false;
+      await loadStoreItems();
+    }
     function renderStoreItems() {
+      renderAllergyChips();
       for (const kind of ["avoid", "soft", "staple"]) {
         const wrap = $(STORE_LIST_ID[kind]);
         if (!wrap) continue;
         // 旧仕様の 'hard' は「控えめ(soft)」として表示
-        const items = storeItems.filter((it) => it.kind === kind || (kind === "soft" && it.kind === "hard"));
+        let items = storeItems.filter((it) => it.kind === kind || (kind === "soft" && it.kind === "hard"));
+        // アレルギーの選択肢で選んだものは上のボタンに出ているので、ここには並べない
+        if (kind === "avoid") items = items.filter((it) => !ALLERGY_MAJOR.includes(it.name) && !ALLERGY_OTHERS.includes(it.name));
         if (!items.length) { wrap.innerHTML = `<p class="empty" style="padding:8px 0">${esc(STORE_EMPTY[kind])}</p>`; continue; }
         wrap.innerHTML = items.map((it) =>
           `<span class="pantrychip">${esc(it.name)}<button data-id="${esc(it.id)}" aria-label="削除">×</button></span>`
@@ -4281,7 +4403,7 @@
       { sel: "#tab-home", t: "ホーム", d: "作った献立の予定表です。今日なにを作るかが、ひと目で分かります。" },
       { sel: "#tab-shop", t: "買い物リスト", d: "献立の材料が自動でまとまります。買えたものはチェックしていけます。" },
       { sel: "#tab-soon", t: "べんり機能", d: "お気に入り・冷蔵庫の使い切り・カロリー計算・コラム・毎週おまかせ作成は、ここに入っています。" },
-      { sel: "#tab-settings", t: "設定", d: "人数・苦手な食材・通知の設定はこちら。この案内も、ここからもう一度見られます。" },
+      { sel: "#tab-settings", t: "設定", d: "アレルギー・苦手な食材・人数・通知の設定はこちら。この案内も、ここからもう一度見られます。" },
       { sel: ".tab.center", t: "献立をつくる", d: "条件を選ぶだけ。3品の献立が15秒ほどでできます。まずは1回、作ってみましょう。",
         round: true, cta: "作ってみる", act: () => showCreate() },
     ];
@@ -5272,7 +5394,7 @@
           else if (meal._error) rows = `<li class="empty-dish">生成に失敗しました（後で作り直せます）</li>`;
           else if (meal.dishes && meal.dishes.length)
             rows = meal.dishes.map((d) =>
-              `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${d.favorite ? "⭐" : ""}${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
+              `<li><span class="rl">${esc(d.role || "料理")}</span>${mtagHtml(mainTypeOf(d))}<span class="nm">${(d.avoidHit || []).length ? `<b style="color:#c0392b" title="使わない食材が入っているかもしれません">⚠</b>` : ""}${d.favorite ? "⭐" : ""}${esc(d.name || "（無題）")}</span>${d.cook_minutes ? `<span class="tm">${esc(d.cook_minutes)}分</span>` : ""}</li>`
             ).join("");
           else rows = `<li class="empty-dish">タップして料理を追加</li>`;
           card.innerHTML = `
@@ -5581,6 +5703,7 @@
             <button class="dish-edit-btn" data-idx="${idx}" aria-label="編集">${EDIT_SVG}</button>
             <button class="dish-edit-btn dish-del-btn" data-del="${idx}" aria-label="この料理を削除">${TRASH_SVG}</button></div></div>
           <h3>${esc(dish.name)}</h3>
+          ${(dish.avoidHit || []).length ? `<span class="avoid-warn">⚠ 使わない食材（${esc(dish.avoidHit.join("・"))}）が入っているかもしれません。材料を確かめるか「1品だけ変更」で作り直してください。</span>` : ""}
           ${dish.description ? `<p class="desc">${esc(dish.description)}</p>` : ""}
           ${chips.length ? `<div class="chips">${chips.join("")}</div>` : ""}
           ${dish._prev ? `<button class="undo-btn" data-undo="${idx}">↩ 「${esc(dish._prev.name || "前の料理")}」に戻す</button>` : ""}
@@ -5885,6 +6008,7 @@
       dish.cook_minutes = Number($("edMin").value) || 0;
       dish.ingredients = parseIngLines($("edIngs").value);
       dish.steps = $("edSteps").value.split("\n").map((s) => s.trim()).filter(Boolean);
+      delete dish.avoidHit; // 自分で材料を直したので、自動の注意は外す
       if (dish.steps.length && dish.store_bought) {
         // 市販品→手作りに戻す：買うものが自動の「◯◯（市販）」のままなら退避した材料を復元
         dish.store_bought = false;
