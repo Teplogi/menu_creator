@@ -1066,9 +1066,13 @@
     .shop-head .t { color: var(--muted); font-size: .9rem; }
     .shop-head .reset { margin-left: auto; background: none; border: none; color: var(--orange);
       font-weight: 700; font-size: .8rem; cursor: pointer; }
-    .shopitem { display: flex; align-items: center; gap: 6px; background: var(--card); border-radius: 14px;
-      padding: 8px 8px 8px 16px; box-shadow: var(--shadow); margin-bottom: 10px; }
-    .shoptap { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer; padding: 6px 0; }
+    /* カードの余白もタップで反応するよう、余白は shoptap 側に持たせる（端を押して反応しない、の対策）。
+       touch-action: 続けて2品を押したときに、ダブルタップ拡大と取られて2回目が消えるのを防ぐ */
+    .shopitem { display: flex; align-items: stretch; gap: 0; background: var(--card); border-radius: 14px;
+      padding: 0 8px 0 0; box-shadow: var(--shadow); margin-bottom: 10px; touch-action: manipulation; }
+    .shopitem > button { align-self: center; }
+    .shoptap { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer;
+      padding: 14px 6px 14px 16px; -webkit-tap-highlight-color: transparent; }
     .shopitem input[type="checkbox"] { position: absolute; opacity: 0; pointer-events: none; }
     .del { flex: none; width: 34px; height: 34px; border: none; background: none; color: var(--muted);
       border-radius: 9px; cursor: pointer; display: grid; place-items: center; }
@@ -1315,13 +1319,18 @@
       font-size: .8rem; color: var(--muted); line-height: 1.8; }
     .col-foot b { color: var(--ink); }
     /* 献立の材料に関係する記事があるとき、料理カードの下に出す一言 */
-    .col-tip { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; margin-top: 10px;
-      background: #fdf6ee; border: 1px solid #f3e2cd; border-radius: 12px; padding: 9px 12px;
-      font: inherit; font-size: .82rem; cursor: pointer; }
-    .col-tip .ic { font-size: 1rem; flex: none; }
-    .col-tip .tt { flex: 1; min-width: 0; font-weight: 600; color: #6b5c4c;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .col-tip .go { color: var(--orange-dark); font-weight: 800; flex: none; }
+    /* コラムはレシピ本体（オレンジ系）と色を変え、区切り線の下に「読みもの」として置く */
+    .col-tip { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left;
+      margin-top: 16px; position: relative;
+      background: #eef3fa; border: none; border-left: 4px solid #5b82b8; border-radius: 10px; padding: 10px 12px;
+      font: inherit; font-size: .82rem; cursor: pointer; color: #2f4a6b; }
+    .col-tip::before { content: ""; position: absolute; left: -4px; right: 0; top: -9px; border-top: 1px dashed var(--line, #e5ded5); }
+    .col-tip .col-badge { flex: none; font-size: .7rem; font-weight: 800; color: #fff; background: #5b82b8;
+      border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+    .col-tip .tt { flex: 1; min-width: 0; font-weight: 600; line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .col-tip .tt .fd { display: block; font-size: .7rem; font-weight: 700; color: #5b82b8; }
+    .col-tip .go { color: #5b82b8; font-weight: 800; flex: none; font-size: .78rem; white-space: nowrap; }
 
     /* ---- Share ---- */
     .urlbox { display: flex; gap: 8px; margin-top: 8px; }
@@ -2417,7 +2426,7 @@
           <div class="allergy-chips" id="aaChips"></div>
           <button type="button" class="allergy-more" id="aaMore"></button>
           <input type="text" id="aaFree" placeholder="そのほか（例: パクチー、貝）" style="width:100%;margin-top:4px" />
-          <p class="allergy-note" style="margin-top:8px">あとから「設定 → 食材の設定」でも変えられます。</p>
+          <p class="allergy-note" style="margin-top:8px">しょうゆ・みそなど調味料の原料に含まれる小麦・大豆は除外の対象外です。重いアレルギーがある方は、材料を必ずご自身でも確かめてください。あとから「設定 → 食材の設定」でも変えられます。</p>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
             <button class="btn-ghost" id="aaNone" style="width:auto;margin-top:0;padding:10px 16px">とくにない</button>
             <button class="btn-primary" id="aaOk" style="width:auto;margin-top:0;padding:10px 18px;font-size:.95rem">これで献立へ</button>
@@ -3783,15 +3792,20 @@
     }
 
     // 献立の材料に関係する記事を探す（1品につき最初の1件だけ出す）
-    function columnForDish(dish) {
+    // used: 同じ食事の中ですでに出したコラム。塩麹チキンとツナサラダに同じ「塩のこと」が
+    // 続けて出ていたので、出したものは避けて、無ければ出さない。
+    function columnForDish(dish, used = new Set()) {
       const map = columnsData?.byFood;
       if (!map) return null;
       for (const ing of dish?.ingredients || []) {
         const key = normName(ing.name);
         for (const food of Object.keys(map)) {
           if (!key.includes(normName(food))) continue;
-          const c = columnBySlug(map[food][0]);
-          if (c) return { food, column: c };
+          for (const slug of map[food]) {
+            if (used.has(slug)) continue;
+            const c = columnBySlug(slug);
+            if (c) return { food, column: c };
+          }
         }
       }
       return null;
@@ -5661,6 +5675,7 @@
         body.appendChild(u);
       }
 
+      const usedCols = new Set(); // この食事で出したコラム（同じものを続けて出さない）
       (meal.dishes || []).forEach((dish, idx) => {
         const el = document.createElement("div");
         el.className = "dish";
@@ -5720,10 +5735,14 @@
             + `</div>`;
         }
         // 材料に関係するコラムがあれば、そこから読めるようにする
-        const rel = columnForDish(dish);
+        const rel = columnForDish(dish, usedCols);
         if (rel) {
+          usedCols.add(rel.column.slug);
+          // レシピの補足と間違えて押されていたので、「別ページの読みもの」と見た目で分かるようにする
           inner += `<button class="col-tip" data-col="${esc(rel.column.slug)}">
-            <span class="ic">📖</span><span class="tt">${esc(rel.food)}のこと：${esc(rel.column.title)}</span><span class="go">›</span></button>`;
+            <span class="col-badge">📖 コラム</span>
+            <span class="tt"><span class="fd">${esc(rel.food)}のこと</span>${esc(rel.column.title)}</span>
+            <span class="go">読む ›</span></button>`;
         }
         el.innerHTML = inner;
         body.appendChild(el);
@@ -6421,6 +6440,7 @@
       if (!household || !shopPending.size) return;
       const weeks = [...shopPending];
       shopPending.clear();
+      let changed = false;
       for (const wk of weeks) {
         const items = readJSON(listKeyFor(wk), null);
         if (!Array.isArray(items)) continue;
@@ -6428,20 +6448,53 @@
           const merged = await apiOK(`/api/households/${household.id}/shopping/${wk}`, {
             method: "PUT", body: { items, deleted: readJSON(delKeyFor(wk), {}) || {} },
           });
-          applyMergedWeek(wk, merged);
+          if (applyMergedWeek(wk, merged)) changed = true;
         } catch { shopPending.add(wk); } // 通信できないときは次の機会に送る
       }
-      if (activeViewId() === "shopping") renderShopping();
+      // 自分の送信が返ってきただけなら描き直さない。
+      // 以前は毎回描き直していて、チェックの約1秒後に一覧がまるごと作り直され、
+      // ちょうど次の品を押していた指のタップが消えていた（「タップが反応しない」の原因）。
+      if (changed) renderShoppingWhenIdle();
     }
-    // サーバの突き合わせ結果を端末側へ反映する
+    // 見た目に関わる中身（並び順・updatedAt は除く）
+    const shopSig = (items) => JSON.stringify((items || [])
+      .map((x) => [x.id, x.name, x.amount || "", !!x.checked, x.date || "", x.category || ""])
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+    // サーバの突き合わせ結果を端末側へ反映する。見た目が変わったときだけ true
     function applyMergedWeek(wk, merged) {
       if (!merged || !Array.isArray(merged.items)) return false;
-      const before = localStorage.getItem(listKeyFor(wk));
-      const after = JSON.stringify(merged.items);
-      localStorage.setItem(listKeyFor(wk), after);
+      const before = shopSig(readJSON(listKeyFor(wk), null));
+      localStorage.setItem(listKeyFor(wk), JSON.stringify(merged.items));
       localStorage.setItem(delKeyFor(wk), JSON.stringify(merged.deleted || {}));
-      return before !== after;
+      return before !== shopSig(merged.items);
     }
+    // 相手の変更を反映するための描き直しは、指が画面に触れている間と、触った直後は待つ。
+    // 押している最中に一覧を作り直すと、そのタップが空振りになるため。
+    let shopTouchAt = 0, shopTouching = false, shopIdleTimer = null;
+    function renderShoppingWhenIdle() {
+      clearTimeout(shopIdleTimer);
+      const wait = shopTouching ? 400 : Math.max(0, 1200 - (Date.now() - shopTouchAt));
+      if (wait > 0) { shopIdleTimer = setTimeout(renderShoppingWhenIdle, wait); return; }
+      if (activeViewId() !== "shopping" || editingId) return;
+      // 入力欄に打っている途中なら、打ち終わるまで待つ
+      const ae = document.activeElement;
+      if (ae && $("shopBody").contains(ae) && /INPUT|TEXTAREA|SELECT/.test(ae.tagName) && ae.type !== "checkbox") {
+        shopIdleTimer = setTimeout(renderShoppingWhenIdle, 1500); return;
+      }
+      const y = window.scrollY;
+      renderShopping();
+      window.scrollTo(0, y); // 描き直しで読んでいた位置が動かないように
+    }
+    (function watchShopTouch() {
+      const body = $("shopBody");
+      if (!body) return;
+      const down = () => { shopTouching = true; shopTouchAt = Date.now(); };
+      const up = () => { shopTouching = false; shopTouchAt = Date.now(); };
+      body.addEventListener("pointerdown", down, { passive: true });
+      body.addEventListener("touchstart", down, { passive: true });
+      for (const ev of ["pointerup", "pointercancel", "touchend", "touchcancel"]) body.addEventListener(ev, up, { passive: true });
+      window.addEventListener("scroll", () => { if (activeViewId() === "shopping") shopTouchAt = Date.now(); }, { passive: true });
+    })();
     // 相手の変更を受け取る。開いた直後と、開いている間は定期的に。
     async function pullShopWeeks(weeks) {
       if (!household || !weeks.length) return false;
@@ -6466,7 +6519,7 @@
       shopPollTimer = setInterval(async () => {
         if (activeViewId() !== "shopping") return stopShopPolling();
         if (editingId) return; // 編集中に書き換わると入力が消えるので待つ
-        if (await pullShopWeeks(touchedWeeks())) renderShopping();
+        if (await pullShopWeeks(touchedWeeks())) renderShoppingWhenIdle();
       }, 20000);
     }
     function stopShopPolling() { clearInterval(shopPollTimer); shopPollTimer = null; }
@@ -6574,7 +6627,9 @@
           loadFoodAliases(),  // 「玉ねぎ」と「たまねぎ」を同じ食材として照合するため
         ]);
         plansCache = plans; pantryItems = pantry;
-        renderShopping();
+        // すでに一覧を出しているなら、押している最中に作り直さない（開いてすぐ押したタップが消えるため）
+        if ($("shopMemo")) renderShoppingWhenIdle();
+        else renderShopping();
       } catch {}
     }
     // プラン詳細の「買い物リスト」→ その献立の分が見える起点で開く
