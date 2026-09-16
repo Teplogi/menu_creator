@@ -4776,7 +4776,7 @@
         if (nd) { it.movedFrom = it.date; it.date = nd; it._m = 1; }
       }
       for (const it of list) delete it._m;
-      localStorage.setItem(listK, JSON.stringify(list));
+      writeShopWeek(week, list);
       localStorage.setItem("shopSig:w:" + week, weekPlanSig(week)); // 署名を最新化（「更新されました」を出さない）
     }
 
@@ -5616,7 +5616,7 @@
           if (Array.isArray(list)) {
             let changed = false;
             for (const it of list) if (it.date === date && it.name === oldName) { it.name = newName; changed = true; }
-            if (changed) localStorage.setItem(key, JSON.stringify(list));
+            if (changed) writeShopWeek(wk, list);
           }
         }
         if (localStorage.getItem("shopSig:w:" + wk) != null) {
@@ -5635,7 +5635,7 @@
         const list = JSON.parse(raw);
         if (!Array.isArray(list)) return;
         const next = fn(list);
-        localStorage.setItem(key, JSON.stringify(next || list));
+        writeShopWeek(wk, next || list);
         if (localStorage.getItem("shopSig:w:" + wk) != null) {
           localStorage.setItem("shopSig:w:" + wk, weekPlanSig(wk));
         }
@@ -6430,20 +6430,39 @@
         localStorage.setItem(delKeyFor(wk), JSON.stringify(dels));
       }
     }
-    function queueShopSync(weeks) {
-      for (const w of weeks) shopPending.add(w);
-      if (!household || shopSyncTimer) return;
-      // 連続でチェックしても1回にまとめる
-      shopSyncTimer = setTimeout(() => { shopSyncTimer = null; pushShopWeeks(); }, 700);
+    // 週のリストを書き換えるときの共通の入口。時刻を打ち、消えた品を墓標に残し、サーバへ送る。
+    // ここを通さずに localStorage を書くと、サーバに残った古い内容が次の取得で戻ってくる
+    //（献立を作り直して「反映」しても、買い物リストが更新前に戻る原因だった）。
+    function writeShopWeek(wk, items) {
+      stampShopWeek(wk, items);
+      localStorage.setItem(listKeyFor(wk), JSON.stringify(items));
+      queueShopSync([wk], { reset: true });
     }
+    // 電波が悪いときは、間隔を空けながら送り直す（1秒→2秒→…最大30秒）。
+    // 以前は失敗するとそのままで、次に何か操作するまで送られなかった。
+    let shopFail = 0;
+    // reset=true は「利用者が操作した」「電波が戻った」＝すぐ送ってよい合図。
+    // 画面に戻ったときや取得のついでに呼ぶぶんは、間隔をリセットしない
+    //（そこで戻すと、圏外のあいだ1〜2秒おきに送り続けてしまう）。
+    function queueShopSync(weeks, opts = {}) {
+      for (const w of weeks) shopPending.add(w);
+      if (opts.reset) shopFail = 0;
+      if (!household || shopSyncTimer || !shopPending.size) return;
+      const wait = shopFail ? Math.min(30000, 1000 * 2 ** (shopFail - 1)) : 700;
+      shopSyncTimer = setTimeout(() => { shopSyncTimer = null; pushShopWeeks(); }, wait);
+    }
+    // 圏外から戻ったとき・画面に戻ってきたときは、たまった分をすぐ送る
+    addEventListener("online", () => queueShopSync([], { reset: true }));
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) queueShopSync([]); });
     let shopPushing = false;
+    let behindTries = 0; // 送ってもサーバが追いつかないときに、際限なく送り続けないための歯止め
     async function pushShopWeeks() {
       // 送信は1本ずつ。重ねて走らせると、古い送信の返事があとから届いて新しいチェックを消す
       if (!household || !shopPending.size || shopPushing) return;
       shopPushing = true;
       const weeks = [...shopPending];
       shopPending.clear();
-      let changed = false;
+      let changed = false, failed = false, ok = false;
       for (const wk of weeks) {
         const items = readJSON(listKeyFor(wk), null);
         if (!Array.isArray(items)) continue;
@@ -6453,11 +6472,14 @@
           });
           const r = applyMergedWeek(wk, merged);
           if (r.changed) changed = true;
-          if (r.behind) shopPending.add(wk); // 送っている間に押した分は、もう一度送る
-        } catch { shopPending.add(wk); } // 通信できないときは次の機会に送る
+          if (r.behind && behindTries < 3) { shopPending.add(wk); behindTries++; } // 送信中に押した分を送り直す
+          ok = true;
+        } catch { shopPending.add(wk); failed = true; } // 通信できないときは間を空けて送り直す
       }
       shopPushing = false;
-      if (shopPending.size) queueShopSync([]); // 送り残しがあれば続けて送る
+      shopFail = failed ? shopFail + 1 : 0;
+      if (ok && !failed) behindTries = 0;
+      if (shopPending.size) queueShopSync([]); // 送り残しは続けて送る
       // 自分の送信が返ってきただけなら描き直さない。
       // 以前は毎回描き直していて、チェックの約1秒後に一覧がまるごと作り直され、
       // ちょうど次の品を押していた指のタップが消えていた（「タップが反応しない」の原因）。
@@ -6599,7 +6621,7 @@
         stampShopWeek(wk, items); // 変わった品目に時刻を打つ／消えた品目を墓標に残す
         localStorage.setItem(listKeyFor(wk), JSON.stringify(items));
       }
-      queueShopSync([...byWeek.keys()]); // 世帯の他メンバーへ共有
+      queueShopSync([...byWeek.keys()], { reset: true }); // 世帯の他メンバーへ共有
     }
 
     function addItem(name, amount, date) {
@@ -6632,7 +6654,7 @@
     function uncheckAll() { const l = getList(); l.forEach((it) => (it.checked = false)); saveList(l); renderShopping(); }
     function resyncList() {
       if (!confirm("編集内容を破棄して、献立の材料からリストを作り直しますか？")) return;
-      for (const wk of touchedWeeks()) localStorage.setItem(listKeyFor(wk), JSON.stringify(materializeList(wk)));
+      for (const wk of touchedWeeks()) writeShopWeek(wk, materializeList(wk)); // サーバにも送る
       editingId = null;
       renderShopping();
     }
