@@ -6436,8 +6436,11 @@
       // 連続でチェックしても1回にまとめる
       shopSyncTimer = setTimeout(() => { shopSyncTimer = null; pushShopWeeks(); }, 700);
     }
+    let shopPushing = false;
     async function pushShopWeeks() {
-      if (!household || !shopPending.size) return;
+      // 送信は1本ずつ。重ねて走らせると、古い送信の返事があとから届いて新しいチェックを消す
+      if (!household || !shopPending.size || shopPushing) return;
+      shopPushing = true;
       const weeks = [...shopPending];
       shopPending.clear();
       let changed = false;
@@ -6448,9 +6451,13 @@
           const merged = await apiOK(`/api/households/${household.id}/shopping/${wk}`, {
             method: "PUT", body: { items, deleted: readJSON(delKeyFor(wk), {}) || {} },
           });
-          if (applyMergedWeek(wk, merged)) changed = true;
+          const r = applyMergedWeek(wk, merged);
+          if (r.changed) changed = true;
+          if (r.behind) shopPending.add(wk); // 送っている間に押した分は、もう一度送る
         } catch { shopPending.add(wk); } // 通信できないときは次の機会に送る
       }
+      shopPushing = false;
+      if (shopPending.size) queueShopSync([]); // 送り残しがあれば続けて送る
       // 自分の送信が返ってきただけなら描き直さない。
       // 以前は毎回描き直していて、チェックの約1秒後に一覧がまるごと作り直され、
       // ちょうど次の品を押していた指のタップが消えていた（「タップが反応しない」の原因）。
@@ -6460,13 +6467,41 @@
     const shopSig = (items) => JSON.stringify((items || [])
       .map((x) => [x.id, x.name, x.amount || "", !!x.checked, x.date || "", x.category || ""])
       .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
-    // サーバの突き合わせ結果を端末側へ反映する。見た目が変わったときだけ true
-    function applyMergedWeek(wk, merged) {
-      if (!merged || !Array.isArray(merged.items)) return false;
-      const before = shopSig(readJSON(listKeyFor(wk), null));
+    // サーバの返事と端末の内容を突き合わせる（サーバと同じ規則: 品目ごとに updatedAt の
+    // 新しいほうを採用。消した時刻のほうが新しければ消えたまま）。
+    // 返事をそのまま上書きしていたため、送信中に押したチェックが消えていた
+    //（「チェックしたのに、次を押すと前のが戻る」の原因）。
+    function mergeShopLocal(local, server) {
+      const items = new Map(), dels = new Map();
+      const at = (x) => String((x && x.updatedAt) || "");
+      for (const src of [local, server]) {
+        for (const it of src.items || []) {
+          const cur = items.get(it.id);
+          if (!cur || at(it) > at(cur)) items.set(it.id, it);
+        }
+        for (const [id, t] of Object.entries(src.deleted || {})) {
+          if (String(t) > (dels.get(id) || "")) dels.set(id, String(t));
+        }
+      }
+      const out = [];
+      for (const [id, it] of items) {
+        const d = dels.get(id);
+        if (d && d >= at(it)) continue; // 消したほうが新しい＝消えたまま
+        out.push(it);
+        dels.delete(id); // 戻ってきたので墓標は不要
+      }
+      return { items: out, deleted: Object.fromEntries(dels) };
+    }
+    // サーバの結果を端末へ反映する。
+    // changed=画面の見た目が変わった / behind=端末のほうが新しく、送り直しが要る
+    function applyMergedWeek(wk, server) {
+      if (!server || !Array.isArray(server.items)) return { changed: false, behind: false };
+      const local = { items: readJSON(listKeyFor(wk), null) || [], deleted: readJSON(delKeyFor(wk), {}) || {} };
+      const merged = mergeShopLocal(local, server);
+      const mergedSig = shopSig(merged.items);
       localStorage.setItem(listKeyFor(wk), JSON.stringify(merged.items));
-      localStorage.setItem(delKeyFor(wk), JSON.stringify(merged.deleted || {}));
-      return before !== shopSig(merged.items);
+      localStorage.setItem(delKeyFor(wk), JSON.stringify(merged.deleted));
+      return { changed: shopSig(local.items) !== mergedSig, behind: mergedSig !== shopSig(server.items) };
     }
     // 相手の変更を反映するための描き直しは、指が画面に触れている間と、触った直後は待つ。
     // 押している最中に一覧を作り直すと、そのタップが空振りになるため。
@@ -6504,7 +6539,9 @@
         for (const [wk, data] of Object.entries(r.weeks || {})) {
           // まだサーバに何も無い週は、こちらの内容を送る側なので上書きしない
           if (!(data.items || []).length && !Object.keys(data.deleted || {}).length) continue;
-          if (applyMergedWeek(wk, data)) changed = true;
+          const r = applyMergedWeek(wk, data);
+          if (r.changed) changed = true;
+          if (r.behind) { shopPending.add(wk); queueShopSync([]); } // 端末のほうが新しければ送る
         }
         const memo = $("shopMemo");
         if (memo && document.activeElement !== memo && (r.memo || "") !== memo.value) {
