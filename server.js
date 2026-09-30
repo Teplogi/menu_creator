@@ -83,9 +83,9 @@ if (!googleEnabled()) console.log("（Googleログインは未設定: GOOGLE_CLI
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || null;
 // 無料ユーザーが月に生成できる「食数」（回数ではなく、生成した食事の数で数える）
-const FREE_AI_MEALS_PER_MONTH = Number(process.env.FREE_AI_MEALS_PER_MONTH) || 10;
+const FREE_AI_MEALS_PER_MONTH = Number(process.env.FREE_AI_MEALS_PER_MONTH) || 20;
 // AI修正（作り直し・1品差し替え）の無料枠は献立生成とは別枠にする（修正も体験してもらうため）
-const FREE_AI_EDITS_PER_MONTH = Number(process.env.FREE_AI_EDITS_PER_MONTH) || 5;
+const FREE_AI_EDITS_PER_MONTH = Number(process.env.FREE_AI_EDITS_PER_MONTH) || 10;
 // テスト期間モード。テスターに目玉機能（毎週おまかせ作成・栄養コメント）まで
 // 触ってもらうため、課金導線を止めて全機能を開放する。
 // Stripeがテストキーのままだと、決済画面に飛ばしてしまい不信を招くので、
@@ -1302,8 +1302,13 @@ async function householdsOf(userId) {
   );
 }
 
+// パスワードの再設定に対応していないので、新規登録は Google のみにする（忘れると復旧できないため）。
+// 既存のパスワード利用者のログインはそのまま。Google が使えない環境（ローカル等）では従来どおり登録できる。
+const passwordSignup = () => process.env.PASSWORD_SIGNUP === "1" || !googleEnabled();
 app.post("/api/auth/register", authLimiter, async (req, res) => {
   try {
+    if (!passwordSignup())
+      return res.status(403).json({ error: "新規登録は「Googleで登録」からお願いします。" });
     const username = (req.body?.username || "").toString().trim();
     const password = (req.body?.password || "").toString();
     if (username.length < 2 || username.length > 20)
@@ -1362,7 +1367,8 @@ app.get("/api/columns", (req, res) => {
 });
 
 app.get("/api/auth/config", (req, res) => {
-  res.json({ googleEnabled: googleEnabled(), googleClientId: googleEnabled() ? GOOGLE_CLIENT_ID : null });
+  res.json({ googleEnabled: googleEnabled(), googleClientId: googleEnabled() ? GOOGLE_CLIENT_ID : null,
+    passwordSignup: passwordSignup() });
 });
 
 // Googleログイン: クライアントの IDトークン(credential) を検証し、既存Googleユーザーはログイン、
@@ -1557,7 +1563,7 @@ app.get("/api/households/:id/share", auth, async (req, res) => {
   try {
     const hh = await requireMember(req, res, req.params.id);
     if (!hh) return;
-    res.json({ token: hh.share_token, url: `${appBaseUrl(req)}/?join=${hh.share_token}` });
+    res.json({ token: hh.share_token, url: inviteUrl(req, hh.share_token) });
   } catch (err) {
     handleError(res, err);
   }
@@ -1570,7 +1576,7 @@ app.post("/api/households/:id/share/rotate", auth, async (req, res) => {
     if (!hh) return;
     const token = randomBytes(12).toString("base64url");
     await q("UPDATE households SET share_token = $1 WHERE id = $2", [token, hh.id]);
-    res.json({ token, url: `${appBaseUrl(req)}/?join=${token}` });
+    res.json({ token, url: inviteUrl(req, token) });
   } catch (err) {
     handleError(res, err);
   }
@@ -3081,6 +3087,9 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1, "edi
 });
 
 // ---------- 課金 API（Stripe） ----------
+// openExternalBrowser=1: LINE で開いたときに Safari/Chrome で開き直させる指定。
+// LINE のアプリ内ブラウザでは Google ログインがブロックされ、招待された側が登録できないため。
+const inviteUrl = (req, token) => `${appBaseUrl(req)}/?join=${token}&openExternalBrowser=1`;
 const appBaseUrl = (req) => process.env.APP_BASE_URL || `${req.protocol}://${req.get("host")}`;
 
 // 現在の課金状態＋無料枠の残りをフロントに返す

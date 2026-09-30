@@ -423,6 +423,12 @@
     .store-sub { font-size: .84rem; font-weight: 800; margin: 0 0 6px; }
     .store-sub span { font-weight: 600; color: var(--muted); font-size: .78rem; }
     .pantrylist { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .auth-note { font-size: .82rem; color: var(--muted); line-height: 1.7; margin: 10px 0 0; text-align: center; }
+    .inapp-note { display: flex; flex-direction: column; gap: 6px; background: #fff4e5; border: 1.5px solid #f5c27a;
+      border-radius: 12px; padding: 12px 14px; margin-top: 10px; font-size: .84rem; line-height: 1.65; }
+    .inapp-note b:first-child { color: var(--orange-dark); }
+    .inapp-note button { align-self: flex-start; border: none; background: var(--orange); color: #fff; font-weight: 700;
+      border-radius: 999px; padding: 8px 14px; font-family: inherit; font-size: .84rem; cursor: pointer; }
     .allergy-lead { font-size: .8rem; color: var(--muted); margin: 2px 0 6px; font-weight: 700; }
     .allergy-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .allergy-chips button { border: 1.5px solid var(--line, #e5ded5); background: #fff; color: var(--ink, #333);
@@ -1648,7 +1654,7 @@
                     <li>冷蔵庫・作り置きの記録</li>
                     <li>カロリー・塩分の表示</li>
                     <li>お気に入り登録／コラム</li>
-                    <li><b>AIで作る</b>のは毎月10食分＋修正5回まで</li>
+                    <li><b>AIで作る</b>のは毎月20食分＋修正10回まで</li>
                   </ul>
                 </div>
                 <div class="lp-plan pro">
@@ -1689,7 +1695,7 @@
             <details class="lp-qa"><summary>「毎週おまかせ作成」は何をしてくれますか？</summary>
               <p class="ans">決めた曜日・時刻になると、AIが自動で翌週の献立を作り、できあがったらお知らせします。作成ボタンを押す必要はありません。曜日ごとに「平日は夕食だけ、土日は昼も」のような細かい指定ができ、すでに献立がある日はそのまま残します。プレミアムの機能です。</p></details>
             <details class="lp-qa"><summary>無料のままでも使えますか？</summary>
-              <p class="ans">はい。300品以上の料理リストから条件に合う献立を組み立てる機能は、<b>回数の制限なく無料</b>で使えます（作り方は付きません）。買い物リストの共有・冷蔵庫の記録・カロリー表示・コラムも無料です。作り方つきのAI作成だけ、無料は毎月10食分までです。</p></details>
+              <p class="ans">はい。300品以上の料理リストから条件に合う献立を組み立てる機能は、<b>回数の制限なく無料</b>で使えます（作り方は付きません）。買い物リストの共有・冷蔵庫の記録・カロリー表示・コラムも無料です。作り方つきのAI作成だけ、無料は毎月20食分までです。</p></details>
             <details class="lp-qa"><summary>解約はいつでもできますか？</summary>
               <p class="ans">はい。プレミアムはいつでも解約でき、解約後も無料の範囲で引き続きご利用いただけます。</p></details>
           </div>
@@ -1732,6 +1738,12 @@
           <p class="auth-reco" id="googleReco">パスワード不要で、いちばんかんたんです</p>
           <div id="googleBtn" style="display:flex;justify-content:center"></div>
           <div class="auth-or"><span id="authOrText">または</span></div>
+        </div>
+        <p class="auth-note" id="signupNote" style="display:none">登録は<b>Googleアカウント</b>で行います。パスワードを覚える必要がなく、機種を変えてもそのまま使えます。</p>
+        <div class="inapp-note" id="inAppNote" style="display:none">
+          <b>このままでは Google でログインできません</b>
+          <span>LINE や Instagram の中で開いたページでは、Google のログインが使えない仕組みになっています。画面のメニューから<b>「ブラウザで開く」</b>を選ぶか、リンクをコピーして Safari / Chrome に貼り付けてください。</span>
+          <button type="button" id="inAppCopy" onclick="copyOpenLink()">このページのリンクをコピー</button>
         </div>
         <button type="button" class="linklike pw-toggle" id="pwToggle" onclick="togglePwForm()" style="display:none">
           ユーザー名とパスワードで登録する</button>
@@ -2223,6 +2235,20 @@
   </div>
 
   <script>
+    // LINE のアプリ内ブラウザでは Google ログインがブロックされる（新規登録は Google のみ）。
+    // openExternalBrowser=1 を付けて開き直すと、LINE が Safari / Chrome で開いてくれる。
+    (function openOutsideLine() {
+      try {
+        if (!/Line\//i.test(navigator.userAgent)) return;
+        const u = new URL(location.href);
+        if (u.searchParams.get("openExternalBrowser") === "1") return; // 付けても開けなかった＝繰り返さない
+        u.searchParams.set("openExternalBrowser", "1");
+        location.replace(u.toString());
+      } catch {}
+    })();
+    // アプリ内ブラウザ（LINE・Instagram・Facebook・Android の WebView）。Google ログインが使えない
+    const IN_APP_BROWSER = /Line\/|FBAN|FBAV|Instagram|MicroMessenger|; wv\)/i.test(navigator.userAgent);
+    let passwordSignupOn = true; // サーバの設定で上書き（本番は Google のみ）
     let authToken = null;
     let currentUser = null;   // { id, username }
     let households = [];       // [{ id, name }]
@@ -2666,7 +2692,7 @@
       try { localStorage.setItem("lastJoinToken", t); } catch {}
     }
     function cleanJoinFromUrl() {
-      try { const u = new URL(location.href); if (u.searchParams.has("join")) { u.searchParams.delete("join"); history.replaceState(null, "", u.pathname + (u.search || "")); } } catch {}
+      try { const u = new URL(location.href); if (u.searchParams.has("join") || u.searchParams.has("openExternalBrowser")) { u.searchParams.delete("join"); u.searchParams.delete("openExternalBrowser"); history.replaceState(null, "", u.pathname + (u.search || "")); } } catch {}
     }
     // 招待リンクやコードを貼って参加する。リンクごと貼られても拾えるようにしておく。
     async function joinByCode(inputId, hintId) {
@@ -2745,9 +2771,12 @@
     function syncAuthForm() {
       const reg = authMode === "register";
       const googleOn = $("googleAuth").style.display !== "none";
-      $("pwForm").style.display = pwFormOpen || !googleOn ? "block" : "none";
-      $("pwToggle").style.display = reg && googleOn && !pwFormOpen ? "block" : "none";
-      $("pwWarn").style.display = reg ? "block" : "none";
+      const pwSignupOff = reg && !passwordSignupOn; // 本番の新規登録は Google のみ
+      $("pwForm").style.display = pwSignupOff ? "none" : (pwFormOpen || !googleOn ? "block" : "none");
+      $("pwToggle").style.display = reg && googleOn && !pwFormOpen && !pwSignupOff ? "block" : "none";
+      $("pwWarn").style.display = reg && !pwSignupOff ? "block" : "none";
+      $("signupNote").style.display = pwSignupOff && !IN_APP_BROWSER ? "block" : "none";
+      $("inAppNote").style.display = IN_APP_BROWSER ? "block" : "none";
       $("pwForgot").style.display = reg ? "none" : "block";
       const reco = $("googleReco");
       if (reco) reco.textContent = reg
@@ -2757,6 +2786,12 @@
       if (or) or.style.display = $("pwForm").style.display === "none" ? "none" : "";
       $("googleAuth").querySelector(".auth-or").style.display =
         $("pwForm").style.display === "none" ? "none" : "flex";
+    }
+    async function copyOpenLink() {
+      const t = sessionStorage.getItem("joinToken");
+      const url = location.origin + "/" + (t ? `?join=${encodeURIComponent(t)}` : "");
+      try { await navigator.clipboard.writeText(url); $("inAppCopy").textContent = "コピーしました。ブラウザに貼り付けてください"; }
+      catch { prompt("このリンクをコピーして、Safari / Chrome で開いてください", url); }
     }
     function togglePwForm() { pwFormOpen = true; syncAuthForm(); $("authUser").focus(); }
     function showForgotHelp() {
@@ -2805,7 +2840,9 @@
     (async () => {
       try {
         const cfg = await (await fetch("/api/auth/config")).json();
+        passwordSignupOn = cfg.passwordSignup !== false;
         if (cfg.googleEnabled && cfg.googleClientId) { googleClientId = cfg.googleClientId; renderGoogleButton(); }
+        if ($("pwForm")) syncAuthForm();
       } catch {}
     })();
     async function handleGoogleCredential(response) {
