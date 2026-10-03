@@ -2895,7 +2895,13 @@
       // 課金が未設定（STRIPE未設定）なら、プランUI自体を出さない
       if (!b || !b.billingEnabled) { card.style.display = "none"; return; }
       card.style.display = "";
-      if (b.active) {
+      if (b.active && b.shared) {
+        // グループの誰かの契約で使えている。解約・カード変更は契約した本人の画面から行う
+        $("billingBody").innerHTML =
+          `<div class="plan-row"><span class="plan-badge premium">プレミアム</span>` +
+          `<span class="plan-note">グループのメンバーの契約で、毎週おまかせ作成・AI生成が使い放題</span></div>` +
+          `<p class="hint" style="margin:0">お支払いは不要です。解約やカード変更は、契約したメンバーの設定画面から行えます。</p>`;
+      } else if (b.active) {
         const until = b.currentPeriodEnd ? new Date(b.currentPeriodEnd).toLocaleDateString("ja-JP") : "";
         $("billingBody").innerHTML =
           `<div class="plan-row"><span class="plan-badge premium">プレミアム</span>` +
