@@ -31,7 +31,7 @@ services:
         sync: false
       - key: VAPID_PRIVATE_KEY       # ★秘密。.env と同じ値を入力（外部に出さない）
         sync: false
-      - key: VAPID_SUBJECT           # 例: mailto:peitullysblack@gmail.com
+      - key: VAPID_SUBJECT           # 例: mailto:you@example.com（通知の送信元として使う連絡先）
         sync: false
       # --- Googleログイン: クライアントIDは非秘密なので値を直書き（クライアントに埋め込む公開情報） ---
       - key: GOOGLE_CLIENT_ID
