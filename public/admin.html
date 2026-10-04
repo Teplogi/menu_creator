@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>めにゅらく！ 集計</title>
+  <style>
+    :root {
+      --orange: #f5831f; --orange-dark: #c9640e; --orange-soft: #fdecda;
+      --bg: #fff7f1; --card: #ffffff; --ink: #3b3733; --ink2: #6b625a; --muted: #9a8c7e;
+      --line: #f0e7dd; --track: #f6eee5;
+      --heat-0: #fff4ea; --heat-1: #fde0c3; --heat-2: #fbbf86; --heat-3: #f5964a; --heat-4: #d96f0d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --orange: #f59a4a; --orange-dark: #f7b27a; --orange-soft: #3a2a1d;
+        --bg: #1c1916; --card: #26221e; --ink: #f2ece6; --ink2: #c9bfb5; --muted: #998d82;
+        --line: #3a342e; --track: #332d28;
+        --heat-0: #2e2721; --heat-1: #4d3522; --heat-2: #7a4a24; --heat-3: #b0642a; --heat-4: #e8873a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink);
+      font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", "Hiragino Sans", system-ui, sans-serif;
+      line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    main { max-width: 760px; margin: 0 auto; padding: 16px 16px 48px; }
+    header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    h1 { font-size: 1.2rem; margin: 0; }
+    .gen { color: var(--muted); font-size: .78rem; margin-left: auto; }
+    .toggle { display: flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--ink2);
+      background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+    .toggle input { accent-color: var(--orange); width: 16px; height: 16px; margin: 0; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+    h2 { font-size: 1rem; margin: 0 0 4px; }
+    .lead { color: var(--muted); font-size: .8rem; margin: 0 0 12px; }
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+    .tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+    .tile .k { font-size: .78rem; color: var(--ink2); }
+    .tile .v { font-size: 1.7rem; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    .tile .s { font-size: .74rem; color: var(--muted); }
+    /* ファネル: 1系列の横棒。ラベルと値は文字色、棒だけがブランド色 */
+    .fn-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; margin-bottom: 10px; }
+    .fn-label { font-size: .85rem; }
+    .fn-val { font-size: .85rem; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+    .fn-val small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+    .fn-track { grid-column: 1 / -1; height: 14px; background: var(--track); border-radius: 4px; overflow: hidden; }
+    .fn-bar { height: 100%; background: var(--orange); border-radius: 0 4px 4px 0; min-width: 2px; }
+    .fn-step { grid-column: 1 / -1; font-size: .74rem; color: var(--muted); }
+    .fn-step.drop { color: var(--orange-dark); font-weight: 700; }
+    /* 週ごとの棒グラフ（2つの指標は別のグラフに分ける） */
+    .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .wk-title { font-size: .85rem; font-weight: 700; margin: 0 0 6px; }
+    .wk { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; align-items: end; height: 110px;
+      border-bottom: 1px solid var(--line); position: relative; }
+    .wk .b { position: relative; height: 100%; display: flex; align-items: flex-end; cursor: default; }
+    .wk .b span { display: block; width: 100%; background: var(--orange); border-radius: 4px 4px 0 0; min-height: 0; }
+    .wk .b:hover span, .wk .b:focus span { background: var(--orange-dark); }
+    .wk-x { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; font-size: .62rem; color: var(--muted); text-align: center; margin-top: 3px; }
+    .tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font-size: .78rem;
+      padding: 6px 9px; border-radius: 8px; white-space: nowrap; z-index: 10; display: none; }
+    /* 継続率: 1色の濃淡（薄い＝低い、濃い＝高い）。数値も必ず書く */
+    .tbl-wrap { overflow-x: auto; }
+    table { border-collapse: separate; border-spacing: 2px; width: 100%; font-size: .8rem; font-variant-numeric: tabular-nums; }
+    th { font-weight: 700; color: var(--ink2); text-align: center; padding: 6px 4px; white-space: nowrap; font-size: .74rem; }
+    td { text-align: center; padding: 7px 4px; border-radius: 4px; white-space: nowrap; }
+    td.lbl { text-align: left; color: var(--ink2); }
+    td.na { color: var(--muted); }
+    .h0 { background: var(--heat-0); } .h1 { background: var(--heat-1); } .h2 { background: var(--heat-2); }
+    .h3 { background: var(--heat-3); color: #fff; } .h4 { background: var(--heat-4); color: #fff; }
+    @media (prefers-color-scheme: dark) { .h3, .h4 { color: #1c1916; } }
+    .legend { display: flex; align-items: center; gap: 4px; font-size: .72rem; color: var(--muted); margin-top: 8px; }
+    .legend i { width: 18px; height: 10px; border-radius: 2px; display: inline-block; }
+    .users td, .users th { text-align: left; border-bottom: 1px solid var(--line); border-radius: 0; padding: 7px 6px; }
+    .users td.num, .users th.num { text-align: right; }
+    .users td.nm { white-space: normal; word-break: break-all; max-width: 140px; }
+    .pill { display: inline-block; font-size: .7rem; padding: 1px 7px; border-radius: 999px; background: var(--orange-soft); color: var(--orange-dark); font-weight: 700; }
+    .msg { text-align: center; padding: 48px 16px; color: var(--ink2); }
+    .msg a { color: var(--orange-dark); }
+    details summary { cursor: pointer; font-size: .8rem; color: var(--ink2); margin-top: 10px; }
+    .note { font-size: .74rem; color: var(--muted); margin: 6px 0 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>📊 めにゅらく！ 集計</h1>
+      <label class="toggle"><input type="checkbox" id="excludeSelf" checked /> 自分のグループを除く</label>
+      <span class="gen" id="gen"></span>
+    </header>
+    <div id="root"><p class="msg">読み込み中…</p></div>
+  </main>
+  <div class="tip" id="tip"></div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const pct = (r) => (r == null ? "–" : Math.round(r * 100) + "%");
+    const md = (ymd) => { const [, m, d] = ymd.split("-"); return `${+m}/${+d}`; };
+    const day = (iso) => (iso ? new Date(iso).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" }) : "–");
+    const heat = (r) => (r == null ? "" : r >= 0.6 ? "h4" : r >= 0.4 ? "h3" : r >= 0.2 ? "h2" : r > 0 ? "h1" : "h0");
+
+    function bindTips(root) {
+      const tip = $("tip");
+      root.querySelectorAll("[data-tip]").forEach((el) => {
+        const show = (e) => {
+          tip.textContent = el.dataset.tip; tip.style.display = "block";
+          const r = el.getBoundingClientRect();
+          const x = Math.min(window.innerWidth - tip.offsetWidth - 8, Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2));
+          tip.style.left = x + "px"; tip.style.top = Math.max(8, r.top - tip.offsetHeight - 6) + "px";
+        };
+        el.addEventListener("mouseenter", show); el.addEventListener("focus", show);
+        el.addEventListener("click", show);
+        el.addEventListener("mouseleave", () => (tip.style.display = "none"));
+        el.addEventListener("blur", () => (tip.style.display = "none"));
+      });
+    }
+
+    function weekChart(title, rows, key, unit) {
+      const max = Math.max(1, ...rows.map((r) => r[key]));
+      return `<div><p class="wk-title">${title}</p>
+        <div class="wk" role="img" aria-label="${esc(title)}（直近12週）">
+          ${rows.map((r) => `<div class="b" tabindex="0" data-tip="${md(r.week)}の週：${r[key]}${unit}">
+            <span style="height:${(r[key] / max) * 100}%"></span></div>`).join("")}
+        </div>
+        <div class="wk-x">${rows.map((r, i) => `<span>${i % 3 === 2 ? md(r.week) : ""}</span>`).join("")}</div>
+        <p class="note">最大 ${max}${unit}・各棒は月曜はじまりの1週間</p></div>`;
+    }
+
+    function render(d) {
+      $("gen").textContent = "更新 " + new Date(d.generatedAt).toLocaleString("ja-JP", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      const t = d.totals;
+      const top = d.funnel[0].count || 0;
+      const funnel = d.funnel.map((f, i) => {
+        const prev = i ? d.funnel[i - 1].count : null;
+        const step = prev ? f.count / prev : null;
+        // 前の段から半分以上が抜けている段は目立たせる（どこで離脱しているか）
+        const drop = i > 0 && prev > 0 && step < 0.5;
+        return `<div class="fn-row">
+          <span class="fn-label">${esc(f.label)}</span>
+          <span class="fn-val">${f.count}人<small>${top ? pct(f.count / top) : "–"}</small></span>
+          <div class="fn-track"><div class="fn-bar" style="width:${top ? (f.count / top) * 100 : 0}%"></div></div>
+          ${i ? `<span class="fn-step${drop ? " drop" : ""}">前の段から ${prev ? pct(step) : "–"}${drop ? " ← ここで大きく離脱" : ""}</span>` : ""}
+        </div>`;
+      }).join("");
+
+      const cohort = d.cohorts.length
+        ? `<div class="tbl-wrap"><table>
+            <thead><tr><th style="text-align:left">登録した週</th><th>人数</th><th>献立作成</th><th>1週後</th><th>2週後</th><th>3週後</th><th>4週後</th></tr></thead>
+            <tbody>${d.cohorts.slice().reverse().map((c) => `<tr>
+              <td class="lbl">${md(c.week)}〜</td><td>${c.size}</td>
+              <td class="${heat(c.planRate)}">${pct(c.planRate)}</td>
+              ${c.retention.map((r) => `<td class="${r == null ? "na" : heat(r)}">${pct(r)}</td>`).join("")}
+            </tr>`).join("")}</tbody></table></div>
+            <div class="legend">0%<i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i>60%以上　・「–」はまだ来ていない週</div>`
+        : `<p class="note">直近12週に登録した人はいません。</p>`;
+
+      const users = d.recentUsers.length
+        ? `<div class="tbl-wrap"><table class="users">
+            <thead><tr><th>名前</th><th>登録</th><th class="num">人数</th><th class="num">献立</th><th>最終利用</th></tr></thead>
+            <tbody>${d.recentUsers.map((u) => `<tr>
+              <td class="nm">${esc(u.name)}${u.paid || u.returned ? "<br>" : ""}${u.paid ? '<span class="pill">有料</span> ' : ""}${u.returned ? '<span class="pill">継続</span>' : ""}</td>
+              <td>${day(u.createdAt)}</td>
+              <td class="num">${u.members || "–"}</td><td class="num">${u.plans}</td>
+              <td>${day(u.lastActiveAt)}</td>
+            </tr>`).join("")}</tbody></table></div>`
+        : `<p class="note">まだ登録者がいません。</p>`;
+
+      $("root").innerHTML = `
+        <div class="tiles">
+          <div class="tile"><div class="k">登録者</div><div class="v">${t.users}</div><div class="s">この7日で +${t.newUsers7d}</div></div>
+          <div class="tile"><div class="k">使ったグループ</div><div class="v">${t.activeGroups7d}</div><div class="s">直近7日（30日では ${t.activeGroups30d}）</div></div>
+          <div class="tile"><div class="k">有料会員</div><div class="v">${t.subscribers}</div><div class="s">月額480円なら ${(t.subscribers * 480).toLocaleString()}円/月</div></div>
+          <div class="tile"><div class="k">今月のAI作成</div><div class="v">${t.aiMealsThisMonth}<small style="font-size:.9rem">食</small></div><div class="s">AI修正 ${t.aiEditsThisMonth}回</div></div>
+        </div>
+        <section class="card">
+          <h2>どこで離脱しているか</h2>
+          <p class="lead">登録した人のうち、各段まで進んだ人数。％は登録者に対する割合。</p>
+          ${funnel}
+          <details><summary>それぞれの段の数え方</summary>
+            <p class="note">「使った」は、そのグループで献立の作成・買い物リストの更新・お気に入りや冷蔵庫の登録のどれかがあったこと。
+            「2週目以降も献立を作った」は、登録した週より後の週にも献立を作ったこと。
+            買い物リストは9月4日の共有対応より前の利用は数えられません。</p></details>
+        </section>
+        <section class="card">
+          <h2>週ごとの推移</h2>
+          <p class="lead">直近12週。棒にさわると数字が出ます。</p>
+          <div class="cols">${weekChart("新しく登録した人", d.weekly, "signups", "人")}${weekChart("使ったグループ", d.weekly, "activeGroups", "グループ")}</div>
+        </section>
+        <section class="card">
+          <h2>登録した週ごとの継続率</h2>
+          <p class="lead">その週に登録した人のうち、n週後にも使った人の割合。右に行くほど薄くなるのが普通で、薄くなりにくいほど良い。</p>
+          ${cohort}
+        </section>
+        <section class="card">
+          <h2>最近の登録者（30人まで）</h2>
+          <p class="lead">人数＝いちばん大きいグループの人数。「継続」は2週目以降も献立を作った人。</p>
+          ${users}
+        </section>`;
+      bindTips($("root"));
+    }
+
+    async function load() {
+      const token = (() => { try { return localStorage.getItem("authToken"); } catch { return null; } })();
+      if (!token) {
+        $("root").innerHTML = `<p class="msg">ログインが必要です。<br><a href="/">アプリでログイン</a>してから、もう一度このページを開いてください。</p>`;
+        return;
+      }
+      const ex = $("excludeSelf").checked ? "1" : "0";
+      const r = await fetch(`/api/admin/stats?excludeSelf=${ex}`, { headers: { authorization: "Bearer " + token } });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        $("root").innerHTML = `<p class="msg">${esc(d.error || "読み込めませんでした。")}${r.status === 401 ? '<br><a href="/">アプリでログイン</a>してください。' : ""}</p>`;
+        return;
+      }
+      render(d);
+    }
+    try { $("excludeSelf").checked = localStorage.getItem("adminExcludeSelf") !== "0"; } catch {}
+    $("excludeSelf").addEventListener("change", () => {
+      try { localStorage.setItem("adminExcludeSelf", $("excludeSelf").checked ? "1" : "0"); } catch {}
+      load();
+    });
+    load();
+  </script>
+</body>
+</html>

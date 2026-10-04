@@ -3113,6 +3113,172 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1, "edi
   }
 });
 
+// ---------- 管理者用の集計（/admin.html から読む） ----------
+// 見られるのは ADMIN_EMAILS（カンマ区切り）に入っている Google アカウントだけ。未設定なら誰も見られない。
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
+  .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+async function requireAdmin(req, res) {
+  const u = await one("SELECT email FROM users WHERE id = $1", [req.user.id]);
+  if (u?.email && ADMIN_EMAILS.includes(u.email.toLowerCase())) return true;
+  res.status(403).json({ error: "このページは管理者だけが見られます。" });
+  return false;
+}
+// 日本時間で、その日を含む週の月曜（YYYY-MM-DD）
+function jstWeekStart(iso) {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+const addWeeks = (ws, n) => {
+  const d = new Date(ws + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 7 * n);
+  return d.toISOString().slice(0, 10);
+};
+
+app.get("/api/admin/stats", auth, async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const [users, members, plans, shops, favs, fridge, ents, usage] = await Promise.all([
+      all("SELECT id, username, display_name, created_at FROM users ORDER BY created_at"),
+      all("SELECT household_id, user_id FROM memberships"),
+      all("SELECT household_id, created_at FROM meal_plans"),
+      all("SELECT household_id, updated_at AS at FROM shopping_lists"),
+      all("SELECT household_id, created_at AS at FROM favorite_dishes"),
+      all("SELECT household_id, created_at AS at FROM fridge_items"),
+      all("SELECT user_id, status, current_period_end FROM entitlements"),
+      all("SELECT user_id, count, edit_count FROM ai_usage WHERE ym = $1", [currentYM()]),
+    ]);
+
+    // 自分（と同じグループのメンバー）を除外して、身内の利用で数字が膨らまないようにする
+    const excludeSelf = req.query.excludeSelf === "1";
+    const myHh = new Set(members.filter((m) => m.user_id === req.user.id).map((m) => m.household_id));
+    const excludedUsers = new Set(excludeSelf ? [req.user.id] : []);
+    if (excludeSelf) for (const m of members) if (myHh.has(m.household_id)) excludedUsers.add(m.user_id);
+    const hhOk = (h) => !(excludeSelf && myHh.has(h));
+
+    const hhOf = new Map(); // user_id -> Set(household_id)
+    const memberCount = new Map(); // household_id -> 人数
+    for (const m of members) {
+      if (!hhOk(m.household_id)) continue;
+      if (!hhOf.has(m.user_id)) hhOf.set(m.user_id, new Set());
+      hhOf.get(m.user_id).add(m.household_id);
+      memberCount.set(m.household_id, (memberCount.get(m.household_id) || 0) + 1);
+    }
+    // グループごとの「使った」記録（献立の作成・買い物リストの更新・お気に入り・冷蔵庫）
+    const planCount = new Map();
+    const planWeeks = new Map(); // household_id -> Set(献立を作った週)
+    const activity = new Map(); // household_id -> Set(何かした週)
+    const lastAt = new Map();
+    const touch = (h, at) => {
+      if (!hhOk(h) || !at) return;
+      const w = jstWeekStart(at);
+      if (!activity.has(h)) activity.set(h, new Set());
+      activity.get(h).add(w);
+      if (!lastAt.has(h) || lastAt.get(h) < at) lastAt.set(h, at);
+    };
+    for (const p of plans) {
+      if (!hhOk(p.household_id)) continue;
+      planCount.set(p.household_id, (planCount.get(p.household_id) || 0) + 1);
+      if (!planWeeks.has(p.household_id)) planWeeks.set(p.household_id, new Set());
+      planWeeks.get(p.household_id).add(jstWeekStart(p.created_at));
+      touch(p.household_id, p.created_at);
+    }
+    for (const r of [...shops, ...favs, ...fridge]) touch(r.household_id, r.at);
+    const shopHh = new Set(shops.filter((s) => hhOk(s.household_id)).map((s) => s.household_id));
+    const activeSub = new Set(ents.filter(isEntitlementActive).map((e) => e.user_id));
+
+    const now = new Date().toISOString();
+    const thisWeek = jstWeekStart(now);
+    const list = users.filter((u) => !excludedUsers.has(u.id)).map((u) => {
+      const hhs = [...(hhOf.get(u.id) || [])];
+      const weeksActive = new Set(hhs.flatMap((h) => [...(activity.get(h) || [])]));
+      const planWeekSet = new Set(hhs.flatMap((h) => [...(planWeeks.get(h) || [])]));
+      const signupWeek = jstWeekStart(u.created_at);
+      const last = hhs.map((h) => lastAt.get(h)).filter(Boolean).sort().pop() || null;
+      return {
+        u, hhs, signupWeek, weeksActive, last,
+        hasGroup: hhs.length > 0,
+        plans: hhs.reduce((s, h) => s + (planCount.get(h) || 0), 0),
+        shared: hhs.some((h) => (memberCount.get(h) || 0) >= 2),
+        shopping: hhs.some((h) => shopHh.has(h)),
+        // 登録した週より後の週にも献立を作った＝2週目も使った
+        returned: [...planWeekSet].some((w) => w > signupWeek),
+        paid: activeSub.has(u.id),
+        members: Math.max(0, ...hhs.map((h) => memberCount.get(h) || 0)),
+      };
+    });
+
+    const n = list.length;
+    const funnel = [
+      { key: "signup", label: "登録した", count: n },
+      { key: "group", label: "グループを作った・参加した", count: list.filter((x) => x.hasGroup).length },
+      { key: "plan", label: "献立を1回作った", count: list.filter((x) => x.plans > 0).length },
+      { key: "shared", label: "パートナーと共有した（2人以上のグループ）", count: list.filter((x) => x.shared).length },
+      { key: "shopping", label: "買い物リストを使った", count: list.filter((x) => x.shopping).length },
+      { key: "returned", label: "2週目以降も献立を作った", count: list.filter((x) => x.returned).length },
+      { key: "paid", label: "プレミアムを契約中", count: list.filter((x) => x.paid).length },
+    ];
+
+    // 直近12週の推移（新規登録・使ったグループ数）
+    const weeks = Array.from({ length: 12 }, (_, i) => addWeeks(thisWeek, i - 11));
+    const activeHhIn = (w) => [...activity.entries()].filter(([, ws]) => ws.has(w)).length;
+    const weekly = weeks.map((w) => ({
+      week: w,
+      signups: list.filter((x) => x.signupWeek === w).length,
+      activeGroups: activeHhIn(w),
+    }));
+
+    // 登録した週ごとの継続（その週から n 週後にも、どれかのグループで何かしたか）
+    const cohorts = weeks.filter((w) => list.some((x) => x.signupWeek === w)).map((w) => {
+      const c = list.filter((x) => x.signupWeek === w);
+      return {
+        week: w,
+        size: c.length,
+        planRate: c.filter((x) => x.plans > 0).length / c.length,
+        retention: [1, 2, 3, 4].map((k) => {
+          const target = addWeeks(w, k);
+          if (target > thisWeek) return null; // まだ来ていない週
+          return c.filter((x) => x.weeksActive.has(target)).length / c.length;
+        }),
+      };
+    });
+
+    const usageOk = usage.filter((r) => !excludedUsers.has(r.user_id));
+    const weekAgo = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
+    const monthAgo = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
+    const activeGroupsSince = (t) => [...lastAt.values()].filter((at) => at >= t).length;
+    res.json({
+      generatedAt: now,
+      excludeSelf,
+      adminConfigured: ADMIN_EMAILS.length > 0,
+      totals: {
+        users: n,
+        newUsers7d: list.filter((x) => x.u.created_at >= weekAgo).length,
+        activeGroups7d: activeGroupsSince(weekAgo),
+        activeGroups30d: activeGroupsSince(monthAgo),
+        subscribers: funnel.find((f) => f.key === "paid").count,
+        aiMealsThisMonth: usageOk.reduce((s, r) => s + (r.count || 0), 0),
+        aiEditsThisMonth: usageOk.reduce((s, r) => s + (r.edit_count || 0), 0),
+      },
+      funnel,
+      weekly,
+      cohorts,
+      recentUsers: list.slice(-30).reverse().map((x) => ({
+        name: x.u.display_name || x.u.username,
+        createdAt: x.u.created_at,
+        members: x.members,
+        plans: x.plans,
+        shopping: x.shopping,
+        returned: x.returned,
+        paid: x.paid,
+        lastActiveAt: x.last,
+      })),
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // ---------- 課金 API（Stripe） ----------
 // openExternalBrowser=1: LINE で開いたときに Safari/Chrome で開き直させる指定。
 // LINE のアプリ内ブラウザでは Google ログインがブロックされ、招待された側が登録できないため。
