@@ -259,6 +259,11 @@ const SCHEMA_STATEMENTS = [
   // Googleログイン: google_sub（Googleの一意ID）・email。Google専用ユーザーは pw_hash が NULL。
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub TEXT`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`,
+  // 流入元: 登録した人が最初にどこから来たか（?ref= の値や、X・note などの参照元）
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS signup_ref TEXT`,
+  // 流入元ごとの紹介ページの訪問数（日本時間の日ごと。登録までの割合を見るため）
+  `CREATE TABLE IF NOT EXISTS ref_visits (
+    day TEXT NOT NULL, ref TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (day, ref))`,
   `ALTER TABLE users ALTER COLUMN pw_hash DROP NOT NULL`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub ON users (google_sub)`,
   `CREATE TABLE IF NOT EXISTS sessions (
@@ -1347,8 +1352,8 @@ app.post("/api/auth/register", authLimiter, async (req, res) => {
       return res.status(409).json({ error: "そのユーザー名は既に使われています。" });
     const id = randomUUID();
     await q(
-      "INSERT INTO users (id, username, username_lc, pw_hash, created_at) VALUES ($1, $2, $3, $4, $5)",
-      [id, username, lc, hashPassword(password), new Date().toISOString()]
+      "INSERT INTO users (id, username, username_lc, pw_hash, created_at, signup_ref) VALUES ($1, $2, $3, $4, $5, $6)",
+      [id, username, lc, hashPassword(password), new Date().toISOString(), normRef(req.body?.ref)]
     );
     res.json({ token: await createSession(id), user: { id, username, displayName: username } });
   } catch (err) {
@@ -1425,9 +1430,9 @@ app.post("/api/auth/google", authLimiter, async (req, res) => {
       const seed = email ? email.split("@")[0] : "user";
       const username = await generateUniqueUsername(seed);
       await q(
-        `INSERT INTO users (id, username, username_lc, pw_hash, display_name, google_sub, email, created_at)
-         VALUES ($1, $2, $3, NULL, $4, $5, $6, $7)`,
-        [id, username, username.toLowerCase(), gname, sub, email, new Date().toISOString()]
+        `INSERT INTO users (id, username, username_lc, pw_hash, display_name, google_sub, email, created_at, signup_ref)
+         VALUES ($1, $2, $3, NULL, $4, $5, $6, $7, $8)`,
+        [id, username, username.toLowerCase(), gname, sub, email, new Date().toISOString(), normRef(req.body?.ref)]
       );
       u = await one("SELECT * FROM users WHERE id = $1", [id]);
     } else if (email && u.email !== email) {
@@ -3113,6 +3118,32 @@ app.post("/api/plans/:id/replace-dish", auth, aiLimiter, requireAi(() => 1, "edi
   }
 });
 
+// ---------- 流入元の計測 ----------
+// ?ref=x_1012 のような目印を、英小文字・数字・記号(_ . -)の40文字までにそろえる
+const normRef = (v) => String(v || "").toLowerCase().replace(/[^a-z0-9_.-]/g, "").slice(0, 40) || null;
+const visitLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: jsonTooMany("アクセスが集中しています。"),
+});
+// 紹介ページを開いた回数（ブラウザのタブごとに1回。ログイン済みの人は送ってこない）
+app.post("/api/track/visit", visitLimiter, async (req, res) => {
+  try {
+    const ref = normRef(req.body?.ref) || "direct";
+    const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    await q(
+      `INSERT INTO ref_visits (day, ref, count) VALUES ($1, $2, 1)
+       ON CONFLICT (day, ref) DO UPDATE SET count = ref_visits.count + 1`,
+      [day, ref]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 // ---------- 管理者用の集計（/admin.html から読む） ----------
 // 見られるのは ADMIN_EMAILS（カンマ区切り）に入っている Google アカウントだけ。未設定なら誰も見られない。
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "")
@@ -3138,8 +3169,8 @@ const addWeeks = (ws, n) => {
 app.get("/api/admin/stats", auth, async (req, res) => {
   try {
     if (!(await requireAdmin(req, res))) return;
-    const [users, members, plans, shops, favs, fridge, ents, usage] = await Promise.all([
-      all("SELECT id, username, display_name, created_at FROM users ORDER BY created_at"),
+    const [users, members, plans, shops, favs, fridge, ents, usage, visits] = await Promise.all([
+      all("SELECT id, username, display_name, created_at, signup_ref FROM users ORDER BY created_at"),
       all("SELECT household_id, user_id FROM memberships"),
       all("SELECT household_id, created_at FROM meal_plans"),
       all("SELECT household_id, updated_at AS at FROM shopping_lists"),
@@ -3147,6 +3178,7 @@ app.get("/api/admin/stats", auth, async (req, res) => {
       all("SELECT household_id, created_at AS at FROM fridge_items"),
       all("SELECT user_id, status, current_period_end FROM entitlements"),
       all("SELECT user_id, count, edit_count FROM ai_usage WHERE ym = $1", [currentYM()]),
+      all("SELECT ref, SUM(count)::int AS visits, MIN(day) AS since FROM ref_visits GROUP BY ref"),
     ]);
 
     // 自分（と同じグループのメンバー）を除外して、身内の利用で数字が膨らまないようにする
@@ -3243,6 +3275,23 @@ app.get("/api/admin/stats", auth, async (req, res) => {
       };
     });
 
+    // 流入元ごと: 訪問 → 登録 → 献立 → 2週目以降 → 有料
+    const refMap = new Map();
+    const refRow = (ref) => {
+      if (!refMap.has(ref)) refMap.set(ref, { ref, visits: 0, since: null, signups: 0, plan: 0, shared: 0, returned: 0, paid: 0 });
+      return refMap.get(ref);
+    };
+    for (const v of visits) Object.assign(refRow(v.ref), { visits: v.visits, since: v.since });
+    for (const x of list) {
+      const r = refRow(x.u.signup_ref || "(計測前)");
+      r.signups++;
+      if (x.plans > 0) r.plan++;
+      if (x.shared) r.shared++;
+      if (x.returned) r.returned++;
+      if (x.paid) r.paid++;
+    }
+    const refs = [...refMap.values()].sort((a, b) => b.signups - a.signups || b.visits - a.visits);
+
     const usageOk = usage.filter((r) => !excludedUsers.has(r.user_id));
     const weekAgo = new Date(Date.now() - 7 * 86400 * 1000).toISOString();
     const monthAgo = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
@@ -3261,6 +3310,7 @@ app.get("/api/admin/stats", auth, async (req, res) => {
         aiEditsThisMonth: usageOk.reduce((s, r) => s + (r.edit_count || 0), 0),
       },
       funnel,
+      refs,
       weekly,
       cohorts,
       recentUsers: list.slice(-30).reverse().map((x) => ({
