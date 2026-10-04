@@ -154,6 +154,20 @@
             <div class="legend">0%<i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i>60%以上　・「–」はまだ来ていない週</div>`
         : `<p class="note">直近12週に登録した人はいません。</p>`;
 
+      const rate = (a, b) => (b ? pct(a / b) : "–");
+      const refs = d.refs.length
+        ? `<div class="tbl-wrap"><table class="users">
+            <thead><tr><th>流入元</th><th class="num">訪問</th><th class="num">登録</th><th class="num">献立</th><th class="num">継続</th><th class="num">有料</th></tr></thead>
+            <tbody>${d.refs.map((r) => `<tr>
+              <td class="nm">${esc(r.ref)}</td>
+              <td class="num">${r.visits || "–"}</td>
+              <td class="num">${r.signups}<br><small style="color:var(--muted)">${rate(r.signups, r.visits)}</small></td>
+              <td class="num">${r.plan}<br><small style="color:var(--muted)">${rate(r.plan, r.signups)}</small></td>
+              <td class="num">${r.returned}<br><small style="color:var(--muted)">${rate(r.returned, r.plan)}</small></td>
+              <td class="num">${r.paid}</td>
+            </tr>`).join("")}</tbody></table></div>`
+        : `<p class="note">まだ記録がありません。</p>`;
+
       const users = d.recentUsers.length
         ? `<div class="tbl-wrap"><table class="users">
             <thead><tr><th>名前</th><th>登録</th><th class="num">人数</th><th class="num">献立</th><th>最終利用</th></tr></thead>
@@ -180,6 +194,16 @@
             <p class="note">「使った」は、そのグループで献立の作成・買い物リストの更新・お気に入りや冷蔵庫の登録のどれかがあったこと。
             「2週目以降も献立を作った」は、登録した週より後の週にも献立を作ったこと。
             買い物リストは9月4日の共有対応より前の利用は数えられません。</p></details>
+        </section>
+        <section class="card">
+          <h2>どこから来たか（流入元）</h2>
+          <p class="lead">小さい％は前の列に対する割合（訪問→登録、登録→献立、献立→継続）。</p>
+          ${refs}
+          <details><summary>流入元の付け方</summary>
+            <p class="note">発信するリンクの最後に <b>?ref=目印</b> を付けると、その目印で数えます（例：<b>https://menuraku.onrender.com/?ref=x_1012</b>）。
+            英小文字・数字・「_ . -」が使えます。目印がないときは、X・note・Instagram などの参照元から自動で判定し、わからなければ direct になります。
+            招待リンクから来た人は invite。訪問はブラウザのタブごとに1回で、ログイン済みの人は数えません。
+            「(計測前)」はこの機能を入れる前に登録した人です。</p></details>
         </section>
         <section class="card">
           <h2>週ごとの推移</h2>

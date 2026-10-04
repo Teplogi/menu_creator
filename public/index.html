@@ -2662,6 +2662,7 @@
     async function init() {
       handleBillingReturn();
       captureJoinToken(); // 招待リンク(?join=)のトークンを保持
+      captureRef(); // どこから来たか（?ref= や参照元）を控える
       authToken = localStorage.getItem("authToken");
       if (authToken) {
         const { res, data } = await api("/api/auth/me");
@@ -2691,6 +2692,38 @@
       // 参加できなくなっていた。あとから手動で参加できるよう控えを残す。
       try { localStorage.setItem("lastJoinToken", t); } catch {}
     }
+    // ---------- 流入元（どこから来た人か） ----------
+    // ?ref=x_1012 のような目印、無ければ参照元（X・note など）を「最初に来たきっかけ」として控え、
+    // 登録時にサーバへ送る。訪問はタブごとに1回だけ数える。ログイン済みの人の再訪は数えない。
+    const REF_FROM_HOST = [
+      [/(^|\.)(t\.co|x\.com|twitter\.com)$/, "x"], [/(^|\.)note\.com$/, "note"],
+      [/(^|\.)instagram\.com$/, "instagram"], [/(^|\.)threads\.(net|com)$/, "threads"],
+      [/(^|\.)tiktok\.com$/, "tiktok"], [/(^|\.)(facebook\.com|fb\.me)$/, "facebook"],
+      [/(^|\.)line\.me$/, "line"], [/(^|\.)google\./, "google"], [/(^|\.)yahoo\.co\.jp$/, "yahoo"],
+    ];
+    function captureRef() {
+      try {
+        const p = new URLSearchParams(location.search);
+        let ref = p.get("ref") || p.get("utm_source") || "";
+        if (!ref && p.get("join")) ref = "invite";
+        if (!ref && document.referrer) {
+          const host = new URL(document.referrer).hostname;
+          if (host !== location.hostname) ref = (REF_FROM_HOST.find(([re]) => re.test(host)) || [, host])[1];
+        }
+        ref = (ref || "direct").toLowerCase().replace(/[^a-z0-9_.-]/g, "").slice(0, 40) || "direct";
+        if (p.has("ref") || p.has("utm_source")) {
+          const u = new URL(location.href);
+          ["ref", "utm_source", "utm_medium", "utm_campaign"].forEach((k) => u.searchParams.delete(k));
+          history.replaceState(null, "", u.pathname + (u.search || "") + u.hash);
+        }
+        if (localStorage.getItem("authToken")) return;
+        if (!localStorage.getItem("signupRef")) localStorage.setItem("signupRef", ref);
+        if (sessionStorage.getItem("refCounted")) return;
+        sessionStorage.setItem("refCounted", "1");
+        fetch("/api/track/visit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ref }) }).catch(() => {});
+      } catch {}
+    }
+    const signupRef = () => { try { return localStorage.getItem("signupRef") || ""; } catch { return ""; } };
     function cleanJoinFromUrl() {
       try { const u = new URL(location.href); if (u.searchParams.has("join") || u.searchParams.has("openExternalBrowser")) { u.searchParams.delete("join"); u.searchParams.delete("openExternalBrowser"); history.replaceState(null, "", u.pathname + (u.search || "")); } } catch {}
     }
@@ -2810,7 +2843,7 @@
       $("authErr").textContent = "";
       $("authBtn").disabled = true;
       try {
-        const data = await apiOK(path, { method: "POST", body: { username, password } });
+        const data = await apiOK(path, { method: "POST", body: { username, password, ref: signupRef() } });
         authToken = data.token; localStorage.setItem("authToken", authToken);
         currentUser = data.user;
         households = (await apiOK("/api/auth/me")).households;
@@ -2848,7 +2881,7 @@
     async function handleGoogleCredential(response) {
       $("authErr").textContent = "";
       try {
-        const data = await apiOK("/api/auth/google", { method: "POST", body: { credential: response.credential } });
+        const data = await apiOK("/api/auth/google", { method: "POST", body: { credential: response.credential, ref: signupRef() } });
         authToken = data.token; localStorage.setItem("authToken", authToken);
         currentUser = data.user;
         households = (await apiOK("/api/auth/me")).households;

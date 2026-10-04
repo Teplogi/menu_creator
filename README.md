@@ -126,6 +126,10 @@ npm start        # 開発中は npm run dev（ファイル変更で自動再起�
 ## コラム
 - `content/columns/` に `.md` を1記事1ファイルで置くと、アプリの「コラム」に出ます（ビルド不要）。書き方は [content/columns/README.md](content/columns/README.md) を参照
 
+## 集計ページと流入元
+- `/admin.html` で、登録から継続・有料までの各段の人数、週ごとの推移、登録した週ごとの継続率、流入元ごとの数字を見られます（`ADMIN_EMAILS` のアカウントだけ）
+- 発信するリンクに `?ref=目印` を付けると、その目印で流入元を数えます（例: `https://menuraku.onrender.com/?ref=x_1012`）。目印がないときは参照元（X・note・Instagram など）から判定し、招待リンクは `invite`、わからなければ `direct`
+
 ## 仕組み
 - `server.js` … Express サーバー ＋ Postgres（テーブルは起動時に自動作成）。APIキーはサーバー側だけで保持。
   Claude の forced tool use で構造化した献立データを生成します。モデルは既定で `claude-haiku-4-5`（`GEN_MODEL` / `GEN_MODEL_SINGLE` で変更可）。
