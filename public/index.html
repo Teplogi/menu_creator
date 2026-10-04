@@ -1504,7 +1504,7 @@
                   <p>いつ・どの食事を作るかを選ぶだけ。AIがまとめて提案し、できたものから順に画面に出るので待たされません。</p>
                   <ul class="lp-zlist">
                     <li>肉・魚・卵が続かないよう自動で配分</li>
-                    <li>「肉多め」「和食中心」などタップで指定</li>
+                    <li>「肉多め」「揚げ物なし」などタップで指定</li>
                     <li>気に入らない一皿はその場で作り直し</li>
                   </ul>
                 </div>
@@ -1535,8 +1535,8 @@
               <div class="lp-zrow">
                 <div class="lp-ztext">
                   <span class="lp-znum">3</span>
-                  <h3>買い物リストは自動。今日買うものだけ見える</h3>
-                  <p>献立の材料を自動でまとめます。同じ食材は数量を合算し、「今日／3日分／7日分」に絞れるので、余計な情報が目に入りません。</p>
+                  <h3>買い物リストは自動。買う日のぶんだけ見える</h3>
+                  <p>献立の材料を自動でまとめます。同じ食材は数量を合算し、「日付／3日分／7日分」に絞れるので、余計な情報が目に入りません。</p>
                   <ul class="lp-zlist">
                     <li>1/2個＋1/4個 → 3/4個(150g) と合算</li>
                     <li>何の料理に使うかも一緒に表示</li>
@@ -1545,7 +1545,7 @@
                 </div>
                 <div class="lp-shot">
                   <img class="scr" src="/lp/shopping.jpg" width="520" height="1127" loading="lazy"
-                    alt="今日・3日分・7日分で絞り込める買い物リスト。食材ごとに使う料理と日付が並ぶ" />
+                    alt="日付・3日分・7日分で絞り込める買い物リスト。食材ごとに使う料理と日付が並ぶ" />
                   <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" loading="lazy" alt="" aria-hidden="true" />
                 </div>
               </div>
@@ -1580,7 +1580,7 @@
                   <img class="frm" src="/lp/iphone-frame.png" width="660" height="1173" loading="lazy" alt="" aria-hidden="true" />
                 </div>
                 <h3>こだわりをタップする</h3>
-                <p>人数や調理時間、「肉多め」「和食中心」などを選ぶだけ。空欄のままでも大丈夫です。</p>
+                <p>人数や調理時間、「肉多め」「揚げ物なし」などを選ぶだけ。空欄のままでも大丈夫です。</p>
               </div>
               <div class="lp-step">
                 <span class="sn">STEP 3</span>
@@ -1649,7 +1649,7 @@
                   <p class="pl-lead">献立決めと買い物を、まずラクに。</p>
                   <ul class="pl-list">
                     <li><b>献立づくりが回数無制限</b><span class="d">300品以上の料理から、条件に合う献立をすぐ組み立て</span></li>
-                    <li><b>買い物リストが自動</b><span class="d">同じ食材はまとめて、今日／3日分で絞り込み</span></li>
+                    <li><b>買い物リストが自動</b><span class="d">同じ食材はまとめて、日付／3日分で絞り込み</span></li>
                     <li><b>ふたりで共有</b><span class="d">招待リンクを送るだけ。人数ぶんの料金はなし</span></li>
                     <li>冷蔵庫・作り置きの記録</li>
                     <li>カロリー・塩分の表示</li>
@@ -2895,7 +2895,13 @@
       // 課金が未設定（STRIPE未設定）なら、プランUI自体を出さない
       if (!b || !b.billingEnabled) { card.style.display = "none"; return; }
       card.style.display = "";
-      if (b.active) {
+      if (b.active && b.shared) {
+        // グループの誰かの契約で使えている。解約・カード変更は契約した本人の画面から行う
+        $("billingBody").innerHTML =
+          `<div class="plan-row"><span class="plan-badge premium">プレミアム</span>` +
+          `<span class="plan-note">グループのメンバーの契約で、毎週おまかせ作成・AI生成が使い放題</span></div>` +
+          `<p class="hint" style="margin:0">お支払いは不要です。解約やカード変更は、契約したメンバーの設定画面から行えます。</p>`;
+      } else if (b.active) {
         const until = b.currentPeriodEnd ? new Date(b.currentPeriodEnd).toLocaleDateString("ja-JP") : "";
         $("billingBody").innerHTML =
           `<div class="plan-row"><span class="plan-badge premium">プレミアム</span>` +

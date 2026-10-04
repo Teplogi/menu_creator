@@ -103,11 +103,24 @@ if (TEST_MODE) {
 const currentYM = () => new Date().toISOString().slice(0, 7); // "YYYY-MM"
 // プレミアム扱いか（課金未設定の環境では全員プレミアム扱い＝開発時に詰まらないように）
 const hasAi = async (userId) => (billingEnabled() ? await hasActiveEntitlement(userId) : true);
+const isEntitlementActive = (e) =>
+  !!e && e.status === "active" && !(e.current_period_end && e.current_period_end < new Date().toISOString());
+// 本人が契約しているか（解約・カード変更の窓口を出せるのは契約者本人だけ）
+async function hasOwnEntitlement(userId) {
+  return isEntitlementActive(await one("SELECT status, current_period_end FROM entitlements WHERE user_id = $1", [userId]));
+}
+// プレミアムが使えるか。LP・料金表で「ひとりが契約すれば、同じグループのメンバーも追加料金なし」と
+// 約束しているので、本人に加えて、同じグループにいる誰かの契約でも有効にする。
 async function hasActiveEntitlement(userId) {
-  const e = await one("SELECT status, current_period_end FROM entitlements WHERE user_id = $1", [userId]);
-  if (!e || e.status !== "active") return false;
-  if (e.current_period_end && e.current_period_end < new Date().toISOString()) return false;
-  return true;
+  const rows = await all(
+    `SELECT status, current_period_end FROM entitlements
+     WHERE user_id = $1 OR user_id IN (
+       SELECT m2.user_id FROM memberships m1
+       JOIN memberships m2 ON m2.household_id = m1.household_id
+       WHERE m1.user_id = $1)`,
+    [userId]
+  );
+  return rows.some(isEntitlementActive);
 }
 // { meals, edits } を返す（meals=献立生成の食数、edits=AI修正の回数）
 async function getAiUsage(userId) {
@@ -3101,15 +3114,17 @@ app.get("/api/public-config", (req, res) => {
 
 app.get("/api/billing/status", auth, async (req, res) => {
   try {
-    const active = billingEnabled() ? await hasActiveEntitlement(req.user.id) : false;
+    const own = billingEnabled() ? await hasOwnEntitlement(req.user.id) : false;
+    const active = own || (billingEnabled() ? await hasActiveEntitlement(req.user.id) : false);
     const e = await one("SELECT plan, current_period_end FROM entitlements WHERE user_id = $1", [req.user.id]);
     const usage = await getAiUsage(req.user.id);
     res.json({
       billingEnabled: billingEnabled(),
       testMode: TEST_MODE, // テスト期間中は画面に「無料で全部使えます」と出す
       active,
+      shared: active && !own, // グループの誰かの契約で使えている（本人は解約・カード変更できない）
       plan: active ? e?.plan || "monthly" : null,
-      currentPeriodEnd: active ? e?.current_period_end || null : null,
+      currentPeriodEnd: own ? e?.current_period_end || null : null,
       // 献立生成の無料枠（食数）
       freeLimit: FREE_AI_MEALS_PER_MONTH,
       freeUsed: usage.meals,
@@ -3129,6 +3144,9 @@ app.post("/api/billing/checkout", auth, async (req, res) => {
   try {
     if (TEST_MODE) return res.status(503).json({ error: "テスト期間中のため、お支払いは受け付けていません。すべての機能を無料でお使いいただけます。" });
     if (!billingEnabled()) return res.status(503).json({ error: "課金は現在利用できません。" });
+    // 二重契約を防ぐ（本人の契約中、またはグループの誰かの契約で使えている間は申し込ませない）
+    if (await hasActiveEntitlement(req.user.id))
+      return res.status(409).json({ error: "すでにプレミアムをご利用中です（グループのメンバーの契約も含みます）。" });
     const customerId = await getOrCreateStripeCustomer(req.user);
     const base = appBaseUrl(req);
     const session = await stripe.checkout.sessions.create({
@@ -3186,16 +3204,26 @@ async function handleStripeWebhook(req, res) {
   }
 }
 
+// 契約期間の終わり。Stripe API 2025-03-31 以降は current_period_end が Subscription 直下から
+// 各 item へ移ったため、直下に無ければ item の値を使う（無いままだと期限切れを判定できない）。
+function subPeriodEnd(sub) {
+  const ends = (sub.items?.data || []).map((it) => it.current_period_end).filter(Boolean);
+  const t = sub.current_period_end || (ends.length ? Math.max(...ends) : null);
+  return t ? new Date(t * 1000).toISOString() : null;
+}
+
 async function processStripeEvent(event) {
   const now = new Date().toISOString();
   if (event.type === "checkout.session.completed") {
     const s = event.data.object;
     const userId = s.client_reference_id;
-    if (!userId) return;
+    if (!userId || s.mode !== "subscription") return;
+    // 支払いが未完了のまま完了通知が来る支払い方法もある。その場合は subscription.updated で有効化する
+    if (s.payment_status === "unpaid") return;
     let periodEnd = null;
     if (s.subscription) {
       const sub = await stripe.subscriptions.retrieve(s.subscription);
-      periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+      periodEnd = subPeriodEnd(sub);
     }
     await q(
       `INSERT INTO entitlements
@@ -3213,7 +3241,7 @@ async function processStripeEvent(event) {
     const sub = event.data.object;
     const isActive = sub.status === "active" || sub.status === "trialing";
     const status = event.type === "customer.subscription.deleted" ? "canceled" : isActive ? "active" : sub.status;
-    const periodEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+    const periodEnd = subPeriodEnd(sub);
     await q(
       `UPDATE entitlements SET status = $1, current_period_end = $2, stripe_subscription_id = $3, updated_at = $4
        WHERE stripe_customer_id = $5`,
