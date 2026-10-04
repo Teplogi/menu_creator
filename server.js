@@ -181,7 +181,15 @@ function requireAi(costFn, kind = "meal") {
 }
 async function getOrCreateStripeCustomer(user) {
   const e = await one("SELECT stripe_customer_id FROM entitlements WHERE user_id = $1", [user.id]);
-  if (e?.stripe_customer_id) return e.stripe_customer_id;
+  if (e?.stripe_customer_id) {
+    // テスト環境で作った顧客は本番環境には無い（逆も同じ）。見つからない・削除済みなら作り直す
+    try {
+      const c = await stripe.customers.retrieve(e.stripe_customer_id);
+      if (!c.deleted) return c.id;
+    } catch (err) {
+      if (err?.code !== "resource_missing") throw err;
+    }
+  }
   const customer = await stripe.customers.create({ name: user.username, metadata: { userId: user.id } });
   await q(
     `INSERT INTO entitlements (user_id, provider, status, stripe_customer_id, updated_at)
@@ -1289,6 +1297,12 @@ function handleError(res, err) {
     return res.status(502).json({ error: "生成に失敗しました（応答が空でした）。" });
   }
   res.status(500).json({ error: "処理中にエラーが発生しました。" });
+}
+// 決済まわりのエラー。Stripe のエラーは原因（価格IDやキーの取り違えなど）がログで分かるように残す
+function handleBillingError(res, err) {
+  if (!String(err?.type || "").startsWith("Stripe")) return handleError(res, err);
+  console.error(`Stripeエラー: ${err.type} ${err.code || ""} ${err.message}`);
+  res.status(502).json({ error: "決済サービスとの通信でエラーが起きました。時間をおいて再度お試しください。" });
 }
 
 // ---------- 認証 API ----------
@@ -3160,7 +3174,7 @@ app.post("/api/billing/checkout", auth, async (req, res) => {
     });
     res.json({ url: session.url });
   } catch (err) {
-    handleError(res, err);
+    handleBillingError(res, err);
   }
 });
 
@@ -3177,7 +3191,7 @@ app.post("/api/billing/portal", auth, async (req, res) => {
     });
     res.json({ url: session.url });
   } catch (err) {
-    handleError(res, err);
+    handleBillingError(res, err);
   }
 });
 
