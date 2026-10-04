@@ -64,6 +64,7 @@ npm start        # 開発中は npm run dev（ファイル変更で自動再起�
 | `SESSION_TTL_DAYS` | | ログインセッションの有効期限（既定 30日） |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | | プッシュ通知用。そろったときだけ通知を有効化 |
 | `GEN_MODEL` / `GEN_MODEL_SINGLE` | | 献立生成に使うモデル（既定 `claude-haiku-4-5`） |
+| `ADMIN_EMAILS` | | 集計ページ（`/admin.html`）を見られる Google アカウントのメール（カンマ区切り）。未設定なら誰も見られない |
 | `PORT` | | 待ち受けポート（既定 3000） |
 
 ## デプロイ（Render）
