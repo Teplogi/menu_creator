@@ -70,7 +70,7 @@
 
     /* ---- Layout ---- */
     /* 下端はタブバー＋ホームインジケータのぶんだけ空ける（最後の項目が隠れないように） */
-    main { max-width: 480px; margin: 0 auto; padding: 4px 16px calc(84px + var(--tabbar-gap)); }
+    main { max-width: 480px; margin: 0 auto; padding: 4px 16px calc(88px + var(--tabbar-gap)); }
     .card { background: var(--card); border-radius: 22px; padding: 20px; box-shadow: var(--shadow); }
     .auth-hero { text-align: center; margin: 8px 0 6px; }
     .auth-logo { width: 96px; height: 96px; border-radius: 24px; box-shadow: 0 8px 22px rgba(245,131,31,.28); display: inline-block; }
@@ -172,7 +172,7 @@
 
     /* ---- Day agenda (一覧・コンパクト) ---- */
     .today-fab { position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
-      bottom: calc(76px + var(--tabbar-gap));
+      bottom: calc(78px + var(--tabbar-gap));
       align-items: center; gap: 5px; background: var(--orange); color: #fff; border: none; border-radius: 999px;
       padding: 9px 18px; font-weight: 800; font-size: .85rem; cursor: pointer; box-shadow: 0 6px 18px rgba(245,131,31,.42); }
     .today-fab svg { width: 16px; height: 16px; }
@@ -1364,17 +1364,45 @@
     .overlay p { color: var(--ink); font-weight: 700; margin: 0; }
     .overlay small { color: var(--muted); }
 
-    /* ---- Bottom tab bar ---- */
-    .tabbar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; background: #fff; border-top: 1px solid var(--line);
-      display: flex; justify-content: space-around; align-items: flex-end;
-      padding: 8px 0 var(--tabbar-gap); max-width: 480px; margin: 0 auto; }
+    /* ---- Bottom tab bar（浮いたすりガラスのピル） ----
+       画面の端から少し離して浮かせ、後ろのコンテンツが透けて見えるようにする。
+       選ばれているタブの後ろには「レンズ」が滑り込む（位置は moveTabLens() が合わせる）。 */
+    .tabbar { position: fixed; z-index: 20; left: 50%; transform: translateX(-50%);
+      bottom: var(--tabbar-gap); width: calc(100% - 32px); max-width: 448px; height: 64px;
+      display: flex; justify-content: space-around; align-items: center; padding: 0 6px;
+      border-radius: 999px; isolation: isolate;
+      background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.52));
+      -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%);
+      border: 1px solid rgba(255,255,255,.75);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(255,255,255,.35),
+        0 10px 30px rgba(120, 84, 45, .16), 0 2px 6px rgba(120, 84, 45, .08); }
+    /* backdrop-filter が効かない端末では、透かさずに白で塗る（文字が読めなくならないように） */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .tabbar { background: rgba(255,255,255,.96); }
+    }
     .tabbar.hidden { display: none; }
-    .tab { background: none; border: none; cursor: pointer; color: var(--muted); display: flex; flex-direction: column;
-      align-items: center; gap: 3px; font-size: .68rem; font-weight: 700; padding: 4px 14px; }
+    .tab { background: none; border: none; cursor: pointer; color: #8f8174; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 2px; font-size: .66rem; font-weight: 700;
+      height: 52px; min-width: 60px; padding: 0 10px; border-radius: 999px; z-index: 1;
+      -webkit-tap-highlight-color: transparent; transition: color .25s ease, transform .18s ease; }
+    .tab svg { width: 22px; height: 22px; }
+    .tab:active { transform: scale(.92); }
     .tab.on { color: var(--orange); }
-    .tab.center { background: var(--orange); color: #fff; width: 52px; height: 52px; border-radius: 50%;
-      justify-content: center; margin-top: -22px; box-shadow: 0 8px 16px rgba(245, 131, 31, .35); gap: 0; }
-    .tab.center svg { width: 26px; height: 26px; }
+    .tab.center { background: linear-gradient(160deg, #ffa24d, var(--orange) 55%, var(--orange-dark)); color: #fff;
+      width: 48px; height: 48px; min-width: 0; padding: 0; border-radius: 50%; gap: 0; flex: none;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,.55), inset 0 -2px 4px rgba(170, 70, 0, .25),
+        0 6px 14px rgba(245, 131, 31, .38); }
+    .tab.center svg { width: 24px; height: 24px; }
+    /* 選択中タブの後ろに敷くガラスのレンズ。タブを切り替えると滑って移動する */
+    .tab-lens { position: absolute; top: 6px; left: 0; height: 52px; width: 0; border-radius: 999px;
+      pointer-events: none; z-index: 0; opacity: 0;
+      background: linear-gradient(180deg, rgba(253,236,218,.95), rgba(253,236,218,.7));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(245,131,31,.10),
+        0 2px 8px rgba(245,131,31,.12);
+      transition: transform .45s cubic-bezier(.34,1.4,.5,1), width .45s cubic-bezier(.34,1.4,.5,1), opacity .2s ease; }
+    .tab-lens.on { opacity: 1; }
+    .tab-lens.instant { transition: none; }
+    @media (prefers-reduced-motion: reduce) { .tab-lens, .tab { transition: none; } }
 
     /* ---- 使い方ツアー（スポットライト式のコーチマーク） ----
        周りを暗くして1か所だけ明るく残し、そこ以外は押せなくする。
@@ -2204,6 +2232,7 @@
   </div>
 
   <nav class="tabbar" id="tabbar">
+    <span class="tab-lens" id="tabLens" aria-hidden="true"></span>
     <button class="tab" id="tab-home" onclick="goHome()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
       ホーム
@@ -2351,6 +2380,23 @@
     const ICON_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 
     // ---------- View 切替 ----------
+    // タブバーのレンズを選択中タブの後ろへ動かす。最初の1回と画面幅が変わったときはアニメなしで合わせる
+    let tabLensPlaced = false;
+    function moveTabLens(instant = false) {
+      const lens = $("tabLens");
+      const on = document.querySelector("#tabbar .tab.on");
+      if (!lens) return;
+      if (!on || !on.offsetWidth) { lens.classList.remove("on"); return; }
+      const w = Math.max(on.offsetWidth, 64);
+      const x = on.offsetLeft + (on.offsetWidth - w) / 2;
+      lens.classList.toggle("instant", instant || !tabLensPlaced);
+      lens.style.width = w + "px";
+      lens.style.transform = `translateX(${x}px)`;
+      lens.classList.add("on");
+      tabLensPlaced = true;
+      if (lens.classList.contains("instant")) requestAnimationFrame(() => lens.classList.remove("instant"));
+    }
+    window.addEventListener("resize", () => moveTabLens(true));
     function showView(id, title, { back = false, tab = null } = {}) {
       moveSel = null; // 画面遷移で入れ替えモードは解除
       closeDaySheet(); // カレンダーの日付シートが開いたまま残らないように
@@ -2367,6 +2413,7 @@
       $("tab-shop").classList.toggle("on", tab === "shop");
       $("tab-soon").classList.toggle("on", tab === "soon");
       $("tab-settings").classList.toggle("on", tab === "settings");
+      moveTabLens();
       $("status").textContent = "";
       scrollTo(0, 0);
     }
