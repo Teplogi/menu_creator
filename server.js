@@ -2181,7 +2181,7 @@ app.put("/api/households/:id/shopping/:week", auth, async (req, res) => {
   }
 });
 
-// 買い物が終わったことを相手に知らせる。画面に「買い物完了です」が出たときに1回だけ呼ぶ。
+// 買い物が終わったことを相手に知らせる。1日分の「買うもの」が全部チェックされたときに呼ぶ（label は「10/9(金)の分」など）。
 app.post("/api/households/:id/shopping/done", auth, async (req, res) => {
   try {
     if (!(await requireMember(req, res, req.params.id))) return;
@@ -2192,9 +2192,9 @@ app.post("/api/households/:id/shopping/done", auth, async (req, res) => {
     if (!(await markSentOnce(req.user.id, "shopping_done", key))) return res.json({ ok: true, sent: false });
     await pushToHouseholdOthers(req.params.id, req.user.id, "shopping_done", {
       title: "めにゅらく！",
-      body: `${displayNameOf(req.user)}さんが買い物を終えました🛒${count ? `（${count}品）` : ""}`,
+      body: `${displayNameOf(req.user)}さんが${label && label !== "all" ? `${label}の` : ""}買い物を終えました🛒${count ? `（${count}品）` : ""}`,
       url: "/",
-      tag: "shopdone-" + req.params.id,
+      tag: `shopdone-${req.params.id}-${label}`, // 日ごとに別の通知として並ぶように
     }).catch(() => {});
     res.json({ ok: true, sent: true });
   } catch (err) {

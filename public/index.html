@@ -6706,15 +6706,39 @@
     }
     function stopShopPolling() { clearInterval(shopPollTimer); shopPollTimer = null; }
 
-    // 「買い物完了です」が出たら、相手に知らせる（同じ範囲では1日1回だけ）
-    let shopDoneSent = null;
-    async function notifyShopDone(label, count) {
+    // 日付ごとの「買い終わり」を相手に知らせる。
+    // 献立は何日分もまとめて作るので、リスト全部が終わるのを待つと通知がほぼ来ない。
+    // 1日分の「買うもの」が全部チェックされた時点で、その日の分として知らせる。
+    // 調味料・常備品・冷蔵庫にあるものは「買わないこともある」ので数に入れない（入れると永遠に終わらない）。
+    function shopDateStats() {
+      const stats = new Map(); // date -> { total, checked }
+      for (const it of getList()) {
+        if (!it.date || it.date === "__season__") continue;
+        if (isSeasoning(it) || isPantry(it) || isFridge(it)) continue;
+        const s = stats.get(it.date) || { total: 0, checked: 0 };
+        s.total++; if (it.checked) s.checked++;
+        stats.set(it.date, s);
+      }
+      return stats;
+    }
+    function doneShopDates() {
+      const out = new Set();
+      for (const [d, s] of shopDateStats()) if (s.total && s.checked === s.total) out.add(d);
+      return out;
+    }
+    const shopDoneSent = new Set(); // 同じ日の分は、このセッションでは1回だけ（サーバ側でも1日1回に絞っている）
+    async function notifyDatesDone(before) {
       if (!household) return;
+      const stats = shopDateStats();
+      const fresh = [...doneShopDates()].filter((d) => !before.has(d)).sort();
+      if (!fresh.length) return;
+      const label = fresh.map((d) => `${mdLabel(d)}(${dow(d)})`).join("・") + "の分";
+      const count = fresh.reduce((n, d) => n + stats.get(d).total, 0);
       const key = `${fmt(new Date())}|${household.id}|${label}`;
-      if (shopDoneSent === key) return;
-      shopDoneSent = key;
+      if (shopDoneSent.has(key)) return;
+      shopDoneSent.add(key);
       try { await apiOK(`/api/households/${household.id}/shopping/done`, { method: "POST", body: { label, count } }); }
-      catch { shopDoneSent = null; } // 送れなかったら次の描画でまた試す
+      catch { shopDoneSent.delete(key); } // 送れなかったら、次にチェックし直したときにまた試す
     }
 
     function touchedWeeks() {
@@ -7061,7 +7085,6 @@
               <span>${bought.length}品ぜんぶチェックできました。お疲れさまでした。</span>
               <button class="ad-btn" id="doneHome">献立を見る</button>
             </div>`;
-          notifyShopDone(rangeLabel || "all", bought.length); // 相手に知らせる
         }
       }
       // 範囲外に残っている分の件数（隠れているだけと分かるように）。
@@ -7122,7 +7145,9 @@
       if (anchorToday) anchorToday.addEventListener("click", () => { openShoppingWeek(fmt(new Date()), false); });
       body.querySelectorAll(".shopitem input[type=checkbox]").forEach((cb) =>
         cb.addEventListener("change", () => {
+          const before = doneShopDates();
           setCheckedByIds(cb.dataset.ids, cb.checked);
+          if (cb.checked) notifyDatesDone(before); // この操作で買い終わった日があれば相手に知らせる
           renderShopping(); // チェック済みは「買ったもの」枠へ移動
         }));
       body.querySelectorAll(".edit").forEach((b) =>
