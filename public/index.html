@@ -1067,9 +1067,11 @@
     .btn-shop svg { width: 18px; height: 18px; }
     /* 「買うもの（…）」と日付ラベルを1行に詰めると、狭い画面で両方が折り返して崩れる。
        入りきらないときは日付ラベルを次の行に落とし、ラベル自体は折り返さない。 */
-    .shop-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px;
-      margin: 2px 4px 14px; }
-    .shop-head .t { color: var(--muted); font-size: .9rem; }
+    .shop-head { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+      margin: 6px 4px 8px; }
+    .shop-head .t { color: var(--ink); font-size: 1.12rem; font-weight: 800; letter-spacing: .02em; }
+    .shop-head .cnt { font-size: .78rem; font-weight: 800; color: #fff; background: var(--orange);
+      border-radius: 999px; padding: 1px 10px; }
     .shop-head .reset { margin-left: auto; background: none; border: none; color: var(--orange);
       font-weight: 700; font-size: .8rem; cursor: pointer; }
     /* カードの余白もタップで反応するよう、余白は shoptap 側に持たせる（端を押して反応しない、の対策）。
@@ -1257,17 +1259,45 @@
     .shopitem .nm { font-weight: 700; font-size: 1rem; }
     .shopitem .am { color: var(--muted); font-size: .85rem; }
     .shopitem.done .nm, .shopitem.done .am { text-decoration: line-through; color: var(--muted); }
-    .shopcat { margin: 20px 4px 10px; display: flex; align-items: center; gap: 8px; color: var(--orange);
-      font-weight: 700; font-size: .8rem; }
-    .shopcat .lead { flex: 1; border-top: 2px dotted var(--dot); }
-    .shopcat.toggle { cursor: pointer; }
-    .shopcat .cnt { color: var(--muted); font-weight: 700; font-size: .72rem; background: var(--orange-soft);
-      border-radius: 999px; padding: 1px 9px; }
-    .shopcat .arw { display: inline-flex; transition: transform .15s; }
-    .shopcat .arw svg { width: 16px; height: 16px; }
-    .shopcat.open .arw { transform: rotate(90deg); }
-    .shopcat.bought { color: #4caf88; margin-top: 24px; }
-    .shopcat.bought .cnt { color: #3a8f6c; background: #e4f5ec; }
+    /* 売り場カテゴリ（野菜・肉…）は「買うもの」の中の小見出し。目立たせすぎない */
+    .shopcat { margin: 16px 6px 8px; display: flex; align-items: center; gap: 10px; color: #a3927f;
+      font-weight: 700; font-size: .74rem; letter-spacing: .08em; }
+    .shopcat .lead { flex: 1; border-top: 1px solid var(--line); }
+
+    /* ---- 買い物：アコーディオン（冷蔵庫・常備品・調味料・買ったもの・材料を追加） ----
+       色は増やさず、ひとつの白いパネルを細い線で区切る。中の行はカードにせず線で区切り、
+       影つきカードが並ぶ「買うもの」と見た目で区別する。 */
+    .acc-group { margin-top: 26px; background: var(--card); border-radius: 20px; box-shadow: var(--shadow); overflow: hidden; }
+    .acc + .acc { border-top: 1px solid var(--line); }
+    .acc-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+      background: none; border: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+      -webkit-tap-highlight-color: transparent; }
+    .acc-head:active { background: #fcf8f4; }
+    .acc-ic { width: 34px; height: 34px; flex: none; border-radius: 11px; display: grid; place-items: center;
+      background: #f7f1ea; color: #8f7f6e; transition: background .25s, color .25s; }
+    .acc-ic svg { width: 18px; height: 18px; }
+    .acc.open .acc-ic { background: var(--orange-soft); color: var(--orange-dark); }
+    .acc-tt { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.35; }
+    .acc-tt b { font-size: .92rem; font-weight: 800; }
+    .acc-tt small { font-size: .72rem; color: var(--muted); font-weight: 700; }
+    .acc-cnt { flex: none; min-width: 26px; text-align: center; font-size: .74rem; font-weight: 800; color: #8f7f6e;
+      background: #f7f1ea; border-radius: 999px; padding: 2px 8px; font-variant-numeric: tabular-nums; }
+    .acc-chev { flex: none; display: inline-flex; color: #c2b3a3; transform: rotate(90deg);
+      transition: transform .3s cubic-bezier(.4,0,.2,1); }
+    .acc-chev svg { width: 16px; height: 16px; }
+    .acc.open .acc-chev { transform: rotate(-90deg); }
+    /* 高さ不明の中身を滑らかに開閉する（grid の 0fr → 1fr） */
+    .acc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s cubic-bezier(.4,0,.2,1); }
+    .acc.open .acc-body { grid-template-rows: 1fr; }
+    .acc-inner { min-height: 0; overflow: hidden; padding: 0 12px; opacity: 0; transition: opacity .2s ease, padding .3s ease; }
+    .acc.open .acc-inner { opacity: 1; padding: 0 12px 12px; }
+    .acc-inner .shopitem { box-shadow: none; border-radius: 0; margin: 0; background: transparent;
+      border-top: 1px solid var(--line); }
+    .acc-inner .shopitem:first-child { border-top: none; }
+    .acc-inner .shoptap { padding: 12px 6px 12px 6px; }
+    .acc[data-acc="add"] .acc-inner { padding-left: 16px; padding-right: 16px; }
+    .acc.open[data-acc="add"] .acc-inner { padding: 2px 16px 16px; }
+    @media (prefers-reduced-motion: reduce) { .acc-body, .acc-inner, .acc-chev { transition: none; } }
     /* 買い終わったことがひと目で分かるように、1行ではなくカードで出す */
     .alldone { display: flex; flex-direction: column; align-items: center; gap: 4px;
       text-align: center; background: #eef7ee; border: 1.5px solid #cfe6d2; border-radius: 16px;
@@ -6457,7 +6487,7 @@
     const readJSON = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } };
     const newId = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : "id" + Date.now() + Math.round(Math.random() * 1e6));
     let editingId = null;
-    let shopOpen = { season: false, pantry: false, fridge: false, bought: false }; // 折りたたみ枠の開閉状態
+    let shopOpen = { season: false, pantry: false, fridge: false, bought: false, add: false }; // 折りたたみ枠の開閉状態
 
     // 買い物リストの食材が冷蔵庫にあるか（使い切りで出した食材が「買うもの」に並ぶ矛盾を防ぐ）
     function isFridge(it) {
@@ -6710,11 +6740,13 @@
     // 献立は何日分もまとめて作るので、リスト全部が終わるのを待つと通知がほぼ来ない。
     // 1日分の「買うもの」が全部チェックされた時点で、その日の分として知らせる。
     // 調味料・常備品・冷蔵庫にあるものは「買わないこともある」ので数に入れない（入れると永遠に終わらない）。
+    // 「買うもの」に数える品か（調味料・常備品・冷蔵庫にあるものは除く）。完了表示・通知・日付チップの数で共通
+    const isBuyItem = (it) => !isSeasoning(it) && !isPantry(it) && !isFridge(it);
     function shopDateStats() {
       const stats = new Map(); // date -> { total, checked }
       for (const it of getList()) {
         if (!it.date || it.date === "__season__") continue;
-        if (isSeasoning(it) || isPantry(it) || isFridge(it)) continue;
+        if (!isBuyItem(it)) continue;
         const s = stats.get(it.date) || { total: 0, checked: 0 };
         s.total++; if (it.checked) s.checked++;
         stats.set(it.date, s);
@@ -6779,6 +6811,7 @@
       if (date) item.date = date; // 「いつ買うか」を指定した場合はその日付で
       l.push(item);
       saveList(l);
+      shopOpen.add = true;
       renderShopping(true);
     }
     function editItem(id, name, amount) {
@@ -6940,7 +6973,7 @@
     function shopDayCount(date) {
       const l = readJSON(listKeyFor(weekStart(date)), null);
       if (!Array.isArray(l)) return null; // まだ作られていない週は数を出さない
-      return l.filter((it) => it.date === date && !it.checked).length;
+      return l.filter((it) => it.date === date && !it.checked && isBuyItem(it)).length;
     }
 
     function renderShopping(focusAdd) {
@@ -6985,7 +7018,9 @@
 
       // 範囲で仕分け（日付なし＝自分で足したもの、調味料枠は常に表示）
       const inRange = (it) => !it.date || it.date === "__season__" || rangeSet.has(it.date);
-      const outCount = list.filter((it) => !it.checked && !inRange(it)).length;
+      // 範囲外に残っている「買うもの」の数（調味料・常備品などは数えない＝通知と同じ基準）
+      const outCount = buildAgg(list.filter((it) => !it.checked && !inRange(it)))
+        .filter((r) => !r.isSeason && !isFridge(r) && !isPantry(r)).length;
 
       const rows = buildAgg(list.filter(inRange));
       const active = rows.filter((r) => !r.checked);
@@ -6995,23 +7030,13 @@
       const fridge = rest.filter((r) => isFridge(r));                    // 冷蔵庫にある＝買わなくてよい
       const pantry = rest.filter((r) => !isFridge(r) && isPantry(r));
       const nons = rest.filter((r) => !isFridge(r) && !isPantry(r));
-
-      const seasonHeader = (n) => `<div class="shopcat toggle ${shopOpen.season ? "open" : ""}" id="seasonToggle"><span>調味料（常備の可能性）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
-      const pantryHeader = (n) => `<div class="shopcat toggle ${shopOpen.pantry ? "open" : ""}" id="pantryToggle"><span>常備品（家にあるか確認）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
-      const fridgeHeader = (n) => `<div class="shopcat toggle ${shopOpen.fridge ? "open" : ""}" id="fridgeToggle"><span>🧊 冷蔵庫にある（買わなくてOK）</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
-      const boughtHeader = (n) => `<div class="shopcat toggle bought ${shopOpen.bought ? "open" : ""}" id="boughtToggle"><span>✓ 買ったもの</span><span class="cnt">${n}</span><span class="lead"></span><span class="arw">${CHEV_SVG}</span></div>`;
-      const boxStyle = (open) => `style="display:${open ? "block" : "none"}"`;
+      const boughtBuy = bought.filter((r) => !r.isSeason && !isFridge(r) && !isPantry(r));
 
       const rangeLabel = !rangeDates.length ? ""
         : rangeDates.length === 1
           ? `${mdLabel(rangeDates[0])}(${dow(rangeDates[0])}) の分`
           : `${mdLabel(rangeDates[0])}〜${mdLabel(rangeDates[rangeDates.length - 1])} の分`;
-      const extra = [
-        seasons.length ? `調味料${seasons.length}` : "",
-        pantry.length ? `常備品${pantry.length}` : "",
-        fridge.length ? `冷蔵庫${fridge.length}` : "",
-      ].filter(Boolean).join(" ＋");
-      html += `<div class="shop-head"><span class="t">買うもの（${nons.length}品${extra ? ` ＋${extra}` : ""}）</span>${rangeLabel ? `<span class="rangelab">${esc(rangeLabel)}</span>` : ""}</div>`;
+      html += `<div class="shop-head"><span class="t">買うもの</span><span class="cnt">${nons.length}品</span>${rangeLabel ? `<span class="rangelab">${esc(rangeLabel)}</span>` : ""}</div>`;
 
       // 1行 = 食材名 ＋ 合計した分量 ＋（何に使うか・使う日）
       const row = (r, o = {}) => {
@@ -7039,37 +7064,21 @@
           ${buy}${edit}<button class="del" data-ids="${ids}" data-name="${esc(r.name)}" aria-label="削除">${TRASH_SVG}</button></div>`;
       };
 
-      let hasAny = false;
       // 売り場のカテゴリ順に並べる
       const groups = {};
       for (const r of nons) (groups[CAT_ORDER.includes(r.category) ? r.category : "その他"] ||= []).push(r);
       for (const cat of CAT_ORDER) {
         const g = groups[cat];
         if (!g || !g.length) continue;
-        hasAny = true;
         html += `<div class="shopcat"><span>${esc(cat)}</span><span class="lead"></span></div>`;
         html += g.map((r) => row(r)).join("");
       }
-      if (fridge.length) {
-        hasAny = true;
-        html += fridgeHeader(fridge.length);
-        html += `<div id="fridgeBox" ${boxStyle(shopOpen.fridge)}>${fridge.map((r) => row(r, { pantry: true })).join("")}</div>`;
-      }
-      if (pantry.length) {
-        hasAny = true;
-        html += pantryHeader(pantry.length);
-        html += `<div id="pantryBox" ${boxStyle(shopOpen.pantry)}>${pantry.map((r) => row(r, { pantry: true })).join("")}</div>`;
-      }
-      if (seasons.length) {
-        hasAny = true;
-        html += seasonHeader(seasons.length);
-        html += `<div id="seasonList" ${boxStyle(shopOpen.season)}>${seasons.map((r) => row(r)).join("")}</div>`;
-      }
 
-      // 買うものが全部チェックされたら、はっきり分かるように出す。
+      // 「買うもの」が全部チェックされたら、はっきり分かるように出す（通知と同じ基準）。
+      // 調味料・常備品・冷蔵庫の分はチェックしなくてもよい。
       // 「範囲外にまだ残っている」ときは言い切らない（買い忘れて帰らせないため）。
-      if (!hasAny) {
-        if (!bought.length) {
+      if (!nons.length) {
+        if (!boughtBuy.length) {
           html += `<p class="empty">この期間に買うものはありません。</p>`;
         } else if (outCount) {
           html += `<div class="alldone part">
@@ -7082,24 +7091,41 @@
           html += `<div class="alldone">
               <span class="ic">🎉</span>
               <b>買い物完了です</b>
-              <span>${bought.length}品ぜんぶチェックできました。お疲れさまでした。</span>
+              <span>${boughtBuy.length}品ぜんぶチェックできました。お疲れさまでした。</span>
               <button class="ad-btn" id="doneHome">献立を見る</button>
             </div>`;
         }
       }
       // 範囲外に残っている分の件数（隠れているだけと分かるように）。
       // 全部買い終わったときは上の案内に含めているので、ここでは出さない。
-      if (outCount && range !== "d7" && hasAny) {
+      if (outCount && range !== "d7" && nons.length) {
         const lead = range === "pick" ? "ほかの日に" : "このあとの日に";
         html += `<p class="rangehint">${lead}、あと <b>${outCount}品</b> あります<button id="showWeek">7日分をまとめて見る</button></p>`;
       }
-      // チェック済みは折りたたみで下部にまとめる
-      if (bought.length) {
-        html += boughtHeader(bought.length);
-        html += `<div id="boughtBox" ${boxStyle(shopOpen.bought)}>${bought.map((r) => row(r)).join("")}</div>`;
-      }
 
-      html += `<div class="memo-wrap"><div class="sec-head"><span class="label">材料を追加</span><span class="lead"></span></div>
+      // ここから下は「買わなくてもいいかもしれない物」と操作。開閉できるアコーディオンにまとめ、
+      // 上の「買うもの」と見た目で区別できるようにする（中の行はカードにせず、線で区切る）。
+      const acc = (key, icon, title, sub, count, inner) => `
+        <section class="acc ${shopOpen[key] ? "open" : ""}" data-acc="${key}">
+          <button class="acc-head" type="button" aria-expanded="${shopOpen[key] ? "true" : "false"}">
+            <span class="acc-ic">${icon}</span>
+            <span class="acc-tt"><b>${title}</b><small>${sub}</small></span>
+            ${count != null ? `<span class="acc-cnt">${count}</span>` : ""}
+            <span class="acc-chev">${CHEV_SVG}</span>
+          </button>
+          <div class="acc-body"><div class="acc-inner">${inner}</div></div>
+        </section>`;
+      const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+      let accs = "";
+      if (fridge.length) accs += acc("fridge", ic('<rect x="6" y="3" width="12" height="18" rx="2.5"/><path d="M6 10h12M9 6.5v1.5M9 13v2.5"/>'),
+        "冷蔵庫にある", "買わなくてOK", fridge.length, fridge.map((r) => row(r, { pantry: true })).join(""));
+      if (pantry.length) accs += acc("pantry", ic('<path d="M5 8h14l-1 12H6z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/>'),
+        "常備品", "家にあるか確認", pantry.length, pantry.map((r) => row(r, { pantry: true })).join(""));
+      if (seasons.length) accs += acc("season", ic('<path d="M9 3h6v3l2 3v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9l2-3z"/><path d="M7 13h10"/>'),
+        "調味料", "切らしていたら買う", seasons.length, seasons.map((r) => row(r)).join(""));
+      if (bought.length) accs += acc("bought", ic('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+        "買ったもの", "チェック済み", bought.length, bought.map((r) => row(r)).join(""));
+      accs += acc("add", ic('<path d="M12 5v14M5 12h14"/>'), "材料を追加", "リストにない物を足す", null, `
         <div class="additem">
           <input class="nm-in" id="addName" placeholder="材料名（例: 牛乳）">
           <input class="am-in" id="addAmount" placeholder="分量（例: 1本）">
@@ -7107,7 +7133,8 @@
         </div>
         <div class="additem-date"><span>いつ買う？</span>
           <select id="addDate"><option value="">指定なし</option>${Array.from({ length: 14 }, (_, i) => addDays(shopAnchor || fmt(new Date()), i)).map((d) => `<option value="${d}">${esc(mdLabel(d))}(${esc(dow(d))})</option>`).join("")}</select>
-        </div></div>`;
+        </div>`);
+      html += `<div class="acc-group">${accs}</div>`;
 
       html += `<button class="btn-ghost" id="resyncBtn" style="margin-top:18px">献立の材料からリストを作り直す</button>`;
 
@@ -7169,19 +7196,14 @@
       $("resyncBtn").addEventListener("click", resyncList);
       const applyStale = $("applyStale");
       if (applyStale) applyStale.addEventListener("click", resyncList);
-      const bindToggle = (headId, boxId, key) => {
-        const h = $(headId);
-        if (!h) return;
-        h.addEventListener("click", () => {
+      body.querySelectorAll(".acc").forEach((sec) =>
+        sec.querySelector(".acc-head").addEventListener("click", (e) => {
+          const key = sec.dataset.acc;
           shopOpen[key] = !shopOpen[key];
-          $(boxId).style.display = shopOpen[key] ? "block" : "none";
-          h.classList.toggle("open", shopOpen[key]);
-        });
-      };
-      bindToggle("seasonToggle", "seasonList", "season");
-      bindToggle("pantryToggle", "pantryBox", "pantry");
-      bindToggle("fridgeToggle", "fridgeBox", "fridge");
-      bindToggle("boughtToggle", "boughtBox", "bought");
+          sec.classList.toggle("open", shopOpen[key]);
+          e.currentTarget.setAttribute("aria-expanded", shopOpen[key] ? "true" : "false");
+          if (key === "add" && shopOpen[key]) setTimeout(() => $("addName")?.focus({ preventScroll: true }), 280);
+        }));
       body.querySelectorAll(".buyback").forEach((b) =>
         b.addEventListener("click", () => markPantryBuy(b.dataset.name)));
       const doAdd = () => addItem($("addName").value, $("addAmount").value, $("addDate")?.value || "");
