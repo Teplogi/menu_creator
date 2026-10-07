@@ -2229,11 +2229,13 @@ async function getNotifPrefs(userId) {
 }
 
 // 1ユーザーの全端末へ送信（kind の設定がOFFなら送らない）。無効な購読は掃除する。
-async function pushToUser(userId, kind, payload) {
+// stats を渡すと、端末数・失効して消した数・その他の失敗数を書き込む（テスト送信の診断用）。
+async function pushToUser(userId, kind, payload, stats = null) {
   if (!pushEnabled()) return 0;
   const pref = await getNotifPrefs(userId);
   if (kind && pref[kind] === false) return 0;
   const subs = await all("SELECT * FROM push_subscriptions WHERE user_id = $1", [userId]);
+  if (stats) Object.assign(stats, { devices: subs.length, expired: 0, failed: 0, lastError: "" });
   let sent = 0;
   for (const s of subs) {
     try {
@@ -2245,9 +2247,12 @@ async function pushToUser(userId, kind, payload) {
     } catch (e) {
       // 端末が購読解除/失効（404/410）なら購読を削除
       if (e && (e.statusCode === 404 || e.statusCode === 410)) {
+        console.warn(`push購読が失効したので削除: user=${userId} status=${e.statusCode}`);
         await q("DELETE FROM push_subscriptions WHERE endpoint = $1", [s.endpoint]).catch(() => {});
+        if (stats) stats.expired++;
       } else {
-        console.error("push送信エラー:", (e && e.message) || e);
+        console.error("push送信エラー:", e?.statusCode || "", (e && e.body) || (e && e.message) || e);
+        if (stats) { stats.failed++; stats.lastError = String(e?.statusCode || e?.message || "unknown"); }
       }
     }
   }
@@ -2341,12 +2346,13 @@ app.post("/api/push/prefs", auth, async (req, res) => {
 // テスト通知（設定画面の「テスト送信」用。kind無し＝設定に関わらず必ず届く）
 app.post("/api/push/test", auth, async (req, res) => {
   try {
+    const stats = {};
     const n = await pushToUser(req.user.id, null, {
       title: "めにゅらく！",
       body: "通知のテストです。これが届けば設定完了です🎉",
       url: "/",
-    });
-    res.json({ ok: true, sent: n });
+    }, stats);
+    res.json({ ok: true, sent: n, ...stats });
   } catch (err) {
     handleError(res, err);
   }

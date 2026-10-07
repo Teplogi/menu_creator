@@ -2760,6 +2760,7 @@
       household = (joined && households.find((h) => h.id === joined.id))
         || households.find((h) => h.id === saved) || households[0] || null;
       loadBillingStatus(); // 残数・加入状態を先読み（ペイウォール即応のため）
+      ensurePushSubscription(); // 起動のたびに、この端末の通知先をサーバに登録し直す（消えていても自動で直る）
       if (!household) return showSetup();
       localStorage.setItem("householdId", household.id);
       await goHome();
@@ -7274,7 +7275,7 @@
       try { cfg = await (await fetch("/api/push/config")).json(); } catch {}
       if (!cfg || !cfg.enabled) { unsup.style.display = "block"; unsup.textContent = "通知は現在準備中です。"; return; }
       if (!swReg) await registerServiceWorker();
-      const sub = swReg ? await swReg.pushManager.getSubscription() : null;
+      const sub = await ensurePushSubscription(cfg.publicKey);
       if (Notification.permission === "granted" && sub) {
         on.style.display = "block";
         await loadNotifPrefs();
@@ -7284,6 +7285,36 @@
           Notification.permission === "denied"
             ? "通知がブロックされています。端末の設定から許可してください。"
             : "";
+      }
+    }
+    // 端末の購読をサーバに登録し直す（同じ端末なら上書きされるだけなので何度呼んでもよい）。
+    // サーバ側の登録は、Appleが購読を失効させたとき（410）や、同じ端末で別アカウントに
+    // ログインしたときに消える。端末側は「ON」のままなので、ここで黙って直さないと
+    // 「ONなのに届かない」状態が続いてしまう。
+    // create=true のとき（テスト送信を押したとき）は、端末の購読ごと消えていても作り直す（iOSで起きる）。
+    // 起動時は作り直さない（以前にアプリ内でオフにした人を勝手にオンへ戻さないため）。
+    async function ensurePushSubscription(publicKey, { create = false } = {}) {
+      try {
+        if (!notifSupported() || Notification.permission !== "granted" || !authToken) return null;
+        // アプリ内で自分でオフにした人には、勝手に作り直さない
+        try { if (localStorage.getItem("pushOff") === "1") return null; } catch {}
+        if (!publicKey) {
+          const cfg = await (await fetch("/api/push/config")).json();
+          if (!cfg.enabled || !cfg.publicKey) return null;
+          publicKey = cfg.publicKey;
+        }
+        if (!swReg) await registerServiceWorker();
+        if (!swReg) return null;
+        let sub = await swReg.pushManager.getSubscription();
+        if (!sub && !create) return null;
+        if (!sub) {
+          sub = await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+        }
+        await apiOK("/api/push/subscribe", { method: "POST", body: { subscription: sub.toJSON() } });
+        return sub;
+      } catch (e) {
+        console.warn("push購読の再登録に失敗:", e);
+        return swReg ? await swReg.pushManager.getSubscription().catch(() => null) : null;
       }
     }
     async function enableNotifications() {
@@ -7308,6 +7339,7 @@
           });
         }
         await apiOK("/api/push/subscribe", { method: "POST", body: { subscription: sub.toJSON() } });
+        try { localStorage.removeItem("pushOff"); } catch {}
         await refreshNotifUI();
       } catch (e) {
         $("notifEnableHint").textContent = "設定に失敗しました：" + (e.message || e);
@@ -7322,6 +7354,7 @@
           await api("/api/push/unsubscribe", { method: "POST", body: { endpoint: sub.endpoint } });
           await sub.unsubscribe();
         }
+        try { localStorage.setItem("pushOff", "1"); } catch {}
       } catch (e) { console.warn(e); }
       await refreshNotifUI();
     }
@@ -7344,8 +7377,11 @@
     async function testNotif() {
       const hint = $("notifStatusHint");
       try {
+        await ensurePushSubscription(null, { create: true }); // この端末の登録が消えていたら、送る前に直しておく
         const r = await apiOK("/api/push/test", { method: "POST" });
-        hint.textContent = r.sent > 0 ? "テスト通知を送信しました。" : "送信先の端末が見つかりませんでした。";
+        hint.textContent = r.sent > 0 ? "テスト通知を送信しました。"
+          : r.failed ? `送信に失敗しました（${r.lastError}）。通知をいったんオフにして、もう一度オンにしてください。`
+          : "送信先の端末が見つかりませんでした。通知をいったんオフにして、もう一度オンにしてください。";
       } catch (e) {
         hint.textContent = "送信に失敗しました：" + (e.message || e);
       }
