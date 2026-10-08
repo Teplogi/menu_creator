@@ -1329,6 +1329,69 @@
       .alldone, .alldone .ic { animation: none; }
     }
 
+    /* ---- みんなのレシピ ---- */
+    .pr-entry { width: 100%; display: flex; align-items: center; gap: 12px; margin: 2px 0 12px; padding: 12px 14px;
+      border: 1.5px solid var(--line); border-radius: 16px; background: #fff; text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+    .pr-entry:active { transform: scale(.99); }
+    .pr-entry-ic { width: 36px; height: 36px; border-radius: 11px; background: var(--orange-soft); display: grid; place-items: center; font-size: 1.1rem; flex: none; }
+    .pr-entry-tx { flex: 1; display: flex; flex-direction: column; line-height: 1.4; }
+    .pr-entry-tx b { font-size: .92rem; }
+    .pr-entry-tx small { font-size: .74rem; color: var(--muted); font-weight: 700; }
+    .pr-entry-go { color: #c2b3a3; font-size: 1.3rem; }
+    .favcard .ftag.pub { color: #4f7d63; background: #e9f4ec; }
+    .fpub { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .fpub.muted { font-size: .74rem; color: var(--muted); font-weight: 700; }
+    .fpub .b-pub { flex: 1; border: 1.5px dashed var(--dot); background: #fff; color: var(--orange-dark); border-radius: 10px;
+      padding: 8px; font: inherit; font-size: .82rem; font-weight: 800; cursor: pointer; }
+    .fpub.on { background: #f4f9f5; border-radius: 10px; padding: 7px 10px; }
+    .fpub-st { flex: 1; font-size: .78rem; color: #3f6f53; font-weight: 700; }
+    .fpub .b-unpub { border: none; background: none; color: var(--muted); font: inherit; font-size: .74rem; font-weight: 700;
+      text-decoration: underline; cursor: pointer; padding: 2px; }
+    .pn-lead { font-size: .86rem; color: #6f665c; margin: .3rem 0 .8rem; line-height: 1.7; }
+    .pn-label { display: block; font-size: .78rem; font-weight: 800; color: var(--muted); margin-bottom: 4px; }
+    #pubNameInput { width: 100%; margin-bottom: 10px; }
+    .pn-rules { margin: 0 0 10px; padding-left: 1.1em; font-size: .78rem; color: #7a6f64; line-height: 1.7; }
+    .pr-hero { background: var(--card); border-radius: 20px; box-shadow: var(--shadow); padding: 14px 16px; margin-bottom: 12px;
+      display: flex; flex-direction: column; gap: 4px; }
+    .pr-hero b { font-size: .98rem; }
+    .pr-hero span { font-size: .8rem; color: var(--muted); line-height: 1.6; }
+    .pr-search input { width: 100%; margin-bottom: 10px; }
+    .pr-filters { display: flex; gap: 6px; overflow-x: auto; padding: 0 2px 10px; scrollbar-width: none; }
+    .pr-filters::-webkit-scrollbar { display: none; }
+    .pr-chip { flex: none; border: 1.5px solid var(--line); background: #fff; color: #7a6f64; border-radius: 999px;
+      padding: 6px 13px; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; }
+    .pr-chip.on { border-color: var(--orange); background: var(--orange); color: #fff; }
+    .pr-sort { margin: 0 0 12px; }
+    .pr-card { background: var(--card); border-radius: 18px; box-shadow: var(--shadow); margin-bottom: 12px; overflow: hidden; }
+    .pr-head { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px 8px;
+      border: none; background: none; text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+    .pr-top { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .pr-badge { font-size: .68rem; font-weight: 800; color: #2f6b45; background: #e4f3e9; border-radius: 999px; padding: 2px 9px; }
+    .pr-name { font-size: 1.04rem; font-weight: 800; line-height: 1.45; }
+    .pr-meta { display: flex; gap: 6px; flex-wrap: wrap; font-size: .74rem; color: var(--muted); font-weight: 700; }
+    .pr-salt { color: #4f6d7a; background: #edf3f6; border-radius: 6px; padding: 1px 7px; }
+    .pr-tag { color: #3f6f53; background: #e9f4ec; border-radius: 6px; padding: 1px 7px; }
+    .pr-by { font-size: .74rem; color: #a3927f; font-weight: 700; }
+    .pr-detail { padding: 0 16px; }
+    .pr-card.open .pr-detail { padding: 2px 16px 6px; border-top: 1px solid var(--line); }
+    .pr-desc { font-size: .86rem; color: #6f665c; margin: 10px 0 6px; }
+    .pr-sub { font-size: .78rem; font-weight: 800; color: var(--orange-dark); margin: 12px 0 6px; }
+    .pr-steps { margin: 0; padding-left: 1.3em; font-size: .88rem; line-height: 1.7; }
+    .pr-steps li { margin-bottom: 4px; }
+    .pr-note { font-size: .72rem; color: var(--muted); margin: 12px 0 4px; line-height: 1.6; }
+    .pr-report { border: none; background: none; color: #b0a294; font: inherit; font-size: .72rem; text-decoration: underline; padding: 4px 0 6px; cursor: pointer; }
+    .pr-actions { padding: 4px 16px 14px; }
+    .pr-add { width: 100%; border: none; background: var(--orange); color: #fff; border-radius: 12px; padding: 11px;
+      font: inherit; font-weight: 800; font-size: .9rem; cursor: pointer; box-shadow: 0 4px 12px rgba(245,131,31,.28); }
+    .pr-add:active { transform: scale(.98); }
+    .pr-add.done { background: var(--orange-soft); color: var(--orange-dark); box-shadow: none; }
+    .pr-mine { display: block; text-align: center; font-size: .78rem; color: var(--muted); font-weight: 700; padding: 6px 0; }
+    .pr-empty { background: var(--card); border-radius: 18px; padding: 26px 18px; text-align: center; display: flex; flex-direction: column; gap: 6px; }
+    .pr-empty span { font-size: .82rem; color: var(--muted); }
+    .toast { position: fixed; left: 50%; bottom: calc(96px + var(--tabbar-gap)); transform: translate(-50%, 12px); z-index: 60;
+      background: rgba(59,55,51,.92); color: #fff; font-size: .84rem; font-weight: 700; padding: 10px 16px; border-radius: 999px;
+      opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; max-width: calc(100% - 40px); text-align: center; }
+    .toast.on { opacity: 1; transform: translate(-50%, 0); }
     /* お気に入りの無料枠（7/10品） */
     .fav-quota { margin: 4px 0 12px; padding: 10px 12px; border-radius: 14px; background: #faf6f1; }
     .fq-bar { height: 6px; border-radius: 999px; background: #efe5da; overflow: hidden; }
@@ -2196,6 +2259,9 @@
           <button class="copybtn" onclick="addFavoriteManual()">追加</button>
         </div>
         <p class="hint" id="favHint"></p>
+        <button class="pr-entry" type="button" onclick="showRecipesView(showFavoritesView)">
+          <span class="pr-entry-ic">🌏</span><span class="pr-entry-tx"><b>みんなのレシピ</b><small>ほかの家庭のお気に入りを、自分の献立に</small></span>
+          <span class="pr-entry-go">›</span></button>
         <div class="fav-quota" id="favQuota" style="display:none"></div>
 
         <!-- 何のための一覧なのかを最初に書く。記号だけ置くと意味が伝わらない。 -->
@@ -2214,6 +2280,9 @@
     </section>
 
     <!-- コラム（一覧・記事） -->
+    <section class="view" id="view-recipes">
+      <div id="recipesBody"></div>
+    </section>
     <section class="view" id="view-columns">
       <div id="columnsBody"></div>
     </section>
@@ -3367,6 +3436,9 @@
         `<div class="soon-card live" id="favOpenCard"><img class="soon-ic" src="/img/ic-star.png" alt="">
           <div class="soon-tx"><div class="soon-nm">お気に入りレシピ</div><div class="soon-ds">気に入った料理を保存して、次の献立にすぐ追加</div></div>
           <span class="soon-go">›</span></div>` +
+        `<div class="soon-card live" id="prOpenCard"><img class="soon-ic" src="/img/ic-basket.png" alt="">
+          <div class="soon-tx"><div class="soon-nm">みんなのレシピ</div><div class="soon-ds">ほかの家庭のお気に入りを⭐で取り込んで、自分の献立に</div></div>
+          <span class="soon-go">›</span></div>` +
         `<div class="soon-card live" id="frOpenCard"><img class="soon-ic" src="/img/ic-fridge.png" alt="">
           <div class="soon-tx"><div class="soon-nm">冷蔵庫・作り置き</div><div class="soon-ds">残っている食材を登録して、使い切る献立に</div></div>
           <span class="soon-go">›</span></div>` +
@@ -3382,6 +3454,7 @@
           <div class="soon-ds">決めた曜日・時刻に、AIが翌週の献立を自動で作って通知</div></div>
           <span class="soon-go">›</span></div>`;
       $("favOpenCard").addEventListener("click", showFavoritesView);
+      $("prOpenCard").addEventListener("click", () => showRecipesView(showSoonView));
       $("frOpenCard").addEventListener("click", showFridgeView);
       $("nuOpenCard").addEventListener("click", openNutritionFromTab);
       $("colOpenCard").addEventListener("click", () => showColumnsView(showSoonView));
@@ -3476,6 +3549,7 @@
           <div class="fmeta">
             ${f.role ? `<span class="frole">${esc(f.role)}</span>` : ""}
             <span class="ftag">${hasIng ? "材料あり" : "材料なし"}</span>
+            ${f.fromPublic ? `<span class="ftag pub">🌏 みんなのレシピから</span>` : ""}
             ${waitTag(f)}
           </div>
           <div class="fbtns">
@@ -3484,6 +3558,7 @@
             <button class="b-next ${f.pinned ? "on" : ""}" data-id="${esc(f.id)}" ${f.autoMix ? "" : "disabled style=opacity:.4"}>
               ${f.pinned ? "✓ 次に出す" : "次に出す"}</button>
           </div>
+          ${favPublishRow(f, hasIng)}
           <div class="fav-edithint">タップして材料・作り方を編集</div>
         </div>`;
         // 開いたときだけアニメーションさせる。材料を1行足しただけの描き直しでは
@@ -3518,6 +3593,8 @@
         renderFavorites();
       }));
       wrap.querySelectorAll(".fdel").forEach((b) => b.addEventListener("click", () => deleteFavorite(b.dataset.id)));
+      wrap.querySelectorAll(".b-pub").forEach((b) => b.addEventListener("click", () => publishFavorite(b.dataset.id)));
+      wrap.querySelectorAll(".b-unpub").forEach((b) => b.addEventListener("click", () => unpublishFavorite(b.dataset.id)));
       wrap.querySelectorAll(".b-mix").forEach((b) =>
         b.addEventListener("click", () => {
           const f = favorites.find((x) => x.id === b.dataset.id);
@@ -3713,12 +3790,12 @@
         people: s.people,
       };
       try {
-        await apiOK(`/api/households/${household.id}/favorites/${f.id}`, {
+        const r = await apiOK(`/api/households/${household.id}/favorites/${f.id}`, {
           method: "PATCH", body: { name: s.name, role: s.role, dish },
         });
         favEdit = null; favSteps = null; favHead = null; favCheck = null;
         await loadFavorites(); renderFavorites();
-        const h = $("favHint"); if (h) h.textContent = "保存しました ✓";
+        const h = $("favHint"); if (h) h.textContent = r?.unpublished ? `保存しました。公開は止めました：${r.unpublished}` : "保存しました ✓";
       } catch (e) { const h = $("favIngHint"); if (h) h.textContent = e.message; }
     }
     async function aiWriteIngredients(id) {
@@ -3757,9 +3834,228 @@
     }
     async function patchFavorite(id, body) {
       try {
-        await apiOK(`/api/households/${household.id}/favorites/${id}`, { method: "PATCH", body });
+        const r = await apiOK(`/api/households/${household.id}/favorites/${id}`, { method: "PATCH", body });
         await loadFavorites(); renderFavorites();
+        if (r?.unpublished) alert(`公開を止めました。${r.unpublished}`);
       } catch (e) { const h = $("favHint"); if (h) h.textContent = e.message; }
+    }
+
+    // ---------- みんなのレシピ（公開・取り込み） ----------
+    // お気に入りカードの「公開」まわり。材料のあるものだけ、取り込んだものは公開できない。
+    function favPublishRow(f, hasIng) {
+      if (f.fromPublic) return "";
+      if (!hasIng) return `<div class="fpub muted">材料を登録すると、みんなに公開できます</div>`;
+      const p = f.published;
+      if (!p) return `<div class="fpub"><button class="b-pub" data-id="${esc(f.id)}">🌏 みんなに公開する</button></div>`;
+      if (p.status === "hidden") return `<div class="fpub on"><span class="fpub-st">公開を一時停止中（運営が確認しています）</span>
+        <button class="b-unpub" data-id="${esc(f.id)}">公開をやめる</button></div>`;
+      return `<div class="fpub on"><span class="fpub-st">🌏 公開中${p.importCount ? `・<b>${p.importCount}家庭</b>が取り込みました` : ""}</span>
+        <button class="b-unpub" data-id="${esc(f.id)}">公開をやめる</button></div>`;
+    }
+    // 初めて公開するときに、公開名（ニックネーム）と約束ごとを確認する
+    function publicNameDialog(initial = "") {
+      return new Promise((resolve) => {
+        let ov = $("pubNameModal");
+        if (!ov) {
+          ov = document.createElement("div");
+          ov.id = "pubNameModal"; ov.className = "modal-overlay"; ov.style.display = "none";
+          ov.innerHTML =
+            `<div class="modal-card">` +
+            `<div class="mp-title">みんなに公開する</div>` +
+            `<p class="pn-lead">公開されるのは<b>料理名・材料・作り方</b>と、下の<b>公開名</b>だけです。お名前やグループ名は出ません。</p>` +
+            `<label class="pn-label" for="pubNameInput">公開名（ニックネーム）</label>` +
+            `<input id="pubNameInput" maxlength="20" placeholder="例: 共働きのごはん係">` +
+            `<ul class="pn-rules"><li>「〜に効く」「血圧が下がる」など、<b>効果・効能は書けません</b></li>` +
+            `<li>ほかのサイトや本のレシピの丸写しはやめてください</li>` +
+            `<li>公開をやめても、すでに取り込んだ人の手元には残ります</li></ul>` +
+            `<p class="hint" id="pubNameHint" style="margin:0 0 8px"></p>` +
+            `<div style="display:flex;gap:10px;justify-content:flex-end">` +
+            `<button class="btn-ghost" id="pubNameCancel">やめる</button>` +
+            `<button class="btn-primary" id="pubNameOk">公開する</button></div></div>`;
+          document.body.appendChild(ov);
+        }
+        const input = $("pubNameInput");
+        input.value = initial; $("pubNameHint").textContent = "";
+        const close = (v) => { ov.style.display = "none"; resolve(v); };
+        $("pubNameOk").onclick = () => {
+          const v = input.value.trim();
+          if (!v) { $("pubNameHint").textContent = "公開名を入れてください。"; input.focus(); return; }
+          close(v);
+        };
+        $("pubNameCancel").onclick = () => close(null);
+        ov.onclick = (e) => { if (e.target === ov) close(null); };
+        ov.style.display = "flex";
+        setTimeout(() => input.focus(), 50);
+      });
+    }
+    async function publishFavorite(id) {
+      const hint = $("favHint");
+      let publicName;
+      if (!currentUser?.publicName) {
+        publicName = await publicNameDialog();
+        if (!publicName) return;
+      }
+      try {
+        const r = await apiOK(`/api/households/${household.id}/favorites/${id}/publish`, {
+          method: "POST", body: publicName ? { publicName } : {},
+        });
+        if (r.publicName && currentUser) currentUser.publicName = r.publicName;
+        await loadFavorites(); renderFavorites();
+        if (hint) hint.textContent = `「${r.publicName || currentUser?.publicName || ""}」として公開しました 🌏`;
+      } catch (e) {
+        if (hint) hint.textContent = e.message;
+        else alert(e.message);
+      }
+    }
+    async function unpublishFavorite(id) {
+      if (!(await confirmDialog("公開をやめますか？\nすでに取り込んだ人の手元には残ります。", "公開をやめる"))) return;
+      try {
+        await apiOK(`/api/households/${household.id}/favorites/${id}/publish`, { method: "DELETE" });
+        await loadFavorites(); renderFavorites();
+        const h = $("favHint"); if (h) h.textContent = "公開をやめました。";
+      } catch (e) { alert(e.message); }
+    }
+
+    // 一覧画面。絞り込み・並び順・検索。カードを開くと材料と作り方を読み込んで出す。
+    const prState = { role: "", tag: "", sort: "new", q: "", items: [], hasMore: false, open: null, detail: {}, loading: false };
+    const PR_FILTERS = [["", "", "すべて"], ["主菜", "", "主菜"], ["副菜", "", "副菜"], ["汁物", "", "汁物"], ["", "塩分ひかえめ", "塩分ひかえめ"]];
+    async function showRecipesView(back) {
+      backHandler = back || showSoonView;
+      showView("recipes", "みんなのレシピ", { back: true, tab: "soon" });
+      if (!favorites.length) loadFavorites();
+      renderRecipesShell();
+      await loadRecipes(true);
+    }
+    function renderRecipesShell() {
+      $("recipesBody").innerHTML = `
+        <div class="pr-hero">
+          <b>ほかの家庭のお気に入りレシピ</b>
+          <span>⭐で取り込むと自分のお気に入りに入り、次の献立から自動で登場します。塩分は栄養計算で出した1人分の目安です。</span>
+        </div>
+        <div class="pr-search"><input id="prQ" type="search" placeholder="料理名でさがす" value="${esc(prState.q)}"></div>
+        <div class="pr-filters" id="prFilters">${PR_FILTERS.map(([r, t, label]) =>
+          `<button class="pr-chip ${prState.role === r && prState.tag === t ? "on" : ""}" data-role="${esc(r)}" data-tag="${esc(t)}">${esc(label)}</button>`).join("")}</div>
+        <div class="segmented pr-sort"><button class="seg ${prState.sort === "new" ? "on" : ""}" data-sort="new">新着</button>
+          <button class="seg ${prState.sort === "popular" ? "on" : ""}" data-sort="popular">よく取り込まれている</button></div>
+        <div id="prList"><p class="empty">読み込み中…</p></div>`;
+      $("prFilters").querySelectorAll(".pr-chip").forEach((b) => b.addEventListener("click", () => {
+        prState.role = b.dataset.role; prState.tag = b.dataset.tag; renderRecipesShell(); loadRecipes(true);
+      }));
+      $("recipesBody").querySelectorAll(".pr-sort .seg").forEach((b) => b.addEventListener("click", () => {
+        prState.sort = b.dataset.sort; renderRecipesShell(); loadRecipes(true);
+      }));
+      let t = null;
+      $("prQ").addEventListener("input", (e) => {
+        clearTimeout(t);
+        t = setTimeout(() => { prState.q = e.target.value.trim(); loadRecipes(true); }, 350);
+      });
+    }
+    async function loadRecipes(reset) {
+      if (prState.loading) return;
+      prState.loading = true;
+      if (reset) { prState.items = []; prState.open = null; }
+      const qs = new URLSearchParams({ sort: prState.sort, offset: String(prState.items.length) });
+      if (prState.role) qs.set("role", prState.role);
+      if (prState.tag) qs.set("tag", prState.tag);
+      if (prState.q) qs.set("q", prState.q);
+      if (household) qs.set("householdId", household.id);
+      try {
+        const r = await apiOK(`/api/public-recipes?${qs}`);
+        prState.items = prState.items.concat(r.recipes || []);
+        prState.hasMore = !!r.hasMore;
+      } catch (e) {
+        $("prList").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
+        prState.loading = false; return;
+      }
+      prState.loading = false;
+      renderRecipeList();
+    }
+    function renderRecipeList() {
+      const box = $("prList");
+      if (!box) return;
+      if (!prState.items.length) {
+        box.innerHTML = `<div class="pr-empty"><b>${prState.q || prState.role || prState.tag ? "見つかりませんでした" : "まだ公開されたレシピがありません"}</b>
+          <span>お気に入りの「🌏 みんなに公開する」から、あなたの十八番を最初に公開してみませんか？</span></div>`;
+        return;
+      }
+      box.innerHTML = prState.items.map((r) => {
+        const open = prState.open === r.id;
+        const d = prState.detail[r.id];
+        const action = r.mine ? `<span class="pr-mine">あなたのレシピ</span>`
+          : r.imported ? `<button class="pr-add done" disabled>✓ お気に入りに入っています</button>`
+          : `<button class="pr-add" data-id="${esc(r.id)}">⭐ 献立に入れる</button>`;
+        return `<article class="pr-card ${open ? "open" : ""}" data-id="${esc(r.id)}">
+          <button class="pr-head" type="button">
+            <span class="pr-top">${r.role ? `<span class="role-chip">${esc(r.role)}</span>` : ""}
+              ${r.badge ? `<span class="pr-badge">✓ ${esc(r.badge.title)} ${esc(r.badge.name)} チェック済み</span>` : ""}</span>
+            <span class="pr-name">${esc(r.name)}</span>
+            <span class="pr-meta">
+              ${r.salt != null ? `<span class="pr-salt">塩分 ${esc(r.salt)}g/人</span>` : ""}
+              ${r.cookMinutes ? `<span>${esc(r.cookMinutes)}分</span>` : ""}
+              ${r.tags.filter((t) => t !== "15分以内").map((t) => `<span class="pr-tag">${esc(t)}</span>`).join("")}
+            </span>
+            <span class="pr-by">${esc(r.author)}さん${r.importCount ? `・${r.importCount}家庭が取り込み` : ""}</span>
+          </button>
+          <div class="pr-detail">${open ? (d ? recipeDetailHtml(d) : `<p class="hint">読み込み中…</p>`) : ""}</div>
+          <div class="pr-actions">${action}</div>
+        </article>`;
+      }).join("") + (prState.hasMore ? `<button class="btn-ghost" id="prMore" style="margin-top:6px">もっと見る</button>` : "");
+      box.querySelectorAll(".pr-head").forEach((h) => h.addEventListener("click", () => toggleRecipe(h.closest(".pr-card").dataset.id)));
+      box.querySelectorAll(".pr-add[data-id]").forEach((b) => b.addEventListener("click", () => importRecipe(b.dataset.id, b)));
+      box.querySelectorAll(".pr-report").forEach((b) => b.addEventListener("click", () => reportRecipe(b.dataset.id)));
+      $("prMore")?.addEventListener("click", () => loadRecipes(false));
+    }
+    function recipeDetailHtml(d) {
+      const ings = d.dish?.ingredients || [], steps = d.dish?.steps || [];
+      return `${d.dish?.description ? `<p class="pr-desc">${esc(d.dish.description)}</p>` : ""}
+        <div class="pr-sub">材料${d.dish?.people ? `（${esc(d.dish.people)}人分）` : ""}</div>
+        <ul class="ings">${ings.map((i) => `<li>${esc(i.name)}${i.amount ? `　<span style="color:var(--muted)">${esc(i.amount)}</span>` : ""}</li>`).join("")}</ul>
+        ${steps.length ? `<div class="pr-sub">作り方</div><ol class="pr-steps">${steps.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
+        <p class="pr-note">塩分は食品成分表をもとにした目安です。持病などで食事の制限がある方は、主治医・薬剤師・管理栄養士にご相談ください。</p>
+        ${d.mine ? "" : `<button class="pr-report" data-id="${esc(d.id)}">問題を報告する</button>`}`;
+    }
+    async function toggleRecipe(id) {
+      prState.open = prState.open === id ? null : id;
+      renderRecipeList();
+      if (prState.open && !prState.detail[id]) {
+        try {
+          const d = await apiOK(`/api/public-recipes/${encodeURIComponent(id)}`);
+          const item = prState.items.find((x) => x.id === id);
+          prState.detail[id] = { ...d, mine: item?.mine };
+        } catch (e) { prState.detail[id] = { id, dish: { description: e.message } }; }
+        if (prState.open === id) renderRecipeList();
+      }
+    }
+    async function importRecipe(id, btn) {
+      if (!household) return;
+      btn.disabled = true; btn.textContent = "入れています…";
+      try {
+        await apiOK(`/api/public-recipes/${encodeURIComponent(id)}/import`, { method: "POST", body: { householdId: household.id } });
+        const item = prState.items.find((x) => x.id === id);
+        if (item) { item.imported = true; item.importCount = (item.importCount || 0) + 1; }
+        await loadFavorites();
+        renderRecipeList();
+        toast("お気に入りに入れました。次の献立から登場します ⭐");
+      } catch (e) {
+        btn.disabled = false; btn.textContent = "⭐ 献立に入れる";
+        if (!e.upgrade) alert(e.message); // 上限はペイウォールが出る
+      }
+    }
+    async function reportRecipe(id) {
+      if (!(await confirmDialog("このレシピを運営に報告しますか？\n（効果・効能をうたっている、丸写し、不適切な内容など）", "報告する"))) return;
+      try {
+        await apiOK(`/api/public-recipes/${encodeURIComponent(id)}/report`, { method: "POST", body: { reason: "アプリから報告" } });
+        toast("報告しました。ありがとうございます。");
+      } catch (e) { alert(e.message); }
+    }
+    // 画面下に短く出すお知らせ
+    function toast(msg) {
+      let el = $("toast");
+      if (!el) { el = document.createElement("div"); el.id = "toast"; el.className = "toast"; document.body.appendChild(el); }
+      el.textContent = msg;
+      el.classList.add("on");
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => el.classList.remove("on"), 2600);
     }
 
     async function addFavoriteManual() {
