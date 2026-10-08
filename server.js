@@ -6,7 +6,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import Stripe from "stripe";
 import webpush from "web-push";
 import { OAuth2Client } from "google-auth-library";
-import { analyzePlan, foodAliasMap, foodUnitTables, checkIngredients } from "./nutrition.js";
+import { analyzePlan, foodAliasMap, foodUnitTables, checkIngredients, dishNutrition } from "./nutrition.js";
+import { supervisorOf } from "./supervisors.js";
 import { pickMainCandidates, candidateLine, catalogSize, attachChoice, buildPlanFromCatalog, allDishes } from "./catalog.js";
 import { buildAdvice } from "./nutrition-advice.js";
 import { readColumns } from "./columns.js";
@@ -359,6 +360,22 @@ const SCHEMA_STATEMENTS = [
     updated_at TEXT NOT NULL)`,
   // 曜日ごとに作る食事（{"0":["昼食","夕食"],"1":["夕食"]}）。無い曜日は作らない。
   `ALTER TABLE auto_plans ADD COLUMN IF NOT EXISTS dow_slots TEXT`,
+  // みんなのレシピ: お気に入りを公開したもの。dish_json は公開時点の写し（元を編集すると更新する）。
+  // status: public=一覧に出す / hidden=通報が溜まった・運営が止めた。badge は supervisors.js のキー。
+  `CREATE TABLE IF NOT EXISTS public_recipes (
+    id TEXT PRIMARY KEY, fav_id TEXT UNIQUE NOT NULL, household_id TEXT NOT NULL, user_id TEXT NOT NULL,
+    name TEXT NOT NULL, role TEXT, dish_json TEXT NOT NULL, salt REAL, tags TEXT NOT NULL DEFAULT '',
+    import_count INTEGER NOT NULL DEFAULT 0, report_count INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'public', badge TEXT,
+    created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS idx_pubrec_status ON public_recipes (status, created_at)`,
+  // 公開するときの名前。表示名（Googleの実名になりうる）とグループ名は外に出さない。
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS public_name TEXT`,
+  // みんなのレシピから取り込んだお気に入りの元（二重取り込みの防止・取り込み数の集計用）
+  `ALTER TABLE favorite_dishes ADD COLUMN IF NOT EXISTS source_public_id TEXT`,
+  `CREATE TABLE IF NOT EXISTS recipe_reports (
+    recipe_id TEXT NOT NULL, user_id TEXT NOT NULL, reason TEXT, created_at TEXT NOT NULL,
+    PRIMARY KEY (recipe_id, user_id))`,
 ];
 async function initDb() {
   for (const sql of SCHEMA_STATEMENTS) {
@@ -413,7 +430,7 @@ async function auth(req, res, next) {
       await q("DELETE FROM sessions WHERE token = $1", [token]).catch(() => {});
       return res.status(401).json({ error: "セッションの有効期限が切れました。再度ログインしてください。" });
     }
-    const user = sess ? await one("SELECT id, username, display_name FROM users WHERE id = $1", [sess.user_id]) : null;
+    const user = sess ? await one("SELECT id, username, display_name, public_name FROM users WHERE id = $1", [sess.user_id]) : null;
     if (!user) return res.status(401).json({ error: "ログインが必要です。" });
     req.user = user;
     next();
@@ -1315,7 +1332,8 @@ function handleBillingError(res, err) {
 }
 
 // ---------- 認証 API ----------
-const userToClient = (u) => ({ id: u.id, username: u.username, displayName: u.display_name || u.username });
+const userToClient = (u) => ({ id: u.id, username: u.username, displayName: u.display_name || u.username,
+  publicName: u.public_name || "" });
 // 通知やメンバー表示に使う「表示名」。未設定なら username にフォールバック。
 const displayNameOf = (u) => (u && (u.display_name || u.username)) || "";
 
@@ -1724,6 +1742,7 @@ const favToClient = (r) => {
     id: r.id, name: r.name, role: r.role || dish?.role || "", dish,
     autoMix: r.auto_mix == null ? true : !!Number(r.auto_mix), // 生成に混ぜるか
     pinned: !!Number(r.pinned),                                // 次の献立に必ず入れる
+    fromPublic: !!r.source_public_id,                          // みんなのレシピから取り込んだ
   };
 };
 
@@ -1735,7 +1754,11 @@ app.get("/api/households/:id/favorites", auth, async (req, res) => {
       [req.params.id]
     );
     const last = await getDishLastUsed(req.params.id); // 順番待ちを画面に見せる
-    res.json(rows.map((r) => ({ ...favToClient(r), lastUsed: last.get(normName(r.name)) || null })));
+    const pubs = new Map((await all(
+      "SELECT fav_id, id, import_count, status FROM public_recipes WHERE household_id = $1", [req.params.id]
+    )).map((p) => [p.fav_id, { id: p.id, importCount: p.import_count, status: p.status }]));
+    res.json(rows.map((r) => ({ ...favToClient(r), lastUsed: last.get(normName(r.name)) || null,
+      published: pubs.get(r.id) || null })));
   } catch (err) {
     handleError(res, err);
   }
@@ -1763,30 +1786,38 @@ app.post("/api/households/:id/favorites", auth, async (req, res) => {
         "UPDATE favorite_dishes SET name = $1, role = COALESCE($2, role), dish_json = COALESCE($3, dish_json) WHERE id = $4 RETURNING *",
         [name, role, dishJson, existing.id]
       );
+      await refreshPublication(updated);
       return res.json(favToClient(updated));
     }
-    const count = await one("SELECT count(*)::int AS n FROM favorite_dishes WHERE household_id = $1", [req.params.id]);
-    const n = count ? count.n : 0;
-    if (n >= FAVORITES_MAX) return res.status(400).json({ error: `お気に入りは${FAVORITES_MAX}件までです。不要なものを削除してください。` });
-    if (n >= FREE_FAVORITES_LIMIT && !(await hasAi(req.user.id))) {
-      return res.status(402).json({
-        code: "UPGRADE_REQUIRED",
-        error: `無料プランのお気に入りは${FREE_FAVORITES_LIMIT}品までです。プレミアムなら制限なく保存できます（使わないものを消して入れ替えることもできます）。`,
-        favLimit: FREE_FAVORITES_LIMIT,
-        favUsed: n,
-      });
-    }
-    const id = randomUUID();
-    const row = await one(
-      `INSERT INTO favorite_dishes (id, household_id, name, name_norm, role, dish_json, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [id, req.params.id, name, norm, role, dishJson, new Date().toISOString()]
-    );
-    res.json(favToClient(row));
+    const r = await insertFavorite(req.user.id, req.params.id, { name, norm, role, dishJson });
+    if (r.error) return res.status(r.status).json(r.error);
+    res.json(favToClient(r.row));
   } catch (err) {
     handleError(res, err);
   }
 });
+
+// お気に入りを新しく1件作る（上限の判定込み）。手で足すときと、みんなのレシピから取り込むときで共通。
+// 戻り値: { row } か { status, error }（error はそのままレスポンスに返す形）
+async function insertFavorite(userId, householdId, { name, norm, role, dishJson, sourcePublicId = null }) {
+  const count = await one("SELECT count(*)::int AS n FROM favorite_dishes WHERE household_id = $1", [householdId]);
+  const n = count ? count.n : 0;
+  if (n >= FAVORITES_MAX) return { status: 400, error: { error: `お気に入りは${FAVORITES_MAX}件までです。不要なものを削除してください。` } };
+  if (n >= FREE_FAVORITES_LIMIT && !(await hasAi(userId))) {
+    return { status: 402, error: {
+      code: "UPGRADE_REQUIRED",
+      error: `無料プランのお気に入りは${FREE_FAVORITES_LIMIT}品までです。プレミアムなら制限なく保存できます（使わないものを消して入れ替えることもできます）。`,
+      favLimit: FREE_FAVORITES_LIMIT,
+      favUsed: n,
+    } };
+  }
+  const row = await one(
+    `INSERT INTO favorite_dishes (id, household_id, name, name_norm, role, dish_json, created_at, source_public_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [randomUUID(), householdId, name, norm, role, dishJson, new Date().toISOString(), sourcePublicId]
+  );
+  return { row };
+}
 
 // 材料が栄養計算に乗るかを調べる。編集しているその場で「この行は入りません」を出すため。
 app.post("/api/nutrition/check", auth, (req, res) => {
@@ -1857,6 +1888,7 @@ app.post("/api/households/:id/favorites/:favId/ingredients", auth, aiLimiter, re
       [JSON.stringify(dish), dish.role, row.id]
     );
     if (!req.aiPaid) await incAiUsage(req.user.id, 1, "edit");
+    await refreshPublication(updated);
     res.json(favToClient(updated));
   } catch (err) {
     handleError(res, err);
@@ -1955,7 +1987,8 @@ app.patch("/api/households/:id/favorites/:favId", auth, async (req, res) => {
       `UPDATE favorite_dishes SET ${sets.join(", ")} WHERE id = $${sets.length + 1} RETURNING *`,
       [...vals, req.params.favId]
     );
-    res.json(favToClient(updated));
+    const unpublished = await refreshPublication(updated); // 公開中なら、公開側の写しも新しくする
+    res.json({ ...favToClient(updated), ...(unpublished ? { unpublished } : {}) });
   } catch (err) {
     handleError(res, err);
   }
@@ -1967,6 +2000,234 @@ app.delete("/api/households/:id/favorites/:favId", auth, async (req, res) => {
     await q("DELETE FROM favorite_dishes WHERE id = $1 AND household_id = $2", [
       req.params.favId, req.params.id,
     ]);
+    // 公開していたら一覧から下げる（取り込んだ人の手元の写しは残る）
+    await q("DELETE FROM public_recipes WHERE fav_id = $1 AND household_id = $2", [req.params.favId, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// ---------- みんなのレシピ（お気に入りの公開・取り込み） ----------
+// 公開できるのは材料のあるお気に入りだけ。取り込むと相手のお気に入りに「写し」ができ、
+// あとは既存の仕組み（献立への混ぜ込み・ピン留め）にそのまま乗る。
+// 健康まわりの信頼は運営側で担保する: 投稿に効能はうたわせず、塩分は栄養計算から自動で出す。
+const PUBLIC_NAME_MAX = 20;
+const REPORT_HIDE_AT = 3; // 通報がこの件数たまったら自動で一覧から下げる
+const SALT_LOW_PER_PERSON = 1.5; // 1人分の食塩相当量がこれ以下なら「塩分ひかえめ」
+
+// 効能・治療をうたう表現（薬機法・健康増進法・景品表示法に触れやすい）と、外部への誘導。
+// 「効果」単体は「時短効果」などでも使うので入れない。
+const CLAIM_RE = /(治る|治す|治療|完治|効く|効きます|効能|予防|改善|下がる|下げる|痩せる|やせる|デトックス|免疫力|サラサラ|抗がん|がんに|ガンに|薬いらず|病気が|医者いらず)/;
+const LINK_RE = /(https?:\/\/|www\.)/i;
+function findBadText(texts) {
+  for (const t of texts) {
+    const s = String(t || "");
+    const m = s.match(CLAIM_RE);
+    if (m) return `「${m[1]}」のような効果・効能をうたう言葉は、公開レシピには書けません。`;
+    if (LINK_RE.test(s)) return "公開レシピにURLは書けません。";
+  }
+  return null;
+}
+const dishTexts = (name, d) => [name, d?.name, d?.description, ...(d?.steps || []), ...(d?.ingredients || []).map((i) => `${i?.name || ""} ${i?.amount || ""}`)];
+
+// 公開に載せる中身を作る。だめなら { error } を返す。
+function buildPublication(favRow) {
+  let dish = null;
+  try { dish = favRow.dish_json ? JSON.parse(favRow.dish_json) : null; } catch {}
+  if (!dish || !(dish.ingredients || []).length) return { error: "材料が登録されているお気に入りだけ公開できます。" };
+  const bad = findBadText(dishTexts(favRow.name, dish));
+  if (bad) return { error: bad };
+  // 塩分（1人分）。成分表に無い材料が混じると少なく出てしまうので、そのときは出さない。
+  let salt = null;
+  const tags = [];
+  try {
+    const n = dishNutrition(dish, dish.people || 2);
+    if (n.known > 0 && n.unknown === 0) {
+      salt = n.salt;
+      if (salt <= SALT_LOW_PER_PERSON) tags.push("塩分ひかえめ");
+    }
+  } catch {}
+  if (Number(dish.cook_minutes) > 0 && Number(dish.cook_minutes) <= 15) tags.push("15分以内");
+  // 公開に要らない内部用の印は落とす
+  const { favorite, ...clean } = dish;
+  return { dishJson: JSON.stringify({ ...clean, name: favRow.name }), salt, tags: tags.join(","), role: favRow.role || dish.role || null };
+}
+
+// 元のお気に入りが変わったとき、公開中なら写しを更新する。
+// 書き換えで効能表現などが入ったら公開を止め、その理由を返す（呼び出し側で画面に伝える）。
+async function refreshPublication(favRow) {
+  if (!favRow) return null;
+  const pub = await one("SELECT id FROM public_recipes WHERE fav_id = $1", [favRow.id]);
+  if (!pub) return null;
+  const b = buildPublication(favRow);
+  if (b.error) {
+    await q("DELETE FROM public_recipes WHERE id = $1", [pub.id]);
+    return b.error;
+  }
+  await q("UPDATE public_recipes SET name = $1, role = $2, dish_json = $3, salt = $4, tags = $5, updated_at = $6 WHERE id = $7",
+    [favRow.name, b.role, b.dishJson, b.salt, b.tags, new Date().toISOString(), pub.id]);
+  return null;
+}
+
+const publicRecipeToClient = (r, { withDish = false, householdId = null, importedIds = null } = {}) => {
+  let dish = null;
+  if (withDish) { try { dish = JSON.parse(r.dish_json); } catch {} }
+  const sup = r.badge ? supervisorOf(r.badge) : null;
+  return {
+    id: r.id, name: r.name, role: r.role || "", salt: r.salt == null ? null : Number(r.salt),
+    tags: r.tags ? r.tags.split(",").filter(Boolean) : [],
+    importCount: r.import_count, author: r.public_name || "名無しさん",
+    badge: sup ? { title: sup.title, name: sup.name } : null,
+    cookMinutes: (() => { try { return JSON.parse(r.dish_json).cook_minutes || null; } catch { return null; } })(),
+    mine: !!householdId && r.household_id === householdId,
+    imported: !!importedIds && importedIds.has(r.id),
+    createdAt: r.created_at,
+    ...(withDish ? { dish } : {}),
+  };
+};
+
+// 公開する（初回は公開名が必要）
+app.post("/api/households/:id/favorites/:favId/publish", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    const fav = await one("SELECT * FROM favorite_dishes WHERE id = $1 AND household_id = $2", [req.params.favId, req.params.id]);
+    if (!fav) return res.status(404).json({ error: "見つかりません。" });
+    if (fav.source_public_id) return res.status(400).json({ error: "みんなのレシピから取り込んだレシピは公開できません。" });
+    // 公開名。表示名やグループ名を使わないのは、実名やメールアドレス由来の名前が外に出ないようにするため
+    let publicName = req.user.public_name || "";
+    if (typeof req.body?.publicName === "string") {
+      const pn = req.body.publicName.trim().slice(0, PUBLIC_NAME_MAX);
+      if (!pn) return res.status(400).json({ error: "公開名を入力してください。" });
+      const bad = findBadText([pn]);
+      if (bad) return res.status(400).json({ error: "その公開名は使えません。" });
+      publicName = pn;
+      await q("UPDATE users SET public_name = $1 WHERE id = $2", [pn, req.user.id]);
+    }
+    if (!publicName) return res.status(400).json({ code: "PUBLIC_NAME_REQUIRED", error: "公開名（ニックネーム）を決めてください。" });
+    const b = buildPublication(fav);
+    if (b.error) return res.status(400).json({ error: b.error });
+    const now = new Date().toISOString();
+    // 通報で止まっているものは、出し直しても止めたままにする（運営が確認してから戻す）
+    const row = await one(
+      `INSERT INTO public_recipes (id, fav_id, household_id, user_id, name, role, dish_json, salt, tags, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+       ON CONFLICT (fav_id) DO UPDATE SET name = $5, role = $6, dish_json = $7, salt = $8, tags = $9, updated_at = $10
+       RETURNING *`,
+      [randomUUID(), fav.id, req.params.id, req.user.id, fav.name, b.role, b.dishJson, b.salt, b.tags, now]
+    );
+    res.json({ id: row.id, importCount: row.import_count, status: row.status, publicName });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 公開をやめる（取り込んだ人の手元の写しは残る）
+app.delete("/api/households/:id/favorites/:favId/publish", auth, async (req, res) => {
+  try {
+    if (!(await requireMember(req, res, req.params.id))) return;
+    await q("DELETE FROM public_recipes WHERE fav_id = $1 AND household_id = $2", [req.params.favId, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 一覧。householdId を付けると「自分の」「取り込み済み」の印が付く。
+app.get("/api/public-recipes", auth, async (req, res) => {
+  try {
+    const role = ["主菜", "副菜", "汁物"].includes(req.query.role) ? req.query.role : null;
+    const tag = typeof req.query.tag === "string" ? req.query.tag.slice(0, 20) : "";
+    const qText = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 30) : "";
+    const sort = req.query.sort === "popular" ? "popular" : "new";
+    const offset = Math.max(0, Math.min(1000, Number(req.query.offset) || 0));
+    const LIMIT = 30;
+    const where = ["p.status = 'public'"], vals = [];
+    if (role) { vals.push(role); where.push(`p.role = $${vals.length}`); }
+    if (tag) { vals.push(`%${tag}%`); where.push(`p.tags LIKE $${vals.length}`); }
+    if (qText) { vals.push(`%${qText}%`); where.push(`p.name ILIKE $${vals.length}`); }
+    const order = sort === "popular" ? "p.import_count DESC, p.created_at DESC" : "p.created_at DESC";
+    vals.push(LIMIT + 1, offset);
+    const rows = await all(
+      `SELECT p.*, u.public_name FROM public_recipes p LEFT JOIN users u ON u.id = p.user_id
+       WHERE ${where.join(" AND ")} ORDER BY ${order} LIMIT $${vals.length - 1} OFFSET $${vals.length}`, vals);
+    let householdId = null, importedIds = null;
+    const hh = String(req.query.householdId || "");
+    if (hh && (await one("SELECT 1 FROM memberships WHERE household_id = $1 AND user_id = $2", [hh, req.user.id]))) {
+      householdId = hh;
+      importedIds = new Set((await all(
+        "SELECT source_public_id FROM favorite_dishes WHERE household_id = $1 AND source_public_id IS NOT NULL", [hh]
+      )).map((r) => r.source_public_id));
+    }
+    res.json({
+      recipes: rows.slice(0, LIMIT).map((r) => publicRecipeToClient(r, { householdId, importedIds })),
+      hasMore: rows.length > LIMIT,
+    });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get("/api/public-recipes/:rid", auth, async (req, res) => {
+  try {
+    const r = await one(`SELECT p.*, u.public_name FROM public_recipes p LEFT JOIN users u ON u.id = p.user_id
+      WHERE p.id = $1 AND p.status = 'public'`, [req.params.rid]);
+    if (!r) return res.status(404).json({ error: "このレシピは公開されていません。" });
+    res.json(publicRecipeToClient(r, { withDish: true }));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 取り込む＝自分のお気に入りに写しを作る（無料の上限もここで効く）
+app.post("/api/public-recipes/:rid/import", auth, async (req, res) => {
+  try {
+    const householdId = String(req.body?.householdId || "");
+    if (!(await requireMember(req, res, householdId))) return;
+    const r = await one("SELECT * FROM public_recipes WHERE id = $1 AND status = 'public'", [req.params.rid]);
+    if (!r) return res.status(404).json({ error: "このレシピは公開されていません。" });
+    if (r.household_id === householdId) return res.status(400).json({ error: "自分のグループのレシピです。" });
+    const norm = normName(r.name);
+    const same = await one("SELECT * FROM favorite_dishes WHERE household_id = $1 AND name_norm = $2", [householdId, norm]);
+    if (same) {
+      if (same.source_public_id === r.id) return res.json({ favorite: favToClient(same), already: true });
+      return res.status(409).json({ error: `同じ名前のお気に入り「${same.name}」がすでにあります。` });
+    }
+    const ins = await insertFavorite(req.user.id, householdId, {
+      name: r.name, norm, role: r.role, dishJson: r.dish_json, sourcePublicId: r.id,
+    });
+    if (ins.error) return res.status(ins.status).json(ins.error);
+    const upd = await one("UPDATE public_recipes SET import_count = import_count + 1 WHERE id = $1 RETURNING import_count", [r.id]);
+    // 公開した人に「役に立った」を届ける（同じレシピは1日1回まで）
+    const today = new Date().toISOString().slice(0, 10);
+    if (await markSentOnce(r.user_id, "recipe_imported", `${today}|${r.id}`)) {
+      pushToUser(r.user_id, "member_update", {
+        title: "めにゅらく！",
+        body: `あなたの「${r.name}」が、ほかの家庭の献立に入りました🎉（これまで${upd?.import_count || 1}家庭）`,
+        url: "/",
+        tag: "recipe-imported-" + r.id,
+      }).catch(() => {});
+    }
+    res.json({ favorite: favToClient(ins.row) });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// 通報。同じ人は1回まで。たまったら自動で一覧から下げ、運営が管理画面で確認する。
+app.post("/api/public-recipes/:rid/report", auth, async (req, res) => {
+  try {
+    const r = await one("SELECT id, user_id FROM public_recipes WHERE id = $1", [req.params.rid]);
+    if (!r) return res.status(404).json({ error: "見つかりません。" });
+    if (r.user_id === req.user.id) return res.status(400).json({ error: "自分のレシピは通報できません。" });
+    const reason = String(req.body?.reason || "").slice(0, 200);
+    const ins = await q("INSERT INTO recipe_reports (recipe_id, user_id, reason, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+      [r.id, req.user.id, reason, new Date().toISOString()]);
+    if (ins.rowCount > 0) {
+      const u = await one("UPDATE public_recipes SET report_count = report_count + 1 WHERE id = $1 RETURNING report_count", [r.id]);
+      if (u && u.report_count >= REPORT_HIDE_AT) await q("UPDATE public_recipes SET status = 'hidden' WHERE id = $1", [r.id]);
+      console.log(`レシピ通報: recipe=${r.id} 件数=${u?.report_count}`);
+    }
     res.json({ ok: true });
   } catch (err) {
     handleError(res, err);
@@ -3192,10 +3453,48 @@ const addWeeks = (ws, n) => {
   return d.toISOString().slice(0, 10);
 };
 
+// 管理: 通報されたレシピ・止まっているレシピの確認と、表示/非表示・チェック済みバッジの切り替え
+app.get("/api/admin/public-recipes", auth, async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    const rows = await all(
+      `SELECT p.*, u.public_name,
+         (SELECT string_agg(r.reason, ' / ') FROM recipe_reports r WHERE r.recipe_id = p.id) AS reasons
+       FROM public_recipes p LEFT JOIN users u ON u.id = p.user_id
+       ORDER BY (p.status = 'hidden') DESC, p.report_count DESC, p.created_at DESC LIMIT 100`);
+    res.json(rows.map((r) => ({ ...publicRecipeToClient(r, { withDish: true }), status: r.status,
+      reportCount: r.report_count, reasons: r.reasons || "", badgeKey: r.badge || "" })));
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+app.post("/api/admin/public-recipes/:rid", auth, async (req, res) => {
+  try {
+    if (!(await requireAdmin(req, res))) return;
+    if (["public", "hidden"].includes(req.body?.status)) {
+      // 表示に戻すときは通報の件数も戻す（また3件で自動的に止まるように）
+      if (req.body.status === "public") {
+        await q("DELETE FROM recipe_reports WHERE recipe_id = $1", [req.params.rid]);
+        await q("UPDATE public_recipes SET status = 'public', report_count = 0 WHERE id = $1", [req.params.rid]);
+      } else {
+        await q("UPDATE public_recipes SET status = 'hidden' WHERE id = $1", [req.params.rid]);
+      }
+    }
+    if (typeof req.body?.badge === "string") {
+      // 監修者が実際に中身を見たものだけに付ける（supervisors.js にあるキーのみ）
+      const key = req.body.badge && supervisorOf(req.body.badge) ? req.body.badge : null;
+      await q("UPDATE public_recipes SET badge = $1 WHERE id = $2", [key, req.params.rid]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
 app.get("/api/admin/stats", auth, async (req, res) => {
   try {
     if (!(await requireAdmin(req, res))) return;
-    const [users, members, plans, shops, favs, fridge, ents, usage, visits] = await Promise.all([
+    const [users, members, plans, shops, favs, fridge, ents, usage, visits, pubs, imports] = await Promise.all([
       all("SELECT id, username, display_name, created_at, signup_ref FROM users ORDER BY created_at"),
       all("SELECT household_id, user_id FROM memberships"),
       all("SELECT household_id, created_at FROM meal_plans"),
@@ -3205,6 +3504,8 @@ app.get("/api/admin/stats", auth, async (req, res) => {
       all("SELECT user_id, status, current_period_end FROM entitlements"),
       all("SELECT user_id, count, edit_count FROM ai_usage WHERE ym = $1", [currentYM()]),
       all("SELECT ref, SUM(count)::int AS visits, MIN(day) AS since FROM ref_visits GROUP BY ref"),
+      all("SELECT household_id, import_count, status FROM public_recipes"),
+      all("SELECT household_id FROM favorite_dishes WHERE source_public_id IS NOT NULL"),
     ]);
 
     // 自分（と同じグループのメンバー）を除外して、身内の利用で数字が膨らまないようにする
@@ -3334,6 +3635,12 @@ app.get("/api/admin/stats", auth, async (req, res) => {
         subscribers: funnel.find((f) => f.key === "paid").count,
         aiMealsThisMonth: usageOk.reduce((s, r) => s + (r.count || 0), 0),
         aiEditsThisMonth: usageOk.reduce((s, r) => s + (r.edit_count || 0), 0),
+        // みんなのレシピ: 公開したグループ数・公開中の件数・取り込んだグループ数・取り込みの延べ件数
+        publishers: new Set(pubs.filter((p) => hhOk(p.household_id)).map((p) => p.household_id)).size,
+        publicRecipes: pubs.filter((p) => p.status === "public" && hhOk(p.household_id)).length,
+        hiddenRecipes: pubs.filter((p) => p.status === "hidden").length,
+        importers: new Set(imports.filter((i) => hhOk(i.household_id)).map((i) => i.household_id)).size,
+        imports: imports.filter((i) => hhOk(i.household_id)).length,
       },
       funnel,
       refs,
