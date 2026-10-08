@@ -8,6 +8,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { supervisorOf } from "./supervisors.js";
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(DIR, "content/columns");
@@ -128,12 +129,16 @@ export function readColumns() {
     const slug = meta.slug || f.replace(/\.md$/, "");
     for (const k of ["title", "summary", "author", "date"]) if (!meta[k]) problems.push(`${f}: ${k} がありません`);
     if (meta.draft === "true") continue; // 下書きは出さない
+    // 監修者は supervisors.js のキーで書く（名前を直接書かせないのは、表記ゆれと仮名の差し替え漏れを防ぐため）
+    const sup = meta.supervisor ? supervisorOf(meta.supervisor) : null;
+    if (meta.supervisor && !sup) problems.push(`${f}: supervisor「${meta.supervisor}」は supervisors.js にありません`);
     columns.push({
       slug,
       title: meta.title || slug,
       summary: meta.summary || "",
       author: meta.author || "",
       authorTitle: meta.author_title || "",
+      supervisor: sup ? { name: sup.name, title: sup.title, note: sup.note } : null,
       date: meta.date || "",
       updated: meta.updated || "",
       hero: meta.hero || "",
