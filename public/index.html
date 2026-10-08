@@ -6747,16 +6747,24 @@
     // 献立は何日分もまとめて作るので、リスト全部が終わるのを待つと通知がほぼ来ない。
     // 1日分の「買うもの」が全部チェックされた時点で、その日の分として知らせる。
     // 調味料・常備品・冷蔵庫にあるものは「買わないこともある」ので数に入れない（入れると永遠に終わらない）。
-    // 「買うもの」に数える品か（調味料・常備品・冷蔵庫にあるものは除く）。完了表示・通知・日付チップの数で共通
-    const isBuyItem = (it) => !isSeasoning(it) && !isPantry(it) && !isFridge(it);
+    // 日付ごとの「買うもの」の数とチェック済みの数。
+    // 画面の「買うもの」と同じく、まず同じ食材を1行にまとめてから（buildAgg）行ごとに仕分ける。
+    // 品目ごとに仕分けると、たとえば「しょうが」が日付つきの野菜と調味料枠の両方にあるとき、
+    // 画面では調味料の行に入って「完了」になるのに、通知では未チェックの買うものとして残り、
+    // 通知が飛ばなかった。
     function shopDateStats() {
+      const list = getList();
+      const byId = new Map(list.map((it) => [it.id, it]));
       const stats = new Map(); // date -> { total, checked }
-      for (const it of getList()) {
-        if (!it.date || it.date === "__season__") continue;
-        if (!isBuyItem(it)) continue;
-        const s = stats.get(it.date) || { total: 0, checked: 0 };
-        s.total++; if (it.checked) s.checked++;
-        stats.set(it.date, s);
+      for (const r of buildAgg(list)) {
+        if (r.isSeason || isFridge(r) || isPantry(r)) continue; // 調味料・冷蔵庫・常備品は数えない
+        for (const id of r.ids) {
+          const it = byId.get(id);
+          if (!it || !it.date || it.date === "__season__") continue;
+          const s = stats.get(it.date) || { total: 0, checked: 0 };
+          s.total++; if (it.checked) s.checked++;
+          stats.set(it.date, s);
+        }
       }
       return stats;
     }
@@ -6980,7 +6988,7 @@
     function shopDayCount(date) {
       const l = readJSON(listKeyFor(weekStart(date)), null);
       if (!Array.isArray(l)) return null; // まだ作られていない週は数を出さない
-      return l.filter((it) => it.date === date && !it.checked && isBuyItem(it)).length;
+      return l.filter((it) => it.date === date && !it.checked && !isSeasoning(it) && !isPantry(it) && !isFridge(it)).length;
     }
 
     function renderShopping(focusAdd) {
