@@ -2189,14 +2189,18 @@ app.post("/api/households/:id/shopping/done", auth, async (req, res) => {
     const count = Math.max(0, Math.min(999, Number(req.body?.count) || 0));
     // 同じ範囲で何度も飛ばさないよう、1日1回にする
     const key = `${new Date().toISOString().slice(0, 10)}|${req.params.id}|${label}`;
-    if (!(await markSentOnce(req.user.id, "shopping_done", key))) return res.json({ ok: true, sent: false });
-    await pushToHouseholdOthers(req.params.id, req.user.id, "shopping_done", {
+    if (!(await markSentOnce(req.user.id, "shopping_done", key))) {
+      console.log(`買い物完了通知: 今日は送信済みのためスキップ household=${req.params.id} label=${label}`);
+      return res.json({ ok: true, sent: false });
+    }
+    const n = await pushToHouseholdOthers(req.params.id, req.user.id, "shopping_done", {
       title: "めにゅらく！",
       body: `${displayNameOf(req.user)}さんが${label && label !== "all" ? `${label}の` : ""}買い物を終えました🛒${count ? `（${count}品）` : ""}`,
       url: "/",
       tag: `shopdone-${req.params.id}-${label}`, // 日ごとに別の通知として並ぶように
-    }).catch(() => {});
-    res.json({ ok: true, sent: true });
+    }).catch((e) => { console.error("買い物完了通知の送信エラー:", e?.message || e); return 0; });
+    console.log(`買い物完了通知: household=${req.params.id} label=${label} 届いた端末=${n}`);
+    res.json({ ok: true, sent: true, devices: n });
   } catch (err) {
     handleError(res, err);
   }
@@ -2229,11 +2233,13 @@ async function getNotifPrefs(userId) {
 }
 
 // 1ユーザーの全端末へ送信（kind の設定がOFFなら送らない）。無効な購読は掃除する。
-async function pushToUser(userId, kind, payload) {
+// stats を渡すと、端末数・失効して消した数・その他の失敗数を書き込む（テスト送信の診断用）。
+async function pushToUser(userId, kind, payload, stats = null) {
   if (!pushEnabled()) return 0;
   const pref = await getNotifPrefs(userId);
   if (kind && pref[kind] === false) return 0;
   const subs = await all("SELECT * FROM push_subscriptions WHERE user_id = $1", [userId]);
+  if (stats) Object.assign(stats, { devices: subs.length, expired: 0, failed: 0, lastError: "" });
   let sent = 0;
   for (const s of subs) {
     try {
@@ -2245,9 +2251,12 @@ async function pushToUser(userId, kind, payload) {
     } catch (e) {
       // 端末が購読解除/失効（404/410）なら購読を削除
       if (e && (e.statusCode === 404 || e.statusCode === 410)) {
+        console.warn(`push購読が失効したので削除: user=${userId} status=${e.statusCode}`);
         await q("DELETE FROM push_subscriptions WHERE endpoint = $1", [s.endpoint]).catch(() => {});
+        if (stats) stats.expired++;
       } else {
-        console.error("push送信エラー:", (e && e.message) || e);
+        console.error("push送信エラー:", e?.statusCode || "", (e && e.body) || (e && e.message) || e);
+        if (stats) { stats.failed++; stats.lastError = String(e?.statusCode || e?.message || "unknown"); }
       }
     }
   }
@@ -2255,12 +2264,15 @@ async function pushToUser(userId, kind, payload) {
 }
 
 // 世帯の「本人以外」のメンバーへ送信。
+// 戻り値は届いた端末の合計数（ログ用）。
 async function pushToHouseholdOthers(householdId, excludeUserId, kind, payload) {
   const members = await all("SELECT user_id FROM memberships WHERE household_id = $1", [householdId]);
+  let sent = 0;
   for (const m of members) {
     if (m.user_id === excludeUserId) continue;
-    await pushToUser(m.user_id, kind, payload);
+    sent += await pushToUser(m.user_id, kind, payload);
   }
+  return sent;
 }
 
 // 献立の作成を世帯の他メンバーへ通知（fire-and-forget で呼ぶ）
@@ -2341,12 +2353,13 @@ app.post("/api/push/prefs", auth, async (req, res) => {
 // テスト通知（設定画面の「テスト送信」用。kind無し＝設定に関わらず必ず届く）
 app.post("/api/push/test", auth, async (req, res) => {
   try {
+    const stats = {};
     const n = await pushToUser(req.user.id, null, {
       title: "めにゅらく！",
       body: "通知のテストです。これが届けば設定完了です🎉",
       url: "/",
-    });
-    res.json({ ok: true, sent: n });
+    }, stats);
+    res.json({ ok: true, sent: n, ...stats });
   } catch (err) {
     handleError(res, err);
   }
