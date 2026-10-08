@@ -1329,6 +1329,15 @@
       .alldone, .alldone .ic { animation: none; }
     }
 
+    /* お気に入りの無料枠（7/10品） */
+    .fav-quota { margin: 4px 0 12px; padding: 10px 12px; border-radius: 14px; background: #faf6f1; }
+    .fq-bar { height: 6px; border-radius: 999px; background: #efe5da; overflow: hidden; }
+    .fq-bar i { display: block; height: 100%; border-radius: inherit; background: var(--orange); transition: width .3s ease; }
+    .fq-tx { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-top: 7px; font-size: .78rem; color: var(--muted); }
+    .fq-tx b { color: var(--ink); font-size: .85rem; }
+    .fav-quota.full { background: var(--orange-soft); }
+    .fq-up { border: none; background: none; padding: 0; font: inherit; font-weight: 800; color: var(--orange-dark);
+      text-decoration: underline; cursor: pointer; }
     /* ---- コラム（薬剤師が書く読み物。監修者は記事ごとに表示） ---- */
     .col-card { display: flex; gap: 12px; background: var(--card); border-radius: 16px; padding: 14px 16px;
       box-shadow: var(--shadow); margin-bottom: 10px; cursor: pointer; align-items: flex-start; }
@@ -1716,7 +1725,7 @@
                     <li><b>ふたりで共有</b><span class="d">招待リンクを送るだけ。人数ぶんの料金はなし</span></li>
                     <li>冷蔵庫・作り置きの記録</li>
                     <li>カロリー・塩分の表示</li>
-                    <li>お気に入り登録／コラム</li>
+                    <li>お気に入り登録（10品まで）／コラム</li>
                     <li><b>AIで作る</b>のは毎月20食分＋修正10回まで</li>
                   </ul>
                 </div>
@@ -1732,6 +1741,7 @@
                       <li><b>自由な要望が反映できる</b><span class="d">「子どもが食べやすい」「作り置きしたい」など、文章で指定</span></li>
                       <li><b>冷蔵庫の使い切り献立</b><span class="d">残っている食材から、それを活かした一皿に</span></li>
                       <li><b>1品だけ作り直せる</b><span class="d">気に入らない副菜だけ、その場で変更</span></li>
+                      <li><b>お気に入りが無制限</b><span class="d">気に入った料理をいくつでも保存して、献立に入れられます</span></li>
                     </ul>
                   </div>
                 </div>
@@ -2186,6 +2196,7 @@
           <button class="copybtn" onclick="addFavoriteManual()">追加</button>
         </div>
         <p class="hint" id="favHint"></p>
+        <div class="fav-quota" id="favQuota" style="display:none"></div>
 
         <!-- 何のための一覧なのかを最初に書く。記号だけ置くと意味が伝わらない。 -->
         <div class="fav-lead" id="favLead">
@@ -3056,6 +3067,7 @@
         `<ul class="pw-list">` +
         `<li>✨ AI献立の作成・作り直し・1品差し替えが<b>使い放題</b></li>` +
         `<li>🗓️ 期間をまとめて指定して自動作成</li>` +
+        `<li>⭐ お気に入りレシピを<b>制限なく</b>保存</li>` +
         `<li>🛒 手動入力・買い物リストは無料のまま</li>` +
         `</ul>` +
         `<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">` +
@@ -3408,7 +3420,7 @@
         }
         await loadFavorites();
         renderRecipe();
-      } catch (e) { alert(e.message); }
+      } catch (e) { if (!e.upgrade) alert(e.message); } // 上限はペイウォールが出る
     }
 
     function showFavoritesView() {
@@ -3417,11 +3429,28 @@
       $("favHint").textContent = "";
       $("favList").innerHTML = '<p class="empty">読み込み中…</p>';
       showView("favorites", "お気に入り", { back: true, tab: "soon" });
-      loadFavorites().then(renderFavorites);
+      Promise.all([loadFavorites(), billingStatus ? null : loadBillingStatus()]).then(renderFavorites);
+    }
+    // 無料プランの残り（「7/10品」）。上限が無い人には出さない
+    function renderFavQuota() {
+      const el = $("favQuota");
+      if (!el) return;
+      const lim = billingStatus?.favLimit;
+      if (!lim) { el.style.display = "none"; return; }
+      const n = favorites.length;
+      const full = n >= lim;
+      el.className = "fav-quota" + (full ? " full" : "");
+      el.innerHTML = `<div class="fq-bar"><i style="width:${Math.min(100, Math.round((n / lim) * 100))}%"></i></div>
+        <div class="fq-tx"><b>${n}/${lim}品</b>${full
+          ? `<span>無料プランの上限です。使わないものを消すか、<button type="button" class="fq-up">プレミアム</button>で無制限に</span>`
+          : `<span>無料プランは${lim}品まで保存できます</span>`}</div>`;
+      el.style.display = "block";
+      el.querySelector(".fq-up")?.addEventListener("click", () => showPaywall({ error: `無料プランのお気に入りは${lim}品までです。プレミアムなら制限なく保存できます。` }));
     }
     function renderFavorites() {
       const wrap = $("favList");
       if (!wrap) return;
+      renderFavQuota();
       if (!favorites.length) {
         wrap.innerHTML = '<p class="empty" style="padding:10px 0">まだ登録がありません。献立の料理の ⭐ からも保存できます。</p>';
         return;
@@ -3742,7 +3771,7 @@
         $("favNameInput").value = "";
         await loadFavorites(); renderFavorites();
         $("favHint").textContent = "追加しました ✓";
-      } catch (e) { $("favHint").textContent = e.message; }
+      } catch (e) { if (!e.upgrade) $("favHint").textContent = e.message; }
     }
     async function deleteFavorite(id) {
       const f = favorites.find((x) => x.id === id);
