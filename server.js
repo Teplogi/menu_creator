@@ -86,6 +86,10 @@ const STRIPE_PRICE_ID = process.env.STRIPE_PRICE_ID || null;
 const FREE_AI_MEALS_PER_MONTH = Number(process.env.FREE_AI_MEALS_PER_MONTH) || 20;
 // AI修正（作り直し・1品差し替え）の無料枠は献立生成とは別枠にする（修正も体験してもらうため）
 const FREE_AI_EDITS_PER_MONTH = Number(process.env.FREE_AI_EDITS_PER_MONTH) || 10;
+// 無料プランで保存できるお気に入りの数（グループ単位。プレミアムは FAVORITES_MAX まで）。
+// 超えている人の既存分は消さず、追加だけ止める。
+const FREE_FAVORITES_LIMIT = Number(process.env.FREE_FAVORITES_LIMIT) || 10;
+const FAVORITES_MAX = 100; // プレミアムでも、一覧が重くならないようにここで止める
 // テスト期間モード。テスターに目玉機能（毎週おまかせ作成・栄養コメント）まで
 // 触ってもらうため、課金導線を止めて全機能を開放する。
 // Stripeがテストキーのままだと、決済画面に飛ばしてしまい不信を招くので、
@@ -1762,7 +1766,16 @@ app.post("/api/households/:id/favorites", auth, async (req, res) => {
       return res.json(favToClient(updated));
     }
     const count = await one("SELECT count(*)::int AS n FROM favorite_dishes WHERE household_id = $1", [req.params.id]);
-    if (count && count.n >= 100) return res.status(400).json({ error: "お気に入りは100件までです。不要なものを削除してください。" });
+    const n = count ? count.n : 0;
+    if (n >= FAVORITES_MAX) return res.status(400).json({ error: `お気に入りは${FAVORITES_MAX}件までです。不要なものを削除してください。` });
+    if (n >= FREE_FAVORITES_LIMIT && !(await hasAi(req.user.id))) {
+      return res.status(402).json({
+        code: "UPGRADE_REQUIRED",
+        error: `無料プランのお気に入りは${FREE_FAVORITES_LIMIT}品までです。プレミアムなら制限なく保存できます（使わないものを消して入れ替えることもできます）。`,
+        favLimit: FREE_FAVORITES_LIMIT,
+        favUsed: n,
+      });
+    }
     const id = randomUUID();
     const row = await one(
       `INSERT INTO favorite_dishes (id, household_id, name, name_norm, role, dish_json, created_at)
@@ -3376,6 +3389,8 @@ app.get("/api/billing/status", auth, async (req, res) => {
       editLimit: FREE_AI_EDITS_PER_MONTH,
       editUsed: usage.edits,
       editRemaining: Math.max(0, FREE_AI_EDITS_PER_MONTH - usage.edits),
+      // お気に入りの上限（課金が有効で未加入のときだけ効く。null=制限なし。件数はグループのお気に入り一覧で数える）
+      favLimit: billingEnabled() && !active ? FREE_FAVORITES_LIMIT : null,
     });
   } catch (err) {
     handleError(res, err);
