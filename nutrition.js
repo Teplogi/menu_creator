@@ -133,8 +133,8 @@ const roundAll = (n) => ({
   fiber: round(n.fiber), salt: round(n.salt, 2),
 });
 
-// 1品ぶんの栄養。people で割って1人分にする。
-function dishNutrition(dish, people) {
+// 1品ぶんの栄養。people で割って1人分にする（公開レシピの塩分表示でも使う）。
+export function dishNutrition(dish, people) {
   const total = ZERO();
   let known = 0, unknown = 0;
   const missing = [];

@@ -185,6 +185,8 @@
           <div class="tile"><div class="k">使ったグループ</div><div class="v">${t.activeGroups7d}</div><div class="s">直近7日（30日では ${t.activeGroups30d}）</div></div>
           <div class="tile"><div class="k">有料会員</div><div class="v">${t.subscribers}</div><div class="s">月額480円なら ${(t.subscribers * 480).toLocaleString()}円/月</div></div>
           <div class="tile"><div class="k">今月のAI作成</div><div class="v">${t.aiMealsThisMonth}<small style="font-size:.9rem">食</small></div><div class="s">AI修正 ${t.aiEditsThisMonth}回</div></div>
+          <div class="tile"><div class="k">みんなのレシピ</div><div class="v">${t.publicRecipes ?? 0}<small style="font-size:.9rem">品</small></div><div class="s">公開した ${t.publishers ?? 0}グループ${t.hiddenRecipes ? `・停止中 ${t.hiddenRecipes}品` : ""}</div></div>
+          <div class="tile"><div class="k">取り込み</div><div class="v">${t.imports ?? 0}<small style="font-size:.9rem">件</small></div><div class="s">取り込んだ ${t.importers ?? 0}グループ</div></div>
         </div>
         <section class="card">
           <h2>どこで離脱しているか</h2>
@@ -216,11 +218,44 @@
           ${cohort}
         </section>
         <section class="card">
+          <h2>みんなのレシピの確認</h2>
+          <p class="lead">通報されたもの・止まっているものが上に出ます。通報が3件で自動的に非表示になります。
+            チェック済みバッジは、監修者が実際に中身を見たレシピにだけ付けてください。</p>
+          <div id="pubAdmin"><p class="note">読み込み中…</p></div>
+        </section>
+        <section class="card">
           <h2>最近の登録者（30人まで）</h2>
           <p class="lead">人数＝いちばん大きいグループの人数。「継続」は2週目以降も献立を作った人。</p>
           ${users}
         </section>`;
       bindTips($("root"));
+      loadPubAdmin();
+    }
+
+    const authHeader = () => ({ authorization: "Bearer " + (localStorage.getItem("authToken") || ""), "content-type": "application/json" });
+    async function loadPubAdmin() {
+      const box = $("pubAdmin");
+      if (!box) return;
+      const r = await fetch("/api/admin/public-recipes", { headers: authHeader() });
+      const list = await r.json().catch(() => []);
+      if (!r.ok || !Array.isArray(list)) { box.innerHTML = `<p class="note">読み込めませんでした。</p>`; return; }
+      if (!list.length) { box.innerHTML = `<p class="note">まだ公開されたレシピはありません。</p>`; return; }
+      box.innerHTML = `<div class="tbl-wrap"><table class="users"><thead><tr><th>レシピ</th><th class="num">取込</th><th class="num">通報</th><th>状態</th><th>バッジ</th></tr></thead><tbody>
+        ${list.map((p) => `<tr>
+          <td class="nm">${esc(p.name)}<br><span class="note">${esc(p.author)}${p.reasons ? `｜通報: ${esc(p.reasons)}` : ""}</span>
+            <details><summary class="note">中身を見る</summary><p class="note">${esc((p.dish?.ingredients || []).map((i) => `${i.name} ${i.amount || ""}`).join("、"))}</p>
+            <p class="note">${esc((p.dish?.steps || []).join(" / "))}</p></details></td>
+          <td class="num">${p.importCount}</td><td class="num">${p.reportCount}</td>
+          <td><button data-id="${esc(p.id)}" data-status="${p.status === "public" ? "hidden" : "public"}">${p.status === "public" ? "表示中→止める" : "停止中→戻す"}</button></td>
+          <td><select data-id="${esc(p.id)}" class="badge-sel">
+            <option value="" ${!p.badgeKey ? "selected" : ""}>なし</option>
+            <option value="dietitian" ${p.badgeKey === "dietitian" ? "selected" : ""}>管理栄養士チェック済み</option>
+            <option value="pharmacist" ${p.badgeKey === "pharmacist" ? "selected" : ""}>薬剤師チェック済み</option>
+          </select></td></tr>`).join("")}
+      </tbody></table></div>`;
+      const post = (id, body) => fetch(`/api/admin/public-recipes/${encodeURIComponent(id)}`, { method: "POST", headers: authHeader(), body: JSON.stringify(body) }).then(loadPubAdmin);
+      box.querySelectorAll("button[data-status]").forEach((b) => b.addEventListener("click", () => post(b.dataset.id, { status: b.dataset.status })));
+      box.querySelectorAll(".badge-sel").forEach((s) => s.addEventListener("change", () => post(s.dataset.id, { badge: s.value })));
     }
 
     async function load() {
