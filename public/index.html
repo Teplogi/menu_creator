@@ -1329,7 +1329,6 @@
       .alldone, .alldone .ic { animation: none; }
     }
 
-    /* ---- コラム（薬剤師・管理栄養士監修の読み物） ---- */
     /* お気に入りの無料枠（7/10品） */
     .fav-quota { margin: 4px 0 12px; padding: 10px 12px; border-radius: 14px; background: #faf6f1; }
     .fq-bar { height: 6px; border-radius: 999px; background: #efe5da; overflow: hidden; }
@@ -1339,6 +1338,7 @@
     .fav-quota.full { background: var(--orange-soft); }
     .fq-up { border: none; background: none; padding: 0; font: inherit; font-weight: 800; color: var(--orange-dark);
       text-decoration: underline; cursor: pointer; }
+    /* ---- コラム（薬剤師が書く読み物。監修者は記事ごとに表示） ---- */
     .col-card { display: flex; gap: 12px; background: var(--card); border-radius: 16px; padding: 14px 16px;
       box-shadow: var(--shadow); margin-bottom: 10px; cursor: pointer; align-items: flex-start; }
     .col-card .thumb { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex: none; background: var(--orange-soft); }
@@ -3374,7 +3374,7 @@
           <div class="soon-tx"><div class="soon-nm">カロリー・栄養計算</div><div class="soon-ds">1日ぶんのカロリーとPFCバランスを自動で表示</div></div>
           <span class="soon-go">›</span></div>` +
         `<div class="soon-card live" id="colOpenCard"><img class="soon-ic" src="/img/ic-book.png" alt="">
-          <div class="soon-tx"><div class="soon-nm">コラム</div><div class="soon-ds">食べ物とお薬・栄養のはなし。薬剤師・管理栄養士が書いています</div></div>
+          <div class="soon-tx"><div class="soon-nm">コラム</div><div class="soon-ds">食べ物とお薬・栄養のはなし。薬剤師が書いています</div></div>
           <span class="soon-go">›</span></div>` +
         // 設定の奥にあると気づかれないので、ここからも開けるようにする
         `<div class="soon-card live" id="autoOpenCard"><img class="soon-ic" src="/img/ic-calendar.png" alt="">
@@ -3933,7 +3933,7 @@
       wireAdviceColumns("nutriBody", () => showNutritionView(back, range));
     }
 
-    // ---------- コラム（薬剤師・管理栄養士監修の読み物） ----------
+    // ---------- コラム（薬剤師が書く読み物。監修者がいる記事だけ「監修」を出す） ----------
     // 記事は content/columns/*.md。サーバが起動時に読み込んで /api/columns で配る。
     let columnsData = null;
     async function loadColumns() {
@@ -3944,6 +3944,8 @@
     }
     const columnBySlug = (slug) => (columnsData?.columns || []).find((c) => c.slug === slug);
     const byline = (c) => [c.authorTitle, c.author].filter(Boolean).join("　") + (c.date ? `　${c.date.replace(/-/g, "/")}` : "");
+    // 監修者（実名を出さない人はペンネーム＋資格）。記事に supervisor があるときだけ出す
+    const supLabel = (c) => (c.supervisor ? `監修：${[c.supervisor.title, c.supervisor.name].filter(Boolean).join(" ")}` : "");
 
     async function showColumnsView(back) {
       backHandler = back || goHome;
@@ -3952,11 +3954,11 @@
       const d = await loadColumns();
       if (!d.columns.length) { $("columnsBody").innerHTML = `<p class="empty">まだ記事がありません。</p>`; return; }
       $("columnsBody").innerHTML =
-        `<p class="hint" style="margin:0 0 12px">食べ物とお薬・栄養のはなし。薬剤師・管理栄養士が書いています。</p>` +
+        `<p class="hint" style="margin:0 0 12px">食べ物とお薬・栄養のはなし。薬剤師が書いています。</p>` +
         d.columns.map((c) => `<div class="col-card" data-slug="${esc(c.slug)}">
           ${c.hero ? `<img class="thumb" src="${esc(c.hero)}" alt="" loading="lazy">` : `<div class="thumb" style="display:grid;place-items:center;font-size:1.5rem">📖</div>`}
           <div class="tx"><div class="ti">${esc(c.title)}</div><div class="su">${esc(c.summary)}</div>
-            <div class="by">${esc(byline(c))}</div></div></div>`).join("");
+            <div class="by">${esc(byline(c))}${c.supervisor ? `<br>${esc(supLabel(c))}` : ""}</div></div></div>`).join("");
       $("columnsBody").querySelectorAll(".col-card").forEach((el) =>
         el.addEventListener("click", () => showColumnView(el.dataset.slug, () => showColumnsView(back))));
     }
@@ -3970,12 +3972,13 @@
       // 免責と著者名は記事ごとに書かず、ここで必ず付ける
       $("columnBody").innerHTML = `<article class="col-body">
         <h1>${esc(c.title)}</h1>
-        <p class="by">${esc(byline(c))}${c.updated ? `　（${esc(c.updated.replace(/-/g, "/"))} 更新）` : ""}</p>
+        <p class="by">${esc(byline(c))}${c.updated ? `　（${esc(c.updated.replace(/-/g, "/"))} 更新）` : ""}${c.supervisor ? `<br>${esc(supLabel(c))}` : ""}</p>
         ${c.hero ? `<img src="${esc(c.hero)}" alt="">` : ""}
         ${c.html}
         <div class="col-foot">この記事は一般的な情報をお伝えするものです。お薬の効き方や必要な量は一人ひとり違います。
           実際にどうするかは、<b>必ず主治医・薬剤師にご相談ください</b>。<br>
-          文責: <b>${esc([c.authorTitle, c.author].filter(Boolean).join(" "))}</b></div>
+          文責: <b>${esc([c.authorTitle, c.author].filter(Boolean).join(" "))}</b>
+          ${c.supervisor ? `<br>${esc(supLabel(c))}${c.supervisor.note ? `（${esc(c.supervisor.note)}）` : ""}` : ""}</div>
       </article>`;
     }
 
