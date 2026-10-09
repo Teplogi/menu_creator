@@ -4697,6 +4697,7 @@
     }
     // 買い物リストの食材が常備品に該当するか（正規化＋部分一致で表記ゆれ吸収）
     function isPantry(it) {
+      if (it.manual) return false; // 手で足したものは買う
       const n = normName(it.name);
       if (!n) return false;
       if (pantryBuySet.has(n)) return false;   // 「これは買う」で常備品から外したものは通常リストへ
@@ -6664,7 +6665,12 @@
       "豆板醤", "コチュジャン", "甜麺醤", "カレー粉", "カレールー", "はちみつ", "蜂蜜", "砂糖・塩",
       "水", "お湯", "湯", "熱湯", "ぬるま湯",
     ]);
+    // 「材料を追加」で手で足したもの。買うつもりで足しているので、調味料・常備品・冷蔵庫には振り分けず、
+    // 献立由来の同名の材料ともまとめない（まとめると1行に複数入って編集できなくなる）。
+    // 以前に足したもの（manual 印なし）は、献立由来なら必ず持っている dishes が無いことで見分ける。
+    const isManualItem = (it) => !!it.manual || (it.date !== "__season__" && !Array.isArray(it.dishes));
     function isSeasoning(it) {
+      if (it.manual) return false;
       const c = it.category || "";
       if (c.includes("調味料")) return true;
       return SEASONING_SET.has((it.name || "").replace(/\s/g, ""));
@@ -6825,6 +6831,7 @@
 
     // 買い物リストの食材が冷蔵庫にあるか（使い切りで出した食材が「買うもの」に並ぶ矛盾を防ぐ）
     function isFridge(it) {
+      if (it.manual) return false; // 手で足したものは買う
       const n = normName(it.name);
       if (!n) return false;
       const key = foodKeyOf(it.name);
@@ -7150,7 +7157,7 @@
       name = (name || "").trim();
       if (!name) return;
       const l = getList();
-      const item = { id: newId(), name, amount: (amount || "").trim(), checked: false, category: "" };
+      const item = { id: newId(), name, amount: (amount || "").trim(), checked: false, category: "", manual: true };
       if (date) item.date = date; // 「いつ買うか」を指定した場合はその日付で
       l.push(item);
       saveList(l);
@@ -7237,7 +7244,8 @@
     function buildAgg(list) {
       const map = new Map();
       for (const it of list) {
-        const key = shopKeyOf(it.name); // 書き方が割れていても同じ行にまとめる
+        // 書き方が割れていても同じ行にまとめる。手で足したものは1品ずつ（編集できるように）
+        const key = isManualItem(it) ? "manual:" + it.id : shopKeyOf(it.name);
         if (!map.has(key)) map.set(key, { names: new Map(), parts: [], dates: new Set(), dishes: new Set(), category: it.category || "", items: [] });
         const g = map.get(key);
         g.names.set(it.name, (g.names.get(it.name) || 0) + 1);
@@ -7255,7 +7263,8 @@
           name, amount, dates: [...g.dates].sort(), dishes: [...g.dishes], category: g.category,
           ids: g.items.map((x) => x.id),
           checked: g.items.length > 0 && g.items.every((x) => x.checked),
-          isSeason: g.items.some((x) => x.date === "__season__") || isSeasoning({ name, category: g.category }),
+          manual: g.items.some(isManualItem),
+          isSeason: !g.items.some(isManualItem) && (g.items.some((x) => x.date === "__season__") || isSeasoning({ name, category: g.category })),
           moved: g.items.some((x) => x.movedFrom),
         });
       }
@@ -7316,7 +7325,7 @@
     function shopDayCount(date) {
       const l = readJSON(listKeyFor(weekStart(date)), null);
       if (!Array.isArray(l)) return null; // まだ作られていない週は数を出さない
-      return l.filter((it) => it.date === date && !it.checked && !isSeasoning(it) && !isPantry(it) && !isFridge(it)).length;
+      return l.filter((it) => it.date === date && !it.checked && (isManualItem(it) || (!isSeasoning(it) && !isPantry(it) && !isFridge(it)))).length;
     }
 
     function renderShopping(focusAdd) {

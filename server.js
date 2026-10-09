@@ -2367,7 +2367,7 @@ app.post("/api/households/claim", auth, async (req, res) => {
 //
 // 同時に触られてもチェックが消えないよう、まるごと上書きはしない。
 // 品目ごとに updatedAt を持たせ、新しいほうを採用する（消したものは墓標で残す）。
-const SHOP_ITEM_KEYS = ["id", "name", "amount", "checked", "category", "date", "dishes", "movedFrom", "updatedAt"];
+const SHOP_ITEM_KEYS = ["id", "name", "amount", "checked", "category", "date", "dishes", "movedFrom", "manual", "updatedAt"];
 const shopClean = (it) => {
   const o = {};
   for (const k of SHOP_ITEM_KEYS) if (it[k] !== undefined) o[k] = it[k];
