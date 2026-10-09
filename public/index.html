@@ -7462,7 +7462,7 @@
         const ids = esc(r.ids.join(","));
         return `<div class="shopitem ${r.checked ? "done" : ""}">
           <label class="shoptap"><input type="checkbox" data-ids="${ids}" ${r.checked ? "checked" : ""}><span class="cb">${CHECK_SVG}</span>
-            <span class="txt"><span class="nm">${esc(r.name)}</span>${r.amount ? `<span class="am">${esc(r.amount)}</span>` : ""}${moved}${meta}</span></label>
+            <span class="txt"><span class="nm">${esc(r.name)}</span>${r.amount && !o.noAmount ? `<span class="am">${esc(r.amount)}</span>` : ""}${moved}${meta}</span></label>
           ${buy}${edit}<button class="del" data-ids="${ids}" data-name="${esc(r.name)}" aria-label="削除">${TRASH_SVG}</button></div>`;
       };
 
@@ -7524,7 +7524,7 @@
       if (pantry.length) accs += acc("pantry", ic('<path d="M5 8h14l-1 12H6z"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/>'),
         "常備品", "家にあるか確認", pantry.length, pantry.map((r) => row(r, { pantry: true })).join(""));
       if (seasons.length) accs += acc("season", ic('<path d="M9 3h6v3l2 3v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9l2-3z"/><path d="M7 13h10"/>'),
-        "調味料", "切らしていたら買う", seasons.length, seasons.map((r) => row(r)).join(""));
+        "調味料", "切らしていたら買う", seasons.length, seasons.map((r) => row(r, { noAmount: true })).join("")); // 調味料は分量を見て買わないので出さない
       if (bought.length) accs += acc("bought", ic('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
         "買ったもの", "チェック済み", bought.length, bought.map((r) => row(r)).join(""));
       accs += acc("add", ic('<path d="M12 5v14M5 12h14"/>'), "材料を追加", "リストにない物を足す", null, `
