@@ -6669,6 +6669,9 @@
     // 献立由来の同名の材料ともまとめない（まとめると1行に複数入って編集できなくなる）。
     // 以前に足したもの（manual 印なし）は、献立由来なら必ず持っている dishes が無いことで見分ける。
     const isManualItem = (it) => !!it.manual || (it.date !== "__season__" && !Array.isArray(it.dishes));
+    // 水・お湯は買う物ではないので、買い物リストには載せない（「水（分量外）」なども含む）
+    const WATER_NAMES = new Set(["水", "お水", "お湯", "湯", "熱湯", "ぬるま湯", "冷水", "氷水", "水分量外"]);
+    const isWaterName = (name) => WATER_NAMES.has(normName(name).replace(/[()（）]/g, ""));
     function isSeasoning(it) {
       if (it.manual) return false;
       const c = it.category || "";
@@ -6878,6 +6881,7 @@
       const seasoningExtra = [];
       for (const day of days) {
         for (const it of aggregateIngredients({ days: [day] })) {
+          if (isWaterName(it.name)) continue;
           if (isSeasoning(it)) {
             seasoningExtra.push({ name: it.name, amount: it.amountText, category: it.category, dishes: it.dishes });
           } else {
@@ -7288,6 +7292,7 @@
     function buildAgg(list) {
       const map = new Map();
       for (const it of list) {
+        if (!isManualItem(it) && isWaterName(it.name)) continue; // 作成済みのリストに残っている水も出さない（手で足した物は出す）
         // 書き方が割れていても同じ行にまとめる。手で足したものは1品ずつ（編集できるように）
         const key = isManualItem(it) ? "manual:" + it.id : shopKeyOf(it.name);
         if (!map.has(key)) map.set(key, { names: new Map(), parts: [], dates: new Set(), dishes: new Set(), category: it.category || "", items: [] });
