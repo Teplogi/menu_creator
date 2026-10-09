@@ -7153,13 +7153,57 @@
       queueShopSync([...byWeek.keys()], { reset: true }); // 世帯の他メンバーへ共有
     }
 
-    function addItem(name, amount, date) {
+    // すでにリストにある材料を足そうとしたときの選択肢（"merge" / "separate" / null=やめる）。
+    // 「合算する」は分量が入っているときだけ出す（足す量が無いと合算できないので）
+    function dupAddDialog(name, canMerge) {
+      return new Promise((resolve) => {
+        let ov = $("dupAddModal");
+        if (!ov) {
+          ov = document.createElement("div");
+          ov.id = "dupAddModal"; ov.className = "modal-overlay"; ov.style.display = "none";
+          ov.innerHTML =
+            `<div class="modal-card">` +
+            `<p id="dupAddMsg" style="font-size:.95rem;line-height:1.7;margin:.2rem 0 1rem"></p>` +
+            `<div style="display:flex;flex-direction:column;gap:10px">` +
+            `<button class="btn-primary" id="dupAddMerge">合算する</button>` +
+            `<button class="btn-ghost" id="dupAddSep">別で表示する</button>` +
+            `<button class="btn-ghost" id="dupAddCancel">キャンセル</button></div></div>`;
+          document.body.appendChild(ov);
+        }
+        $("dupAddMsg").textContent = `「${name}」はすでに買い物リストにあります。どうしますか？`;
+        $("dupAddMerge").style.display = canMerge ? "" : "none";
+        const close = (val) => { ov.style.display = "none"; resolve(val); };
+        $("dupAddMerge").onclick = () => close("merge");
+        $("dupAddSep").onclick = () => close("separate");
+        $("dupAddCancel").onclick = () => close(null);
+        ov.onclick = (e) => { if (e.target === ov) close(null); };
+        ov.style.display = "flex";
+      });
+    }
+    async function addItem(name, amount, date) {
       name = (name || "").trim();
+      amount = (amount || "").trim();
       if (!name) return;
       const l = getList();
-      const item = { id: newId(), name, amount: (amount || "").trim(), checked: false, category: "", manual: true };
-      if (date) item.date = date; // 「いつ買うか」を指定した場合はその日付で
-      l.push(item);
+      // まだ買っていない同じ材料があれば、合算するか別にするかを選んでもらう
+      const key = shopKeyOf(name);
+      const same = l.filter((x) => !x.checked && shopKeyOf(x.name) === key);
+      let mode = "separate";
+      if (same.length) {
+        mode = await dupAddDialog(same[0].name, !!amount);
+        if (!mode) return;
+      }
+      const target = mode === "merge" && same.find((x) => isManualItem(x)); // 手で足した行なら、その行の分量を増やす
+      if (target) {
+        target.amount = target.amount ? sumAmounts([target.amount, amount], target.name) : amount;
+      } else {
+        const item = { id: newId(), name, amount, checked: false, category: "" };
+        // 合算：献立由来の行と同じ1行にまとめる（dishes を持たせて「手で足したもの」扱いから外す）
+        if (mode === "merge") { item.dishes = []; item.category = same[0].category || ""; }
+        else item.manual = true;
+        if (date) item.date = date; // 「いつ買うか」を指定した場合はその日付で
+        l.push(item);
+      }
       saveList(l);
       shopOpen.add = true;
       renderShopping(true);
@@ -7325,7 +7369,9 @@
     function shopDayCount(date) {
       const l = readJSON(listKeyFor(weekStart(date)), null);
       if (!Array.isArray(l)) return null; // まだ作られていない週は数を出さない
-      return l.filter((it) => it.date === date && !it.checked && (isManualItem(it) || (!isSeasoning(it) && !isPantry(it) && !isFridge(it)))).length;
+      // 「買うもの」に出る行と同じ数え方にする（調味料の枠にまとまる物などを数えないように）
+      const rows = buildAgg(l.filter((it) => !it.checked && (it.date === date || it.date === "__season__")));
+      return rows.filter((r) => r.dates.includes(date) && !r.isSeason && !isFridge(r) && !isPantry(r)).length;
     }
 
     function renderShopping(focusAdd) {
