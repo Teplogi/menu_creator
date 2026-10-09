@@ -1297,6 +1297,10 @@
     .acc.open .acc-body { grid-template-rows: 1fr; }
     .acc-inner { min-height: 0; overflow: hidden; padding: 0 12px; opacity: 0; transition: opacity .2s ease, padding .3s ease; }
     .acc.open .acc-inner { opacity: 1; padding: 0 12px 12px; }
+    /* 閉じきった枠の中身はレイアウトから外す。iOS Safari では 0fr でも中身の高さがページ全体の
+       スクロール量に数えられ、リストの下に大きな空白ができたり、固定のタブバーが画面の途中へ
+       ずれたりしていた。閉じるアニメの間だけ .closing で中身を残す。 */
+    .acc:not(.open):not(.closing) .acc-inner { display: none; }
     .acc-inner .shopitem { box-shadow: none; border-radius: 0; margin: 0; background: transparent;
       border-top: 1px solid var(--line); }
     .acc-inner .shopitem:first-child { border-top: none; }
@@ -1474,7 +1478,8 @@
     /* ---- Bottom tab bar（浮いたすりガラスのピル） ----
        画面の端から少し離して浮かせ、後ろのコンテンツが透けて見えるようにする。
        選ばれているタブの後ろには「レンズ」が滑り込む（位置は moveTabLens() が合わせる）。 */
-    .tabbar { position: fixed; z-index: 20; left: 50%; transform: translateX(-50%);
+    /* 中央寄せは transform を使わず left/right + margin で行う（iOS で fixed 要素の位置がずれにくい） */
+    .tabbar { position: fixed; z-index: 20; left: 0; right: 0; margin: 0 auto;
       bottom: var(--tabbar-gap); width: calc(100% - 32px); max-width: 448px; height: 64px;
       display: flex; justify-content: space-around; align-items: center; padding: 0 6px;
       border-radius: 999px; isolation: isolate;
@@ -2512,6 +2517,14 @@
       if (lens.classList.contains("instant")) requestAnimationFrame(() => lens.classList.remove("instant"));
     }
     window.addEventListener("resize", () => moveTabLens(true));
+    // iOS はキーボードを閉じたあと、画面の位置が戻りきらずに固定のタブバーが途中に浮いたままになることがある。
+    // 入力欄からフォーカスが外れたら、今のスクロール位置へ置き直して再計算させる
+    document.addEventListener("focusout", () => setTimeout(() => {
+      const a = document.activeElement;
+      if (a && a.matches && a.matches("input, textarea, select")) return; // 別の入力欄へ移っただけ
+      const max = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+      scrollTo(scrollX, Math.min(scrollY, max));
+    }, 50));
     function showView(id, title, { back = false, tab = null } = {}) {
       moveSel = null; // 画面遷移で入れ替えモードは解除
       closeDaySheet(); // カレンダーの日付シートが開いたまま残らないように
@@ -7547,7 +7560,10 @@
         sec.querySelector(".acc-head").addEventListener("click", (e) => {
           const key = sec.dataset.acc;
           shopOpen[key] = !shopOpen[key];
+          clearTimeout(sec._closeTimer);
+          sec.classList.toggle("closing", !shopOpen[key]);
           sec.classList.toggle("open", shopOpen[key]);
+          if (!shopOpen[key]) sec._closeTimer = setTimeout(() => sec.classList.remove("closing"), 320);
           e.currentTarget.setAttribute("aria-expanded", shopOpen[key] ? "true" : "false");
           if (key === "add" && shopOpen[key]) setTimeout(() => $("addName")?.focus({ preventScroll: true }), 280);
         }));
